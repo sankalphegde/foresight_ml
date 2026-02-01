@@ -1,0 +1,23 @@
+# Core dependencies
+requests==2.31.0
+pandas==2.1.4
+pyyaml==6.0.1
+python-dotenv==1.0.0
+
+# Data APIs
+fredapi==0.5.1
+
+# Data versioning
+dvc==3.37.0
+dvc-gs==3.0.1
+
+# Workflow orchestration
+apache-airflow==2.8.1
+apache-airflow-providers-google==10.14.0
+
+# GCP
+google-cloud-storage==2.14.0
+
+# Development
+pytest==7.4.3
+black==23.12.1

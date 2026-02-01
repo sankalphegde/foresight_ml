@@ -1,0 +1,11 @@
+# DVC pipeline for data ingestion
+stages:
+  fetch_data:
+    cmd: python -m airflow dags test foresight_data_ingestion
+    deps:
+      - src/data/cleints/sec_client.py
+      - src/data/cleints/fred_client.py
+      - data/companies.csv
+    outs:
+      - data/sec_filings.json
+      - data/fred_indicators.csv

@@ -209,6 +209,7 @@ cd Foresight-ML
 ```bash
 pip install -r requirements.txt
 ```
+
 3. **Initialize Code Quality Hooks**
 This project uses pre-commit to enforce code standards.
 ```bash
