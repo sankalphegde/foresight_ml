@@ -1,25 +1,20 @@
-FROM python:3.11-slim
+FROM ghcr.io/astral-sh/uv:python3.11-slim
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends curl \
- && rm -rf /var/lib/apt/lists/*
+# Use /app as the home base
+WORKDIR /app
 
-# Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:${PATH}"
+# 1. Install dependencies first to leverage Docker layer caching
+# This uses bind mounts so the toml/lock files aren't permanently in the layer yet
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    uv sync --frozen --no-dev --no-install-project
 
-WORKDIR /app/src
-
-COPY pyproject.toml uv.lock ./
-RUN uv venv /app/.venv && uv sync --frozen --no-dev --no-install-project
-
-ENV VIRTUAL_ENV=/app/.venv
-ENV PATH="/app/.venv/bin:${PATH}"
-
+# 2. Copy the entire src directory into /app/src
 COPY src/ /app/src/
+COPY pyproject.toml uv.lock ./
 
-# Critical
-ENV PYTHONPATH=/app/src
-
-# Safe default (can be overridden by job)
-CMD ["python", "-m", "ingestion.fred_job"]
+# 3. Use 'uv run' to execute. 
+# This automatically handles the virtualenv and ensures PYTHONPATH includes /app/src
+# if your pyproject.toml is configured correctly.
+CMD ["uv", "run", "python", "-m", "ingestion.fred_job"]
