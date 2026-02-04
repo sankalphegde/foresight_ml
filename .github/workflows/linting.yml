@@ -34,6 +34,7 @@ jobs:
         run: make check
 
   terraform-validate:
+    name: Terraform Validation
     runs-on: ubuntu-latest
     
     steps:
