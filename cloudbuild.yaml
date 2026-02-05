@@ -1,0 +1,38 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '-t',
+        'us-central1-docker.pkg.dev/$PROJECT_ID/foresight/fred:$_IMAGE_TAG',
+        '--build-arg',
+        'BUILDKIT_INLINE_CACHE=1',
+        '-f',
+        'Dockerfile',
+        '.'
+      ]
+    env:
+      - 'DOCKER_BUILDKIT=$_DOCKER_BUILDKIT'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '-t',
+        'us-central1-docker.pkg.dev/$PROJECT_ID/foresight/sec:$_IMAGE_TAG',
+        '--build-arg',
+        'BUILDKIT_INLINE_CACHE=1',
+        '-f',
+        'Dockerfile.sec',
+        '.'
+      ]
+    env:
+      - 'DOCKER_BUILDKIT=$_DOCKER_BUILDKIT'
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/foresight/fred:$_IMAGE_TAG'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/foresight/sec:$_IMAGE_TAG'
+
+substitutions:
+  _DOCKER_BUILDKIT: '0'  # Default value
+  _IMAGE_TAG: 'latest'  # Default value

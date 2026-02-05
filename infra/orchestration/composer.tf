@@ -13,13 +13,20 @@ resource "google_composer_environment" "airflow" {
 
   config {
     software_config {
-      image_version = "composer-2-airflow-2.8"
+      image_version = "composer-2.16.3-airflow-2.10.5"
 
       env_variables = {
+<<<<<<< HEAD
         GCS_BUCKET  = google_storage_bucket.data_lake.name
         GCS_CACHE   = google_storage_bucket.cache.name
         ENVIRONMENT = var.environment
         BQ_DATASET  = google_bigquery_dataset.foresight_ml.dataset_id
+=======
+        FORESIGHT_DATA_BUCKET     = google_storage_bucket.data_lake.name
+        FORESIGHT_CACHE_BUCKET      = google_storage_bucket.cache.name
+        ENVIRONMENT    = var.environment
+        FORESIGHT_BQ_DATASET     = google_bigquery_dataset.foresight_ml.dataset_id
+>>>>>>> debug/sec-ingestion-job
       }
 
       pypi_packages = {
