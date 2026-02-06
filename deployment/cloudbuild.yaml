@@ -1,0 +1,23 @@
+steps:
+  # Build Airflow image (includes all ingestion code)
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '-t',
+        'us-central1-docker.pkg.dev/$PROJECT_ID/foresight/airflow:$_IMAGE_TAG',
+        '--build-arg',
+        'BUILDKIT_INLINE_CACHE=1',
+        '-f',
+        'docker/Dockerfile.airflow',
+        '../'  # Build from project root to access src/
+      ]
+    env:
+      - 'DOCKER_BUILDKIT=$_DOCKER_BUILDKIT'
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/foresight/airflow:$_IMAGE_TAG'
+
+substitutions:
+  _DOCKER_BUILDKIT: '0'  # Default value
+  _IMAGE_TAG: 'latest'  # Default value

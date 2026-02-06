@@ -69,3 +69,14 @@ resource "google_storage_bucket" "cache" {
     project     = "foresight-ml"
   }
 }
+
+# Upload companies.csv to GCS reference folder
+resource "google_storage_bucket_object" "companies_csv" {
+  name   = "reference/companies.csv"
+  bucket = google_storage_bucket.data_lake.name
+  source = "${path.module}/../../data/companies.csv"
+
+  lifecycle {
+    ignore_changes = [detect_md5hash]
+  }
+}

@@ -38,7 +38,14 @@ secrets/
 *.log
 logs/
 
+# Cache
+cache/
+
 # Temporary files
 tmp/
 temp/
 *.tmp
+
+# GCP
+.gcp/service-account-key.json
+.gcp/*.json

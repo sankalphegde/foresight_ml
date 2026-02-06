@@ -12,11 +12,11 @@ FAILED=0
 
 for dir in "iam" "orchestration"; do
   echo -e "\n${YELLOW}Scope: infra/$dir${NC}"
-  
+
   # Use a subshell to isolate the directory change
   (
     cd "infra/$dir" || exit 1
-    
+
     # 1. Check Formatting
     if ! terraform fmt -check -recursive > /dev/null; then
       echo -e "${RED}✘ Formatting error:${NC} Files in '$dir' are not formatted. Run 'terraform fmt' locally."

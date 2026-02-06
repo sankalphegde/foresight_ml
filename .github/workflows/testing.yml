@@ -21,14 +21,26 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-    
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: ".python-version"    
+          python-version-file: ".python-version"
+
+      - name: Cache pytest
+        uses: actions/cache@v4
+        with:
+          path: .pytest_cache
+          key: pytest-${{ runner.os }}-py${{ hashFiles('.python-version') }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            pytest-${{ runner.os }}-py${{ hashFiles('.python-version') }}-
+            pytest-${{ runner.os }}-
 
       - name: Install dependencies
         run: make setup
 
       - name: Run tests
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
         run: make test

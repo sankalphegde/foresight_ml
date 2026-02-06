@@ -15,28 +15,20 @@ variable "environment" {
   default     = "dev"
 }
 
-variable "composer_environment_size" {
-  description = "Cloud Composer environment size"
-  type        = string
-  default     = "ENVIRONMENT_SIZE_SMALL"
-  validation {
-    condition = contains([
-      "ENVIRONMENT_SIZE_SMALL",
-      "ENVIRONMENT_SIZE_MEDIUM",
-      "ENVIRONMENT_SIZE_LARGE"
-    ], var.composer_environment_size)
-    error_message = "Must be SMALL, MEDIUM, or LARGE"
-  }
-}
-
 variable "data_retention_days" {
   description = "Number of days to retain data in standard storage"
   type        = number
   default     = 90
 }
 
-variable "enable_composer" {
-  description = "Whether to deploy Cloud Composer (expensive)"
-  type        = bool
-  default     = true
+variable "fred_api_key" {
+  description = "FRED API key for economic data"
+  type        = string
+  sensitive   = true
+}
+
+variable "sec_user_agent" {
+  description = "User agent for SEC API requests"
+  type        = string
+  default     = "foresight-ml contact@example.com"
 }

@@ -2,6 +2,10 @@
 
 **Foresight-ML** is an end-to-end MLOps initiative designed to predict corporate financial distress before it becomes irreversible. By leveraging historical financial data and machine learning, this system offers a dynamic alternative to static, lagging financial indicators.
 
+> **📋 Quick Start**: See [SETUP.md](SETUP.md) for deployment
+> **🔄 Data Collection**: 2020-2026 (6 years) | ~25 days to complete
+> **🏗️ Architecture**: Single Airflow container runs all ingestion code
+
 ---
 
 ## 1. Project Description
@@ -17,7 +21,7 @@ The current landscape of corporate financial health monitoring suffers from inef
 
 ## 2. Dataset Sources
 
-This project utilizes a combination of fundamental and market data. The raw data is versioned and managed using **DVC (Data Version Control)** to ensure reproducibility.
+This project utilizes a combination of fundamental and market data. The raw data is versioned using **GCS object versioning** to ensure reproducibility.
 All data used in this project is **publicly available**, ensuring transparency, reproducibility, and suitability for academic research.
 
 ### Primary Data Sources
@@ -25,9 +29,13 @@ All data used in this project is **publicly available**, ensuring transparency, 
 - **Federal Reserve Economic Data (FRED)**: Economic indicators including interest rates, inflation, credit spreads
 
 ### Data Management
-- Raw data is stored in Google Cloud Storage (GCS)
-- Ingestion jobs run on Cloud Run
-- Orchestration managed via Apache Airflow
+- **Raw data**: Stored in Google Cloud Storage (GCS) with versioning enabled
+- **Ingestion**: Orchestrated by Apache Airflow, executed directly in Airflow container
+- **Storage paths**:
+  - `raw/fred/year=X/month=Y/indicators.csv` - Economic indicators
+  - `raw/sec/year=X/quarter=QY/filings.jsonl` - Company filings
+  - `reference/companies.csv` - Company list (uploaded by Terraform)
+- **Versioning**: GCS object versioning tracks all data changes automatically
 
 ---
 
@@ -35,7 +43,7 @@ All data used in this project is **publicly available**, ensuring transparency, 
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    LOCAL DEVELOPMENT                         │
+│                    LOCAL DEVELOPMENT                        │
 ├─────────────────────────────────────────────────────────────┤
 │  Apache Airflow (Docker Compose)                            │
 │  ├── Scheduler: Orchestrates DAGs                           │
@@ -47,7 +55,7 @@ All data used in this project is **publicly available**, ensuring transparency, 
                    │ Triggers Cloud Run Jobs
                    ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  GOOGLE CLOUD PLATFORM                       │
+│                  GOOGLE CLOUD PLATFORM                      │
 ├─────────────────────────────────────────────────────────────┤
 │  Cloud Run Jobs                                             │
 │  ├── foresight-ingestion (FRED)                             │
@@ -186,11 +194,11 @@ Two separate images handle FRED and SEC ingestion:
 #### Local Testing
 ```bash
 # Build FRED image
-docker build -f Dockerfile \
+docker build -f deployment/docker/Dockerfile.fred \
   -t us-central1-docker.pkg.dev/financial-distress-ew/foresight/fred:latest .
 
 # Build SEC image
-docker build -f Dockerfile.sec \
+docker build -f deployment/docker/Dockerfile.sec \
   -t us-central1-docker.pkg.dev/financial-distress-ew/foresight/sec:latest .
 
 # Test locally
@@ -214,8 +222,8 @@ docker push us-central1-docker.pkg.dev/financial-distress-ew/foresight/sec:lates
 
 #### Using Cloud Build (Automated)
 ```bash
-# Submit build (automatically builds both images)
-gcloud builds submit --substitutions=_DOCKER_BUILDKIT=1
+# Submit build (automatically builds all three images)
+gcloud builds submit --config deployment/cloudbuild.yaml --substitutions=_DOCKER_BUILDKIT=1
 
 # Monitor build
 gcloud builds log <BUILD_ID> --stream
@@ -342,13 +350,13 @@ Same as Dockerfile but runs `src.ingestion.sec_job` instead.
 
 ## 7. Cloud Build Configuration
 
-`cloudbuild.yaml` automatically builds both images:
+`deployment/cloudbuild.yaml` automatically builds all three images:
 
 ```yaml
 steps:
   - name: 'gcr.io/cloud-builders/docker'
     # Builds Dockerfile → foresight/fred:latest
-  
+
   - name: 'gcr.io/cloud-builders/docker'
     # Builds Dockerfile.sec → foresight/sec:latest
 
@@ -398,10 +406,13 @@ with DAG(
 
 ```
 foresight-ml/
-├── Dockerfile                          # FRED ingestion container
-├── Dockerfile.sec                      # SEC ingestion container
-├── docker-compose.yml                  # Local Airflow stack
-├── cloudbuild.yaml                     # Cloud Build configuration
+├── deployment/
+│   ├── cloudbuild.yaml                 # Cloud Build configuration
+│   └── docker/
+│       ├── Dockerfile.fred             # FRED ingestion container
+│       ├── Dockerfile.sec              # SEC ingestion container
+│       └── Dockerfile.airflow          # Airflow orchestration container
+├── docker-compose.yml                  # Local development stack
 ├── pyproject.toml                      # Python dependencies
 ├── uv.lock                             # Locked dependencies
 ├── example.env                         # Environment template
@@ -492,7 +503,7 @@ docker-compose logs -f airflow-worker
 
 ```bash
 # Build both images
-gcloud builds submit --substitutions=_DOCKER_BUILDKIT=1
+gcloud builds submit --config deployment/cloudbuild.yaml --substitutions=_DOCKER_BUILDKIT=1
 
 # Update Cloud Run jobs
 gcloud run jobs update foresight-ingestion \
@@ -556,13 +567,13 @@ docker run --env-file .env us-central1-docker.pkg.dev/financial-distress-ew/fore
 ### Docker Build Issues
 ```bash
 # Check Dockerfile syntax
-docker build --progress=plain -f Dockerfile .
+docker build --progress=plain -f deployment/docker/Dockerfile.fred .
 
 # Verify dependencies
 uv export
 
 # Check file permissions
-ls -la Dockerfile Dockerfile.sec pyproject.toml uv.lock README.md
+ls -la deployment/docker/*.Dockerfile pyproject.toml uv.lock README.md
 ```
 
 ### Permission Errors
@@ -618,7 +629,7 @@ EXECUTION_DATE=2024-01-01T00:00:00  # Set automatically by Airflow
 
 1. Create `src/ingestion/new_job.py`
 2. Create corresponding Dockerfile
-3. Update `cloudbuild.yaml` to build it
+3. Update `deployment/cloudbuild.yaml` to build it
 4. Create Cloud Run job
 5. Add task to DAG
 6. Test locally and in production
