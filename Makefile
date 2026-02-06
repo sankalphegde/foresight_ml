@@ -51,5 +51,8 @@ terraform-check:
 check: format typecheck terraform-check
 	@echo "All checks passed"
 
+check-ci: format typecheck
+	@echo "All checks passed (CI mode)"
+
 test:
 	uv run pytest tests/

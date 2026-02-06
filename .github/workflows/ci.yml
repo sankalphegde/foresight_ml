@@ -49,9 +49,7 @@ jobs:
         run: make setup
 
       - name: Format, lint, and type check
-        env:
-          SKIP: terraform-check
-        run: make check
+        run: make check-ci
 
   test:
     name: Tests
