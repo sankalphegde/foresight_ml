@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
 import json
+import os
+from pathlib import Path
+
 import pandas as pd
 from google.cloud import storage
-import os
-
 
 BUCKET_NAME = os.getenv("GCP_BUCKET_RAW", "financial-distress-data")
 GCS_OUT_PATH = os.getenv("GCS_PREPROCESS_OUT", "interim/panel_base.parquet")
@@ -15,7 +15,7 @@ GCS_REPORT_PATH = os.getenv("GCS_PREPROCESS_REPORT_OUT", "interim/preprocess_rep
 
 def read_sec_jsonl(path: str) -> pd.DataFrame:
     rows = []
-    with open(path, "r") as f:
+    with open(path) as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -64,6 +64,12 @@ def upload_to_gcs(local_path: Path, bucket_name: str, gcs_path: str) -> None:
 def main() -> None:
     sec_path = "data/raw/sec/filings.jsonl"
     fred_path = "data/raw/fred/indicators.csv"
+
+    # Check if required files exist
+    if not Path(sec_path).exists():
+        raise FileNotFoundError(f"SEC data file not found: {sec_path}")
+    if not Path(fred_path).exists():
+        raise FileNotFoundError(f"FRED data file not found: {fred_path}")
 
     print("Reading SEC...")
     sec = read_sec_jsonl(sec_path)

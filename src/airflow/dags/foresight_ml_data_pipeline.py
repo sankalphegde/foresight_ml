@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from airflow import DAG
 from airflow.providers.google.cloud.operators.run import (
     CloudRunExecuteJobOperator,
 )
+
+from airflow import DAG  # type: ignore[attr-defined]
 
 PROJECT_ID = "financial-distress-ew"
 REGION = "us-central1"
