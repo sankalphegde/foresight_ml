@@ -26,6 +26,8 @@ env/
 .env
 *.env
 secrets/
+foresight-data-sa.json
+.gcp/*.json
 
 # Terraform
 .terraform/

@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from airflow import DAG
 from airflow.providers.google.cloud.operators.run import (
     CloudRunExecuteJobOperator,
 )
+
+from airflow import DAG  # type: ignore[attr-defined]
 
 PROJECT_ID = "financial-distress-ew"
 REGION = "us-central1"
@@ -11,7 +12,7 @@ REGION = "us-central1"
 with DAG(
     dag_id="foresight_ingestion",
     start_date=datetime(2024, 1, 1),
-    schedule_interval="@weekly",
+    schedule="@weekly",
     catchup=False,
     tags=["foresight-ml", "ingestion"],
 ) as dag:

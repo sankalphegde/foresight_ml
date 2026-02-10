@@ -1,7 +1,6 @@
 import os
 from datetime import datetime
 
-import pandas as pd
 from google.cloud import storage
 
 from src.data.clients.fred_client import FREDClient
