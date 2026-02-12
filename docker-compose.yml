@@ -1,104 +1,29 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  airflow-webserver:
-    image: apache/airflow:2.8.0-python3.12
-    environment:
-      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-      AIRFLOW__CORE__DAGS_FOLDER: /app/src/airflow/dags
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres:5432/airflow
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: 'false'
-      GOOGLE_APPLICATION_CREDENTIALS: /app/.gcp/service-account-key.json
-      GCP_PROJECT_ID: financial-distress-ew
+  # Airflow (local development)
+  # Contains scheduler, webserver, and all ingestion code
+  airflow:
+    build:
+      context: .
+      dockerfile: deployment/docker/Dockerfile.airflow
+    container_name: foresight-airflow
     ports:
       - "8080:8080"
-    volumes:
-      - ./src/airflow/dags:/app/src/airflow/dags
-      - ./.gcp:/app/.gcp:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: airflow webserver
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  airflow-scheduler:
-    image: apache/airflow:2.8.0-python3.12
     environment:
-      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-      AIRFLOW__CORE__DAGS_FOLDER: /app/src/airflow/dags
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres:5432/airflow
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: 'false'
-      GOOGLE_APPLICATION_CREDENTIALS: /app/.gcp/service-account-key.json
-      GCP_PROJECT_ID: financial-distress-ew
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/.gcp/service-account-key.json
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID:-financial-distress-ew}
+      - GCS_BUCKET=${GCS_BUCKET}
+      - FRED_API_KEY=${FRED_API_KEY}
+      - SEC_USER_AGENT=${SEC_USER_AGENT}
     volumes:
-      - ./src/airflow/dags:/app/src/airflow/dags
-      - ./.gcp:/app/.gcp:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: airflow scheduler
-
-  airflow-worker:
-    image: apache/airflow:2.8.0-python3.12
-    environment:
-      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-      AIRFLOW__CORE__DAGS_FOLDER: /app/src/airflow/dags
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres:5432/airflow
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: 'false'
-      GOOGLE_APPLICATION_CREDENTIALS: /app/.gcp/service-account-key.json
-      GCP_PROJECT_ID: financial-distress-ew
-    volumes:
-      - ./src/airflow/dags:/app/src/airflow/dags
-      - ./.gcp:/app/.gcp:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: airflow celery worker
+      - ./src/airflow/dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./.gcp:/opt/airflow/.gcp:ro
+      - airflow-data:/opt/airflow
+    restart: unless-stopped
 
 volumes:
-  postgres_data:
+  airflow-data:

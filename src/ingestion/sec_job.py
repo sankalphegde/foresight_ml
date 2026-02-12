@@ -56,7 +56,7 @@ def main() -> None:
             filings = sec_client.filter_filings(
                 filings_data,
                 form_types=["10-K", "10-Q"],
-                start_date="2020-01-01",
+                start_date="2020-01-01",  # 6 years of filings for distress prediction
             )
 
             for filing in filings:
@@ -76,10 +76,7 @@ def main() -> None:
         with blob.open("w") as f:
             f.write("".join(records))
 
-    print(
-        f"Wrote {total_written} SEC filings "
-        f"to gs://{bucket_name}/{output_path}"
-    )
+    print(f"Wrote {total_written} SEC filings to gs://{bucket_name}/{output_path}")
 
 
 if __name__ == "__main__":

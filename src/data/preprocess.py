@@ -12,7 +12,6 @@ GCS_OUT_PATH = os.getenv("GCS_PREPROCESS_OUT", "interim/panel_base.parquet")
 GCS_REPORT_PATH = os.getenv("GCS_PREPROCESS_REPORT_OUT", "interim/preprocess_report.json")
 
 
-
 def read_sec_jsonl(path: str) -> pd.DataFrame:
     rows = []
     with open(path) as f:
@@ -91,7 +90,7 @@ def main() -> None:
 
     sec.to_parquet(out_path, index=False)
 
-        # --- VALIDATION REPORT ---
+    # --- VALIDATION REPORT ---
     print("Creating validation report...")
 
     report = {
@@ -112,6 +111,7 @@ def main() -> None:
 
     report_path = out_dir / "preprocess_report.json"
     import json as _json
+
     with open(report_path, "w") as f:
         _json.dump(report, f, indent=2)
 
@@ -120,8 +120,6 @@ def main() -> None:
     print("Saved interim parquet:", out_path)
     print("Rows:", len(sec))
     print("Columns:", list(sec.columns))
-
-
 
     # Upload to GCS
     upload_to_gcs(out_path, BUCKET_NAME, GCS_OUT_PATH)

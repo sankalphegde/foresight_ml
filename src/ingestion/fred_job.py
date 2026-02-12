@@ -24,7 +24,7 @@ def main() -> None:
     # ---- FETCH DATA ----
     client = FREDClient(api_key=api_key)
     df = client.get_common_indicators(
-        start_date="2020-01-01",
+        start_date="2020-01-01",  # 6 years of economic data for distress patterns
         frequency="q",
     )
 
@@ -32,9 +32,7 @@ def main() -> None:
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
 
-    output_path = (
-        f"raw/fred/year={year}/month={month}/indicators.csv"
-    )
+    output_path = f"raw/fred/year={year}/month={month}/indicators.csv"
 
     blob = bucket.blob(output_path)
     blob.upload_from_string(

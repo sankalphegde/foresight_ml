@@ -1,0 +1,44 @@
+FROM apache/airflow:slim-3.1.7-python3.12
+
+USER root
+
+# Install system dependencies if needed
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+# Install additional Python packages (including ingestion dependencies)
+RUN pip install --no-cache-dir \
+    apache-airflow-providers-google==10.12.0 \
+    pandas>=2.1.4 \
+    requests>=2.31.0 \
+    pydantic>=2.5.3 \
+    google-cloud-storage>=2.14.0
+
+# Copy entire src directory (includes ingestion code)
+COPY --chown=airflow:root src /opt/airflow/src
+
+# Copy DAGs
+COPY --chown=airflow:root src/airflow/dags /opt/airflow/dags
+
+# Set environment variables
+ENV AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+ENV AIRFLOW__CORE__LOAD_EXAMPLES=false
+ENV AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
+ENV AIRFLOW__WEBSERVER__SECRET_KEY=foresight_secret_key_change_me
+ENV PYTHONPATH=/opt/airflow
+
+# Initialize database schema at build time
+RUN airflow db migrate
+
+# Expose webserver port
+EXPOSE 8080
+
+# Use standalone mode for single-container deployment
+# This runs both scheduler and webserver together
+CMD ["airflow", "standalone"]

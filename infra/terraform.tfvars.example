@@ -1,0 +1,31 @@
+# Terraform Variables Configuration
+#
+# Option 1: Use this file (recommended for persistent config)
+#   1. Copy: cp terraform.tfvars.example terraform.tfvars
+#   2. Edit terraform.tfvars with your values
+#   3. Run: terraform apply
+#
+# Option 2: Use environment variables (recommended for CI/CD)
+#   1. Set TF_VAR_* environment variables (see ../../example.env)
+#   2. Run: terraform apply
+#   Terraform automatically reads TF_VAR_project_id, TF_VAR_fred_api_key, etc.
+
+# Required: Your GCP project ID
+project_id = "your-gcp-project-id"
+
+# Optional: GCP region (default: us-central1)
+region = "us-central1"
+
+# Optional: Environment name (default: dev)
+environment = "dev"
+
+# Optional: Data retention days (default: 90)
+data_retention_days = 90
+
+# Required: FRED API key for economic data
+# Get yours at: https://fred.stlouisfed.org/docs/api/api_key.html
+fred_api_key = "your-fred-api-key"
+
+# Optional: User agent for SEC API requests
+# Should include your contact email
+sec_user_agent = "foresight-ml your-email@example.com"

@@ -10,32 +10,31 @@ echo "--- Starting Infrastructure Linting ---"
 
 FAILED=0
 
-for dir in "iam" "orchestration"; do
-  echo -e "\n${YELLOW}Scope: infra/$dir${NC}"
-  
-  # Use a subshell to isolate the directory change
-  (
-    cd "infra/$dir" || exit 1
-    
-    # 1. Check Formatting
-    if ! terraform fmt -check -recursive > /dev/null; then
-      echo -e "${RED}✘ Formatting error:${NC} Files in '$dir' are not formatted. Run 'terraform fmt' locally."
-      terraform fmt -check -recursive # Print the specific filenames
-      FAILED=1
-    else
-      echo -e "${GREEN}✔ Formatting looks great!${NC}"
-    fi
+# Change to infra directory
+pushd "infra" > /dev/null || exit 1
 
-    # 2. Validate Config
-    terraform init -backend=false -input=false > /dev/null 2>&1
-    if ! terraform validate; then
-      echo -e "${RED}✘ Validation failed:${NC} Syntax error in '$dir'."
-      FAILED=1
-    else
-      echo -e "${GREEN}✔ Configuration is valid.${NC}"
-    fi
-  ) || FAILED=1
-done
+echo -e "\n${YELLOW}Scope: infra${NC}"
+
+# 1. Check Formatting
+if ! terraform fmt -check -recursive > /dev/null; then
+  echo -e "${RED}✘ Formatting error:${NC} Files are not formatted. Run 'terraform fmt' locally."
+  terraform fmt -check -recursive # Print the specific filenames
+  FAILED=1
+else
+  echo -e "${GREEN}✔ Formatting looks great!${NC}"
+fi
+
+# 2. Validate Config
+terraform init -backend=false -input=false > /dev/null 2>&1
+if ! terraform validate; then
+  echo -e "${RED}✘ Validation failed:${NC} Syntax error in infra."
+  FAILED=1
+else
+  echo -e "${GREEN}✔ Configuration is valid.${NC}"
+fi
+
+# Return to previous directory
+popd > /dev/null
 
 # Final Exit Logic
 if [ $FAILED -eq 1 ]; then

@@ -1,5 +1,5 @@
-import requests
 import pandas as pd
+import requests
 
 # SEC canonical company ticker list
 SEC_TICKER_URL = "https://www.sec.gov/files/company_tickers.json"
@@ -18,10 +18,12 @@ data = resp.json()
 # Build DataFrame
 rows = []
 for _, entry in data.items():
-    rows.append({
-        "ticker": entry["ticker"],
-        "cik": entry["cik_str"],  # keep as integer string
-    })
+    rows.append(
+        {
+            "ticker": entry["ticker"],
+            "cik": entry["cik_str"],  # keep as integer string
+        }
+    )
 
 df = pd.DataFrame(rows)
 df = df.head(MAX_COMPANIES)
