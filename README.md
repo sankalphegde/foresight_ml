@@ -58,6 +58,40 @@ Traditional financial health monitoring suffers from two critical inefficiencies
 - **Docker** (for local development)
 - **GCP Account** with billing enabled
 
+### Setup Authentication
+
+**For Terraform Deployment:**
+```bash
+# Use your personal account with Owner permissions
+gcloud auth login
+gcloud auth application-default login --scopes=https://www.googleapis.com/auth/cloud-platform
+gcloud config set project financial-distress-ew
+
+# Do NOT set GOOGLE_APPLICATION_CREDENTIALS for Terraform
+unset GOOGLE_APPLICATION_CREDENTIALS
+```
+
+**For Local Development (Optional - only needed to run ingestion scripts locally):**
+```bash
+# Authenticate and set project
+gcloud auth login
+gcloud config set project financial-distress-ew
+
+# Create service account (skip if exists)
+gcloud iam service-accounts create foresight-ml-sa \
+  --display-name="Foresight ML" 2>/dev/null || echo "Service account already exists"
+
+# Grant permissions
+gcloud projects add-iam-policy-binding financial-distress-ew \
+  --member="serviceAccount:foresight-ml-sa@financial-distress-ew.iam.gserviceaccount.com" \
+  --role="roles/storage.admin" --condition=None
+
+# Download key
+mkdir -p .gcp
+gcloud iam service-accounts keys create .gcp/service-account-key.json \
+  --iam-account=foresight-ml-sa@financial-distress-ew.iam.gserviceaccount.com
+```
+
 ### Deploy Infrastructure
 
 ```bash
@@ -71,7 +105,7 @@ cp example.env .env
 source .env
 
 # 3. Deploy with Terraform
-cd infra/orchestration
+cd infra
 terraform init
 terraform plan
 terraform apply
@@ -100,8 +134,8 @@ All data is **publicly available** for transparency and reproducibility:
 
 | Source | Data Type | Frequency | Storage Path |
 |--------|-----------|-----------|--------------|
-| **SEC EDGAR** | 10-K/10-Q filings, XBRL financials | Quarterly/Annual | `gs://.../raw/sec/` |
-| **FRED** | Interest rates, inflation, credit spreads | Daily/Monthly | `gs://.../raw/fred/` |
+| **SEC EDGAR** | 10-K/10-Q filings, XBRL financials | Quarterly/Annual | `gs://.../raw/sec/year=*/quarter=*/` |
+| **FRED** | Interest rates, inflation, credit spreads | Daily/Monthly | `gs://.../raw/fred/year=*/month=*/` |
 | **Reference** | S&P 500 company list | Static | `gs://.../reference/companies.csv` |
 
 **Data Management:**
@@ -239,14 +273,14 @@ terraform output airflow_url
 ### Check Data
 
 ```bash
-# List GCS buckets
-gsutil ls gs://financial-distress-data-*/
+# List GCS buckets (replace PROJECT_ID with your project)
+gsutil ls gs://PROJECT_ID-foresight-ml-data/
 
 # Check FRED data
-gsutil ls gs://financial-distress-data-*/raw/fred/
+gsutil ls gs://PROJECT_ID-foresight-ml-data/raw/fred/
 
 # Check SEC data
-gsutil ls gs://financial-distress-data-*/raw/sec/
+gsutil ls gs://PROJECT_ID-foresight-ml-data/raw/sec/
 
 # Query BigQuery
 bq query --use_legacy_sql=false "SELECT COUNT(*) FROM \`your-project.foresight_ml.raw_filings\`"
@@ -275,6 +309,28 @@ gcloud run services describe foresight-airflow --region us-central1
 
 ### Terraform Issues
 
+**Permission Denied Errors:**
+```bash
+# Re-authenticate with full cloud platform scope
+gcloud auth application-default login --scopes=https://www.googleapis.com/auth/cloud-platform
+
+# Enable required APIs
+gcloud services enable artifactregistry.googleapis.com \
+  bigquery.googleapis.com \
+  cloudbuild.googleapis.com \
+  run.googleapis.com \
+  iam.googleapis.com
+```
+
+**Resource Already Exists (e.g., BigQuery dataset):**
+```bash
+# Import existing resource into Terraform state
+cd infra
+terraform import google_bigquery_dataset.foresight_ml PROJECT_ID/foresight_ml_dev
+terraform plan
+```
+
+**Validation:**
 ```bash
 # Validate configuration
 make terraform-check

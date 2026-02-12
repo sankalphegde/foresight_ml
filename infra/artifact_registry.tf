@@ -17,8 +17,8 @@ resource "null_resource" "build_airflow_image" {
   }
 
   provisioner "local-exec" {
-    command     = "gcloud builds submit --config cloudbuild.yaml"
-    working_dir = "${path.module}/../deployment"
+    command     = "gcloud builds submit --config=deployment/cloudbuild.yaml --ignore-file=deployment/.gcloudignore ."
+    working_dir = "${path.module}/.."
   }
 
   depends_on = [

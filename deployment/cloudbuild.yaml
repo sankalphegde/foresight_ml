@@ -9,8 +9,8 @@ steps:
         '--build-arg',
         'BUILDKIT_INLINE_CACHE=1',
         '-f',
-        'docker/Dockerfile.airflow',
-        '../'  # Build from project root to access src/
+        'deployment/docker/Dockerfile.airflow',
+        '.'  # Build from uploaded source root
       ]
     env:
       - 'DOCKER_BUILDKIT=$_DOCKER_BUILDKIT'

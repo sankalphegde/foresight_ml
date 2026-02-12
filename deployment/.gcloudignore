@@ -1,0 +1,57 @@
+# Git files
+.git/
+.gitignore
+.github/
+
+# Python environments and cache
+.venv/
+venv/
+env/
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node modules
+node_modules/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+
+# Environment and credentials
+.env
+.env.*
+*.env
+.gcp/
+
+# Excluded directories (not needed in Docker build)
+# Use ** to exclude from any location
+tests/
+notebooks/
+docs/
+cache/
+data/
+monitoring/
+infra/
+scripts/
+uv.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# System files
+.DS_Store
+/dev/
+/proc/
+/sys/
