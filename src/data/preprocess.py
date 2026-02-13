@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import pandas as pd
 import json
 import os
 from pathlib import Path
 
-from google.cloud import storage 
-
+import pandas as pd
+from google.cloud import storage
 
 BUCKET_NAME = os.getenv("GCP_BUCKET_RAW", "financial-distress-data")
 GCS_OUT_PATH = os.getenv("GCS_PREPROCESS_OUT", "interim/panel_base.parquet")
