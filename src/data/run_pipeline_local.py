@@ -1,3 +1,5 @@
+"""Local pipeline runner for development and testing."""
+
 from dotenv import load_dotenv
 
 from src.data.pipeline.core import (
@@ -10,6 +12,7 @@ load_dotenv()
 
 
 def main() -> None:
+    """Run the full data pipeline locally."""
     sec = fetch_sec_data()
     fred = fetch_fred_data()
     merged = merge_data(sec, fred, output_dir="data/output")

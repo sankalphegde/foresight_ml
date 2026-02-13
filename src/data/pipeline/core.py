@@ -1,3 +1,5 @@
+"""Core data pipeline functions for fetching and merging SEC and FRED data."""
+
 import json
 import os
 from pathlib import Path

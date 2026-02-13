@@ -1,6 +1,6 @@
-"""
-Basic tests for API clients.
-Run: pytest test_data_ingestion.py -v
+"""Basic tests for API clients.
+
+Run: pytest test_data_ingestion.py -v.
 """
 
 import os

@@ -1,3 +1,5 @@
+"""SEC filings ingestion job for Airflow pipeline."""
+
 import json
 import os
 from datetime import datetime
@@ -9,12 +11,14 @@ from src.data.clients.sec_client import SECClient
 
 
 def get_year_quarter(execution_date: str) -> tuple[int, str]:
+    """Extract year and quarter from execution date string."""
     dt = datetime.fromisoformat(execution_date)
     quarter = (dt.month - 1) // 3 + 1
     return dt.year, f"Q{quarter}"
 
 
 def main() -> None:
+    """Fetch SEC company filings and upload to GCS."""
     # ---- REQUIRED ENV VARS ----
     execution_date = os.environ["EXECUTION_DATE"]
     bucket_name = os.environ["GCS_BUCKET"]

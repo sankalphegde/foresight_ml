@@ -48,8 +48,13 @@ select = [
     "B",   # flake8-bugbear
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
+    "D",   # pydocstyle (docstring rules)
 ]
-ignore = ["E501"]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "D203",   # 1 blank line required before class docstring (conflicts with D211)
+    "D213",   # multi-line docstring summary should start at second line (conflicts with D212)
+]
 exclude = [
     ".git",
     "__pycache__",
@@ -62,6 +67,9 @@ exclude = [
 
 [tool.ruff.lint.isort]
 force-single-line = false
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"  # Use Google-style docstrings
 
 [tool.ruff.format]
 quote-style = "double"

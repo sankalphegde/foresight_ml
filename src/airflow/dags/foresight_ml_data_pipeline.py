@@ -1,6 +1,7 @@
-import os
+"""Airflow DAG for Foresight ML data ingestion pipeline."""
 
-# Import ingestion functions
+# ruff: noqa: I001
+import os
 import sys
 from datetime import datetime
 from typing import Any
@@ -10,12 +11,12 @@ from airflow.operators.python import PythonOperator
 
 sys.path.insert(0, "/opt/airflow")
 
-from src.ingestion.fred_job import main as fred_main
-from src.ingestion.sec_job import main as sec_main
+from src.ingestion.fred_job import main as fred_main  # noqa: E402
+from src.ingestion.sec_job import main as sec_main  # noqa: E402
 
 
 def run_fred_ingestion(**context: Any) -> None:
-    """Run FRED data ingestion"""
+    """Run FRED data ingestion."""
     execution_date = context["ds"]
     os.environ["EXECUTION_DATE"] = execution_date
     os.environ["GCS_BUCKET"] = os.getenv("GCS_BUCKET", "")
@@ -26,7 +27,7 @@ def run_fred_ingestion(**context: Any) -> None:
 
 
 def run_sec_ingestion(**context: Any) -> None:
-    """Run SEC data ingestion"""
+    """Run SEC data ingestion."""
     execution_date = context["ds"]
     os.environ["EXECUTION_DATE"] = execution_date
     os.environ["GCS_BUCKET"] = os.getenv("GCS_BUCKET", "")

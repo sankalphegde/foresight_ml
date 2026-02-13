@@ -1,3 +1,5 @@
+"""Script to fetch SEC company ticker list and generate companies CSV."""
+
 import pandas as pd
 import requests
 

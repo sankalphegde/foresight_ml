@@ -1,3 +1,5 @@
+"""FRED data ingestion job for Airflow pipeline."""
+
 import os
 from datetime import datetime
 
@@ -7,11 +9,13 @@ from src.data.clients.fred_client import FREDClient
 
 
 def get_year_month(execution_date: str) -> tuple[int, str]:
+    """Extract year and month from execution date string."""
     dt = datetime.fromisoformat(execution_date)
     return dt.year, f"{dt.month:02d}"
 
 
 def main() -> None:
+    """Fetch FRED economic indicators and upload to GCS."""
     # ---- REQUIRED ENV VARS ----
     execution_date = os.environ["EXECUTION_DATE"]
     bucket_name = os.environ["GCS_BUCKET"]

@@ -1,51 +1,73 @@
 # Foresight-ML: Corporate Financial Distress Early-Warning System
 
-**Foresight-ML** is an end-to-end MLOps pipeline designed to predict corporate financial distress before it becomes irreversible. By leveraging historical financial data and machine learning, this system offers a dynamic alternative to static, lagging financial indicators.
+End-to-end MLOps pipeline for predicting corporate financial distress using public SEC filings and economic indicators.
 
-> **📋 Quick Start**: See [SETUP.md](SETUP.md) for deployment instructions
-> **🔄 Data Collection**: 2020-2026 (6 years historical data)
-> **🏗️ Architecture**: Airflow on Cloud Run + GCS + BigQuery
-> **⚡ Deployment**: `terraform apply` (single command)
+> **🏗️ Stack**: Airflow on Cloud Run + GCS + BigQuery + DVC
+> **📊 Data**: 2020-2026 SEC/FRED data with DVC versioning
+> **⚡ Deploy**: `terraform apply` (single command)
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Data Sources](#data-sources)
+- [Project Structure](#project-structure)
+- [DVC Setup](#dvc-setup)
+- [Development](#development)
+- [CI/CD](#cicd)
+- [Testing](#testing)
+- [Common Tasks](#common-tasks)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Tech Stack](#tech-stack)
 
 ---
 
 ## Overview
 
-Traditional financial health monitoring suffers from two critical inefficiencies:
-
-1. **Latency in Detection**: Financial distress is typically identified only after official quarterly reports (10-Q/10-K) are released—often months after problems begin
-2. **Static & Outdated Thresholds**: Traditional methods rely on rigid rules (e.g., "Debt-to-Equity > 2.0") that fail to adapt to changing macroeconomic conditions
-
-**Foresight-ML** addresses these by treating financial distress as a time-series classification problem, updating risk scores as new data becomes available.
+MLOps pipeline for predicting corporate financial distress using:
+- **SEC filings**: 10-K/10-Q financial statements
+- **Economic indicators**: FRED data (interest rates, inflation, credit spreads)
+- **ML models**: Time-series classification with daily updates
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│  Airflow on Cloud Run                   │
-│  ┌─────────────────────────────────┐    │
-│  │ DAG: foresight_ingestion        │    │
-│  │  ├─ FRED ingestion (Python)     │    │
-│  │  └─ SEC ingestion (Python)      │    │
-│  └─────────────────────────────────┘    │
-└────────────┬────────────────────────────┘
-             │
-             ▼
-      ┌─────────────┐
-      │  GCS Bucket │  ← Raw data storage
-      │  BigQuery   │  ← Analytics/queries
-      └─────────────┘
+┌────────────────────────────┐
+│  Airflow (Cloud Run)       │
+│  ├─ FRED ingestion         │
+│  └─ SEC ingestion          │
+└───────────┬────────────────┘
+           │
+           ▼
+    ┌───────────────┐
+    │ GCS + BigQuery│
+    └──────┬────────┘
+           │
+           ▼
+    ┌────────────┐
+    │ Local Dev  │
+    │ (DVC)      │
+    └────────────┘
 ```
 
-**Key Components:**
-- **Airflow on Cloud Run**: Containerized Airflow deployed via Terraform, orchestrates data ingestion
-- **Data Sources**:
-  - SEC EDGAR (10-K/10-Q filings with XBRL)
-  - FRED (economic indicators: interest rates, inflation, credit spreads)
-- **Storage**: GCS with versioning for raw data, BigQuery for structured analytics
-- **Orchestration**: Daily ingestion with 6-year historical backfill (~25 days)
+- **Airflow (Cloud Run)**: Orchestrates data ingestion
+- **GCS**: Stores raw data and DVC remote storage
+- **BigQuery**: Structured data warehouse
+- **DVC**: Version control for data and models (local dev only)
+- **Terraform**: Infrastructure as code
+
+### Data Flow
+
+1. **Ingestion**: Airflow DAG runs daily, fetches data from SEC/FRED APIs
+2. **Storage**: Raw data → GCS with partitioning (year/quarter)
+3. **Analytics**: Data loaded into BigQuery
+4. **Local Development**: Pull data → process/experiment → track with DVC
 
 ---
 
@@ -53,95 +75,100 @@ Traditional financial health monitoring suffers from two critical inefficiencies
 
 ### Prerequisites
 
-- **Python 3.12+**
-- **Terraform 1.6+**
-- **Docker** (for local development)
-- **GCP Account** with billing enabled
+- **Python 3.12+** ([download](https://www.python.org/downloads/))
+- **Terraform 1.6+** ([install](https://developer.hashicorp.com/terraform/downloads))
+- **Docker** ([install](https://docs.docker.com/get-docker/))
+- **GCP account** with billing enabled
+- **FRED API key** ([get key](https://fred.stlouisfed.org/docs/api/))
 
-### Setup Authentication
-
-**For Terraform Deployment:**
-```bash
-# Use your personal account with Owner permissions
-gcloud auth login
-gcloud auth application-default login --scopes=https://www.googleapis.com/auth/cloud-platform
-gcloud config set project financial-distress-ew
-
-# Do NOT set GOOGLE_APPLICATION_CREDENTIALS for Terraform
-unset GOOGLE_APPLICATION_CREDENTIALS
-```
-
-**For Local Development (Optional - only needed to run ingestion scripts locally):**
-```bash
-# Authenticate and set project
-gcloud auth login
-gcloud config set project financial-distress-ew
-
-# Create service account (skip if exists)
-gcloud iam service-accounts create foresight-ml-sa \
-  --display-name="Foresight ML" 2>/dev/null || echo "Service account already exists"
-
-# Grant permissions
-gcloud projects add-iam-policy-binding financial-distress-ew \
-  --member="serviceAccount:foresight-ml-sa@financial-distress-ew.iam.gserviceaccount.com" \
-  --role="roles/storage.admin" --condition=None
-
-# Download key
-mkdir -p .gcp
-gcloud iam service-accounts keys create .gcp/service-account-key.json \
-  --iam-account=foresight-ml-sa@financial-distress-ew.iam.gserviceaccount.com
-```
-
-### Deploy Infrastructure
+### 1. Clone and Configure
 
 ```bash
-# 1. Clone and setup
 git clone <repo-url>
 cd foresight-ml
+
+# Copy and edit environment file
 cp example.env .env
-# Edit .env with your GCP_PROJECT_ID and API keys
+# Edit .env with:
+#   - GCP_PROJECT_ID
+#   - FRED_API_KEY
+#   - SEC_USER_AGENT
 
-# 2. Load environment
 source .env
-
-# 3. Deploy with Terraform
-cd infra
-terraform init
-terraform plan
-terraform apply
-
-# 4. Get Airflow URL
-terraform output airflow_url
-# Login: admin / admin
 ```
 
-That's it! Terraform handles:
-- GCS buckets + versioning
-- BigQuery dataset
-- Artifact Registry
-- Docker image build via Cloud Build
-- Cloud Run service deployment
-- IAM service accounts
-- Company list upload
+### 2. Authenticate with GCP
 
-**See [SETUP.md](SETUP.md) for detailed setup instructions including local development.**
+```bash
+# Login and set project
+gcloud auth login
+gcloud auth application-default login --scopes=https://www.googleapis.com/auth/cloud-platform
+gcloud config set project $GCP_PROJECT_ID
+
+# Enable required APIs
+gcloud services enable \
+  artifactregistry.googleapis.com \
+  bigquery.googleapis.com \
+  cloudbuild.googleapis.com \
+  run.googleapis.com \
+  storage.googleapis.com
+```
+
+### 3. Deploy Infrastructure
+
+```bash
+cd infra
+terraform init
+terraform plan    # Review what will be created
+terraform apply   # Type 'yes' to confirm
+
+# Get Airflow URL
+terraform output airflow_url
+```
+
+**What gets created:**
+- GCS bucket: `{project-id}-foresight-ml-data`
+- BigQuery dataset: `foresight_ml_dev`
+- Artifact Registry repository
+- Cloud Run service (Airflow)
+- IAM service accounts with minimal permissions
+
+### 4. Access Airflow
+
+```bash
+# Get URL
+terraform output airflow_url
+
+# Login: admin / admin
+# Enable the DAG: foresight_ml_data_pipeline
+```
 
 ---
 
 ## Data Sources
 
-All data is **publicly available** for transparency and reproducibility:
+All data is publicly available:
 
-| Source | Data Type | Frequency | Storage Path |
-|--------|-----------|-----------|--------------|
-| **SEC EDGAR** | 10-K/10-Q filings, XBRL financials | Quarterly/Annual | `gs://.../raw/sec/year=*/quarter=*/` |
-| **FRED** | Interest rates, inflation, credit spreads | Daily/Monthly | `gs://.../raw/fred/year=*/month=*/` |
-| **Reference** | S&P 500 company list | Static | `gs://.../reference/companies.csv` |
+### SEC EDGAR
+- **Content**: 10-K/10-Q filings with XBRL financial statements
+- **Companies**: S&P 500 constituents
+- **Frequency**: Quarterly/Annual
+- **Storage**: `gs://.../raw/sec/year=YYYY/quarter=Q/`
+- **API**: https://www.sec.gov/edgar/sec-api-documentation
 
-**Data Management:**
-- GCS object versioning tracks all changes automatically
-- BigQuery tables for structured queries
-- Partitioned by date for efficient queries
+### FRED (Federal Reserve Economic Data)
+- **Indicators**:
+  - Interest rates (10-year Treasury, Fed Funds)
+  - Inflation (CPI, PCE)
+  - Credit spreads (BAA-AAA)
+- **Frequency**: Daily/Monthly
+- **Storage**: `gs://.../raw/fred/year=YYYY/month=MM/`
+- **API**: https://fred.stlouisfed.org/docs/api/
+
+### Data Timeline
+- **Historical**: 2020-01-01 to present (~6 years)
+- **Ingestion**: Daily with catchup enabled
+- **Backfill**: ~25 days to complete initial load
 
 ---
 
@@ -149,31 +176,30 @@ All data is **publicly available** for transparency and reproducibility:
 
 ```
 foresight_ml/
-├── infra/                          # Infrastructure as Code (Terraform)
+├── infra/                          # Terraform infrastructure
 │   ├── artifact_registry.tf        # Docker registry + Cloud Build
 │   ├── bigquery.tf                 # BigQuery dataset
 │   ├── cloud_run.tf                # Airflow deployment
 │   ├── storage.tf                  # GCS buckets
-│   ├── iam.tf                      # Service accounts + IAM
-│   ├── outputs.tf
-│   ├── providers.tf
+│   ├── iam.tf                      # Service accounts
 │   └── variables.tf
 │
 ├── src/
 │   ├── airflow/dags/
-│   │   └── foresight_ml_data_pipeline.py  # Orchestration DAG
+│   │   └── foresight_ml_data_pipeline.py  # Main orchestration DAG
 │   ├── ingestion/
 │   │   ├── fred_job.py             # FRED data fetcher
 │   │   └── sec_job.py              # SEC filing fetcher
 │   ├── data/
-│   │   ├── clients/                # API wrappers
-│   │   ├── preprocess.py
-│   │   └── split.py
-│   ├── models/                     # ML pipeline
-│   │   ├── train.py
-│   │   ├── evaluate.py
-│   │   └── predict.py
+│   │   ├── clients/                # API client wrappers
+│   │   ├── preprocess.py           # Data cleaning
+│   │   └── split.py                # Train/test split
+│   ├── models/
+│   │   ├── train.py                # Model training
+│   │   ├── evaluate.py             # Model evaluation
+│   │   └── predict.py              # Inference
 │   └── utils/
+│       └── config.py               # Configuration management
 │
 ├── deployment/
 │   ├── cloudbuild.yaml             # Automated Docker builds
@@ -183,80 +209,195 @@ foresight_ml/
 ├── tests/                          # Unit + integration tests
 ├── notebooks/                      # EDA + experiments
 ├── monitoring/                     # Drift detection
-├── Makefile                        # Dev commands
+├── data/                           # Local data (gitignored, DVC tracked)
+├── cache/                          # API response cache
+│
+├── Makefile                        # Development commands
 ├── pyproject.toml                  # Python dependencies (uv)
-└── README.md                       # This file
+├── docker-compose.yml              # Local Airflow
+└── README.md
+```
+
+---
+
+## DVC Setup
+
+DVC tracks data and model versions locally. Use it for experiments, processed datasets, and model artifacts.
+
+### Initial Setup
+
+```bash
+# Install dependencies
+make setup
+
+# Load environment
+source .env
+
+# Initialize DVC with GCS remote
+make dvc-setup
+```
+
+### Tracking Data
+
+```bash
+# Track a file or directory
+uv run dvc add data/companies.csv
+uv run dvc add data/processed/
+
+# Commit .dvc metadata to Git
+git add data/companies.csv.dvc data/processed.dvc .gitignore
+git commit -m "Track data with DVC"
+
+# Push actual data to GCS
+make dvc-push
+```
+
+### Collaborating with DVC
+
+```bash
+# On another machine, after git clone:
+make setup
+source .env
+make dvc-setup
+make dvc-pull  # Downloads all tracked data from GCS
+
+# Check what changed
+uv run dvc status
+
+# After making changes
+uv run dvc add data/processed/
+git add data/processed.dvc
+git commit -m "Update processed data"
+make dvc-push
 ```
 
 ---
 
 ## Development
 
-### Local Development
+### Local Setup
 
 ```bash
-# Install dependencies
+# Install uv, dependencies, pre-commit hooks
 make setup
 
-# Run Airflow locally
+# Start local Airflow
 make local-up
-# Access: http://localhost:8080 (admin/admin)
 
-# Code quality checks
-make check          # Format, lint, type check, terraform validate
-make format         # Format + fix code
-make test           # Run tests
+# Access Airflow UI
+open http://localhost:8080  # admin/admin
 
-# Run ingestion locally (requires API keys in .env)
+# Stop Airflow
+make local-down
+```
+
+### Code Quality
+
+```bash
+# Run all checks (format + lint + type check + terraform)
+make check
+
+# Individual commands
+make format          # Auto-format with ruff
+make lint            # Check code style
+make typecheck       # Run mypy
+make terraform-check # Validate Terraform
+
+# Run tests
+make test
+
+# Run specific test
+uv run pytest tests/test_data_ingestion.py -v -k test_fred
+```
+
+### Running Jobs Locally
+
+```bash
+# Load API keys
 source .env
+
+# Run FRED ingestion
 uv run python -m src.ingestion.fred_job
+
+# Run SEC ingestion
 uv run python -m src.ingestion.sec_job
 ```
 
-### CI/CD
+---
 
-GitHub Actions workflow ([.github/workflows/ci.yml](.github/workflows/ci.yml)):
-- **checks**: Python formatting, linting, type checking, Terraform validation
-- **test**: Unit and integration tests
+## CI/CD
+
+### GitHub Actions
+
+Workflow file: `.github/workflows/ci.yml`
+
+**On every push:**
+- Code formatting check (ruff)
+- Linting (ruff)
+- Type checking (mypy)
+- Terraform validation
+- Unit tests
+- Integration tests (with API keys)
+
+### Required Secrets
+
+Configure in **GitHub Settings → Secrets → Actions**:
+
+| Secret | Value |
+|--------|-------|
+| `FRED_API_KEY` | Your FRED API key |
+| `SEC_USER_AGENT` | `app-name your@email.com` |
+
+### Deployment
+
+Infrastructure changes are deployed manually via Terraform:
+
+```bash
+cd infra
+terraform plan
+terraform apply
+```
+
+For code changes, rebuild the Docker image:
+
+```bash
+cd infra
+# Terraform will detect Dockerfile changes and rebuild
+terraform apply
+```
 
 ---
 
-## Configuration
+## Testing
 
-### Required Environment Variables
+### Run All Tests
 
 ```bash
-# GCP
-TF_VAR_project_id=your-gcp-project-id
-TF_VAR_region=us-central1
-
-# API Keys
-FRED_API_KEY=your-fred-api-key          # Get from https://fred.stlouisfed.org/docs/api/
-SEC_USER_AGENT=your-app your@email.com  # Required by SEC API
+make test
 ```
 
-### Getting API Keys
+### Unit Tests Only (No API Calls)
 
-**FRED:**
-1. Visit https://fred.stlouisfed.org/docs/api/
-2. Click "Request API Key"
-3. Add to `.env`: `FRED_API_KEY=...`
+```bash
+FRED_API_KEY="" SEC_USER_AGENT="" make test
+```
 
-**SEC:**
-- No key needed
-- Provide User-Agent: `SEC_USER_AGENT=app-name user@email.com`
+### Integration Tests (Requires API Keys)
+
+```bash
+source .env
+uv run pytest tests/test_data_ingestion.py -v
+```
+
+### Test Coverage
+
+```bash
+uv run pytest --cov=src tests/
+```
 
 ---
 
 ## Common Tasks
-
-### Update Infrastructure
-
-```bash
-cd infra
-terraform plan    # Review changes
-terraform apply   # Deploy changes
-```
 
 ### View Logs
 
@@ -264,162 +405,181 @@ terraform apply   # Deploy changes
 # Cloud Run logs
 gcloud run services logs tail foresight-airflow --region us-central1
 
-# Or use Airflow UI
-terraform output airflow_url
+# Follow logs
+gcloud run services logs tail foresight-airflow --region us-central1 --follow
 ```
 
-### Check Data
-
-### Check Data
+### Check Data in GCS
 
 ```bash
-# List GCS buckets (replace PROJECT_ID with your project)
-gsutil ls gs://PROJECT_ID-foresight-ml-data/
+# List buckets
+gsutil ls
 
 # Check FRED data
-gsutil ls gs://PROJECT_ID-foresight-ml-data/raw/fred/
+gsutil ls gs://$GCS_BUCKET/raw/fred/
 
 # Check SEC data
-gsutil ls gs://PROJECT_ID-foresight-ml-data/raw/sec/
+gsutil ls gs://$GCS_BUCKET/raw/sec/
 
-# Query BigQuery
-bq query --use_legacy_sql=false "SELECT COUNT(*) FROM \`your-project.foresight_ml.raw_filings\`"
+# Download a file
+gsutil cp gs://$GCS_BUCKET/raw/fred/year=2024/month=01/data.json .
+```
+
+### Query BigQuery
+
+```bash
+# List datasets
+bq ls
+
+# Query data
+bq query --use_legacy_sql=false \
+  "SELECT * FROM \`$GCP_PROJECT_ID.foresight_ml_dev.raw_filings\` LIMIT 10"
+```
+
+### Update Infrastructure
+
+```bash
+cd infra
+terraform plan
+terraform apply
+```
+
+### Force Rebuild Docker Image
+
+Edit `force_rebuild` in `infra/artifact_registry.tf` or just touch the Dockerfile:
+
+```bash
+touch deployment/docker/Dockerfile.airflow
+cd infra && terraform apply
 ```
 
 ### Cleanup
 
 ```bash
 cd infra
-terraform destroy
+terraform destroy  # Type 'yes' to confirm
 ```
+
+---
+
+## Configuration
+
+### Environment Variables
+
+Required in `.env`:
+
+```bash
+# GCP Configuration
+export GCP_PROJECT_ID="your-project-id"
+export GCS_BUCKET="${GCP_PROJECT_ID}-foresight-ml-data"
+
+# API Keys
+export FRED_API_KEY="your-fred-api-key"
+export SEC_USER_AGENT="foresight-ml your-email@example.com"
+
+# Terraform Variables
+export TF_VAR_project_id="${GCP_PROJECT_ID}"
+export TF_VAR_fred_api_key="${FRED_API_KEY}"
+export TF_VAR_sec_user_agent="${SEC_USER_AGENT}"
+export TF_VAR_region="us-central1"
+```
+
+### Getting API Keys
+
+**FRED:**
+1. Visit https://fred.stlouisfed.org/docs/api/
+2. Sign in/create account
+3. Click "Request API Key"
+4. Add to `.env`: `FRED_API_KEY=your-key-here`
+
+**SEC:**
+- No API key required
+- Must provide User-Agent with contact email
+- Format: `SEC_USER_AGENT="app-name your@email.com"`
 
 ---
 
 ## Troubleshooting
 
+### Terraform Issues
+
+**Permission Denied:**
+```bash
+# Re-authenticate with full scope
+gcloud auth application-default login --scopes=https://www.googleapis.com/auth/cloud-platform
+
+# Check project
+gcloud config get-value project
+```
+
+**Resource Already Exists:**
+```bash
+# Import existing resource
+cd infra
+terraform import google_storage_bucket.data_lake $GCP_PROJECT_ID-foresight-ml-data
+```
+
 ### Airflow Not Starting
 
 ```bash
-# Check Cloud Run logs
-gcloud run services logs tail foresight-airflow --region us-central1
-
-# View service status
+# Check Cloud Run status
 gcloud run services describe foresight-airflow --region us-central1
+
+# View logs
+gcloud run services logs tail foresight-airflow --region us-central1
 ```
 
-### Terraform Issues
+### API Rate Limits
 
-**Permission Denied Errors:**
-```bash
-# Re-authenticate with full cloud platform scope
-gcloud auth application-default login --scopes=https://www.googleapis.com/auth/cloud-platform
+**FRED:** 120 requests/minute
+**SEC:** 10 requests/second
 
-# Enable required APIs
-gcloud services enable artifactregistry.googleapis.com \
-  bigquery.googleapis.com \
-  cloudbuild.googleapis.com \
-  run.googleapis.com \
-  iam.googleapis.com
-```
+Adjust `sleep()` calls in ingestion jobs if hitting limits.
 
-**Resource Already Exists (e.g., BigQuery dataset):**
-```bash
-# Import existing resource into Terraform state
-cd infra
-terraform import google_bigquery_dataset.foresight_ml PROJECT_ID/foresight_ml_dev
-terraform plan
-```
-
-**Validation:**
-```bash
-# Validate configuration
-make terraform-check
-
-# Or manual validation
-cd infra
-terraform fmt -check
-terraform validate
-```
-
-### API Errors
-
-**FRED:**
-- Verify API key: https://fred.stlouisfed.org/docs/api/
-- Check rate limits: 120 requests/minute
-
-**SEC:**
-- Ensure User-Agent header is set correctly
-- Rate limit: 10 requests/second
-
-### Permission Errors
+### DVC Issues
 
 ```bash
-# Check service account roles
-gcloud projects get-iam-policy $GCP_PROJECT_ID \
-  --flatten="bindings[].members" \
-  --filter="bindings.members:foresight*"
-```
+# Re-configure remote
+uv run dvc remote modify storage credentialpath $GOOGLE_APPLICATION_CREDENTIALS
 
----
+# Check status
+uv run dvc status
 
-## Testing
-
-```bash
-# Run all tests
-make test
-
-# Run specific test file
-uv run pytest tests/test_data_ingestion.py -v
-
-# Run unit tests only (no API calls)
-FRED_API_KEY="" SEC_USER_AGENT="" make test
+# Force push
+uv run dvc push --force
 ```
 
 ---
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|-----------|
-| **Orchestration** | Apache Airflow 2.8+ |
-| **Infrastructure** | Terraform, GCP Cloud Run |
-| **Storage** | Google Cloud Storage, BigQuery |
-| **Language** | Python 3.12 |
-| **Package Manager** | uv |
-| **CI/CD** | GitHub Actions |
-| **Containerization** | Docker |
-| **Linting** | Ruff |
-| **Type Checking** | mypy |
-| **Testing** | pytest |
+| Component | Technology | Version |
+|-----------|-----------|---------|
+| **Orchestration** | Apache Airflow | 2.8+ |
+| **Cloud Platform** | Google Cloud Platform | - |
+| **Compute** | Cloud Run | - |
+| **Storage** | GCS, BigQuery | - |
+| **Infrastructure** | Terraform | 1.6+ |
+| **Language** | Python | 3.12 |
+| **Package Manager** | uv | 0.5+ |
+| **Data Versioning** | DVC | 3.66+ |
+| **Containerization** | Docker | - |
+| **CI/CD** | GitHub Actions | - |
+| **Linting** | Ruff | - |
+| **Type Checking** | mypy | - |
+| **Testing** | pytest | - |
 
 ---
 
 ## References
 
-- [Apache Airflow Documentation](https://airflow.apache.org/docs/)
+- [Apache Airflow Docs](https://airflow.apache.org/docs/)
 - [Google Cloud Run](https://cloud.google.com/run/docs)
-- [FRED API Documentation](https://fred.stlouisfed.org/docs/api/)
+- [FRED API](https://fred.stlouisfed.org/docs/api/)
 - [SEC EDGAR API](https://www.sec.gov/edgar/sec-api-documentation)
+- [DVC Documentation](https://dvc.org/doc)
 - [Terraform GCP Provider](https://registry.terraform.io/providers/hashicorp/google/latest/docs)
 - [uv Package Manager](https://docs.astral.sh/uv/)
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes
-4. Run tests and checks: `make check && make test`
-5. Commit your changes: `git commit -m 'Add amazing feature'`
-6. Push to the branch: `git push origin feature/amazing-feature`
-7. Open a Pull Request
-
----
-
-## License
-
-This project is for educational and research purposes.
 
 ---
 

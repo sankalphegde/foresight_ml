@@ -1,3 +1,5 @@
+"""Data preprocessing module for SEC and FRED data."""
+
 from __future__ import annotations
 
 import json
@@ -5,7 +7,7 @@ import os
 from pathlib import Path
 
 import pandas as pd
-from google.cloud import storage  # type: ignore[attr-defined]
+from google.cloud import storage
 
 BUCKET_NAME = os.getenv("GCP_BUCKET_RAW", "financial-distress-data")
 GCS_OUT_PATH = os.getenv("GCS_PREPROCESS_OUT", "interim/panel_base.parquet")
@@ -17,6 +19,7 @@ XBRL_LONG_LOCAL_DIR = os.getenv("XBRL_LONG_LOCAL_DIR", "data/raw/sec_xbrl_long")
 
 
 def read_sec_jsonl(path: str) -> pd.DataFrame:
+    """Read SEC filings from JSONL file and return standardized DataFrame."""
     rows = []
     with open(path) as f:
         for line in f:
@@ -46,6 +49,7 @@ def read_sec_jsonl(path: str) -> pd.DataFrame:
 
 
 def read_fred_csv(path: str) -> pd.DataFrame:
+    """Read FRED economic indicators from CSV file and return DataFrame."""
     df = pd.read_csv(path)
     df.columns = [c.strip().lower() for c in df.columns]
 
@@ -57,6 +61,7 @@ def read_fred_csv(path: str) -> pd.DataFrame:
 
 
 def upload_to_gcs(local_path: Path, bucket_name: str, gcs_path: str) -> None:
+    """Upload local file to Google Cloud Storage."""
     client = storage.Client()
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(gcs_path)
@@ -65,6 +70,7 @@ def upload_to_gcs(local_path: Path, bucket_name: str, gcs_path: str) -> None:
 
 
 def main() -> None:
+    """Main preprocessing entry point."""
     sec_path = "data/raw/sec/filings.jsonl"
     fred_path = "data/raw/fred/indicators.csv"
 
