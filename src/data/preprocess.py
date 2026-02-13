@@ -11,6 +11,10 @@ BUCKET_NAME = os.getenv("GCP_BUCKET_RAW", "financial-distress-data")
 GCS_OUT_PATH = os.getenv("GCS_PREPROCESS_OUT", "interim/panel_base.parquet")
 GCS_REPORT_PATH = os.getenv("GCS_PREPROCESS_REPORT_OUT", "interim/preprocess_report.json")
 
+# Optional: SEC XBRL long facts (many parquet files)
+GCS_XBRL_LONG_OUT_PATH = os.getenv("GCS_XBRL_LONG_OUT", "interim/sec_xbrl_long.parquet")
+XBRL_LONG_LOCAL_DIR = os.getenv("XBRL_LONG_LOCAL_DIR", "data/raw/sec_xbrl_long")
+
 
 def read_sec_jsonl(path: str) -> pd.DataFrame:
     rows = []
@@ -110,18 +114,33 @@ def main() -> None:
     }
 
     report_path = out_dir / "preprocess_report.json"
-    import json as _json
-
     with open(report_path, "w") as f:
-        _json.dump(report, f, indent=2)
+        json.dump(report, f, indent=2)
 
     print("Saved validation report:", report_path)
-
     print("Saved interim parquet:", out_path)
     print("Rows:", len(sec))
     print("Columns:", list(sec.columns))
 
-    # Upload to GCS
+    # --- OPTIONAL: SEC XBRL LONG (facts) ---
+    xbrl_dir = Path(XBRL_LONG_LOCAL_DIR)
+    xbrl_paths = sorted(xbrl_dir.glob("*.parquet")) if xbrl_dir.exists() else []
+
+    if xbrl_paths:
+        print(f"Reading SEC XBRL long facts from {xbrl_dir} ...")
+        xbrl_df = pd.concat([pd.read_parquet(p) for p in xbrl_paths], ignore_index=True)
+
+        xbrl_out_path = out_dir / "sec_xbrl_long.parquet"
+        xbrl_df.to_parquet(xbrl_out_path, index=False)
+        print("Saved XBRL long parquet:", xbrl_out_path)
+        print("XBRL long rows:", len(xbrl_df))
+
+        # Upload xbrl long parquet
+        upload_to_gcs(xbrl_out_path, BUCKET_NAME, GCS_XBRL_LONG_OUT_PATH)
+    else:
+        print("No local SEC XBRL long parquet files found. Skipping XBRL long output.")
+
+    # Upload main outputs
     upload_to_gcs(out_path, BUCKET_NAME, GCS_OUT_PATH)
     upload_to_gcs(report_path, BUCKET_NAME, GCS_REPORT_PATH)
 
