@@ -10,6 +10,8 @@ import pandas as pd
 from google.cloud import storage
 
 BUCKET_NAME = os.getenv("GCP_BUCKET_RAW", "financial-distress-data")
+
+# Main outputs
 GCS_OUT_PATH = os.getenv("GCS_PREPROCESS_OUT", "interim/panel_base.parquet")
 GCS_REPORT_PATH = os.getenv("GCS_PREPROCESS_REPORT_OUT", "interim/preprocess_report.json")
 
@@ -17,10 +19,13 @@ GCS_REPORT_PATH = os.getenv("GCS_PREPROCESS_REPORT_OUT", "interim/preprocess_rep
 GCS_XBRL_LONG_OUT_PATH = os.getenv("GCS_XBRL_LONG_OUT", "interim/sec_xbrl_long.parquet")
 XBRL_LONG_LOCAL_DIR = os.getenv("XBRL_LONG_LOCAL_DIR", "data/raw/sec_xbrl_long")
 
+# FRED macro history
+GCS_FRED_TS_OUT_PATH = os.getenv("GCS_FRED_TS_OUT", "interim/fred_timeseries.parquet")
+
 
 def read_sec_jsonl(path: str) -> pd.DataFrame:
     """Read SEC filings from JSONL file and return standardized DataFrame."""
-    rows = []
+    rows: list[dict] = []
     with open(path) as f:
         for line in f:
             line = line.strip()
@@ -53,9 +58,13 @@ def read_fred_csv(path: str) -> pd.DataFrame:
     df = pd.read_csv(path)
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # convert all columns to numeric
+    # Convert all columns to numeric if possible
     for c in df.columns:
-        df[c] = pd.to_numeric(df[c], errors="coerce")
+        # if there is a date column in the future, keep it parseable
+        if c == "date":
+            df[c] = pd.to_datetime(df[c], errors="coerce")
+        else:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
 
     return df
 
@@ -80,36 +89,55 @@ def main() -> None:
     if not Path(fred_path).exists():
         raise FileNotFoundError(f"FRED data file not found: {fred_path}")
 
+    # Output dir
+    out_dir = Path("data/interim")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     print("Reading SEC...")
     sec = read_sec_jsonl(sec_path)
 
     print("Reading FRED...")
     fred = read_fred_csv(fred_path)
 
-    # FRED has multiple rows but no date column.
-    # Use first row as latest snapshot
+    # --- FRED TIME SERIES OUTPUT (save full macro history) ---
+    fred_ts = fred.copy()
+
+    # If a date column exists, normalize it (optional)
+    if "date" in fred_ts.columns:
+        fred_ts["date"] = pd.to_datetime(fred_ts["date"], errors="coerce")
+        fred_ts = fred_ts.sort_values("date").reset_index(drop=True)
+
+    fred_ts_out_path = out_dir / "fred_timeseries.parquet"
+    fred_ts.to_parquet(fred_ts_out_path, index=False)
+    print("Saved FRED timeseries parquet:", fred_ts_out_path)
+    print("FRED timeseries rows:", len(fred_ts))
+
+    upload_to_gcs(fred_ts_out_path, BUCKET_NAME, GCS_FRED_TS_OUT_PATH)
+
+    # --- FRED SNAPSHOT (attach latest macro values onto each SEC filing row) ---
+    # Current raw indicators.csv in your bucket has no date column.
+    # We treat row 0 as the "latest snapshot" (consistent with your existing approach).
     latest_fred = fred.iloc[0]
 
     for col in fred.columns:
+        # avoid overwriting SEC's own date column if FRED ever adds one later
+        if col == "date":
+            continue
         sec[col] = latest_fred[col]
 
-    # Save interim output
-    out_dir = Path("data/interim")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # Save interim SEC+macro snapshot panel
     out_path = out_dir / "panel_base.parquet"
-
     sec.to_parquet(out_path, index=False)
 
     # --- VALIDATION REPORT ---
     print("Creating validation report...")
 
-    report = {
+    report: dict = {
         "row_count": int(len(sec)),
         "columns": list(sec.columns),
         "null_counts": sec.isna().sum().to_dict(),
     }
 
-    # numeric ranges
     numeric_cols = sec.select_dtypes(include="number").columns
     report["numeric_ranges"] = {
         col: {
@@ -117,6 +145,12 @@ def main() -> None:
             "max": float(sec[col].max()) if len(sec) else None,
         }
         for col in numeric_cols
+    }
+
+    # Optional: include FRED TS shape info
+    report["fred_timeseries"] = {
+        "row_count": int(len(fred_ts)),
+        "columns": list(fred_ts.columns),
     }
 
     report_path = out_dir / "preprocess_report.json"
@@ -141,7 +175,11 @@ def main() -> None:
         print("Saved XBRL long parquet:", xbrl_out_path)
         print("XBRL long rows:", len(xbrl_df))
 
-        # Upload xbrl long parquet
+        report["xbrl_long"] = {
+            "row_count": int(len(xbrl_df)),
+            "columns": list(xbrl_df.columns),
+        }
+
         upload_to_gcs(xbrl_out_path, BUCKET_NAME, GCS_XBRL_LONG_OUT_PATH)
     else:
         print("No local SEC XBRL long parquet files found. Skipping XBRL long output.")
