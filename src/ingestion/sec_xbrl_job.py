@@ -1,3 +1,8 @@
+"""SEC XBRL ingestion job.
+
+Fetches SEC XBRL company facts data and uploads processed output to GCS.
+"""
+
 import json
 import os
 from datetime import datetime
@@ -10,12 +15,25 @@ from src.data.clients.sec_xbrl_client import SECXBRLClient
 
 
 def get_year_quarter(execution_date: str) -> tuple[int, str]:
+    """Extract year and quarter string from an ISO execution date.
+
+    Args:
+        execution_date: Execution date in ISO format (YYYY-MM-DD).
+
+    Returns:
+        A tuple of (year, quarter_string) where quarter_string is like "Q1".
+    """
     dt = datetime.fromisoformat(execution_date)
     quarter = (dt.month - 1) // 3 + 1
     return dt.year, f"Q{quarter}"
 
 
 def main() -> None:
+    """Entry point for SEC XBRL ingestion job.
+
+    Reads execution parameters from environment variables,
+    fetches SEC data, and writes output to the configured GCS bucket.
+    """
     execution_date = os.environ["EXECUTION_DATE"]
     bucket_name = os.environ["GCS_BUCKET"]
     user_agent = os.environ["SEC_USER_AGENT"]
@@ -48,10 +66,7 @@ def main() -> None:
             # ---------- 1. STORE RAW JSON ----------
             raw_json = xbrl_client.get_company_facts(cik)
 
-            raw_path = (
-                f"raw/sec_xbrl_json/year={year}/quarter={quarter}/"
-                f"cik={cik}.json"
-            )
+            raw_path = f"raw/sec_xbrl_json/year={year}/quarter={quarter}/" f"cik={cik}.json"
 
             bucket.blob(raw_path).upload_from_string(
                 json.dumps(raw_json),
@@ -67,10 +82,7 @@ def main() -> None:
             df["ticker"] = ticker
 
             # ---------- 3. WRITE PARQUET PER COMPANY ----------
-            parquet_path = (
-                f"raw/sec_xbrl_long/year={year}/quarter={quarter}/"
-                f"cik={cik}.parquet"
-            )
+            parquet_path = f"raw/sec_xbrl_long/year={year}/quarter={quarter}/" f"cik={cik}.parquet"
 
             with bucket.blob(parquet_path).open("wb") as f:
                 df.to_parquet(f, index=False)

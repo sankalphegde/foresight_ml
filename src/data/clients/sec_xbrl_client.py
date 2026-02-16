@@ -1,6 +1,7 @@
 """SEC XBRL Company Facts client (fully extracted long format)."""
 
 from typing import Any
+
 import pandas as pd
 
 from src.data.clients.sec_client import SECClient
@@ -10,6 +11,11 @@ class SECXBRLClient:
     """Client for SEC XBRL company facts endpoint."""
 
     def __init__(self, sec_client: SECClient) -> None:
+        """Initialize SECXBRLClient.
+
+        Args:
+            sec_client: Base SEC client used to perform HTTP requests.
+        """
         self.sec_client = sec_client
 
     def get_company_facts(self, cik: str) -> dict[str, Any]:
@@ -23,15 +29,13 @@ class SECXBRLClient:
         forms: list[str] | None = None,
         only_quarters: bool = True,
     ) -> pd.DataFrame:
-        """
-        Extract ALL us-gaap facts in long format.
+        """Extract ALL us-gaap facts in long format.
 
         Output schema:
 
         | cik | tag | unit | value | start_date | end_date |
         | fiscal_year | fiscal_period | form | filed_date | frame |
         """
-
         forms = forms or ["10-Q", "10-K"]
 
         data = self.get_company_facts(cik)
@@ -44,7 +48,6 @@ class SECXBRLClient:
 
             for unit_name, unit_entries in units.items():
                 for entry in unit_entries:
-
                     form = entry.get("form")
                     if form not in forms:
                         continue
