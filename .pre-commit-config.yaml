@@ -26,7 +26,7 @@ repos:
 
   # --- Security & Secret Detection ---
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.22.1
+    rev: v8.18.1
     hooks:
       - id: gitleaks
 
