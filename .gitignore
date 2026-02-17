@@ -63,7 +63,4 @@ temp/
 *.csv
 *.xlsx
 *.tsv
-*.jsonl
-data/
-cleaned_data/
-raw_data/
+*.jsonlgi
