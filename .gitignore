@@ -57,3 +57,13 @@ temp/
 .dvc/tmp
 .dvc/cache
 .dvc/plots
+
+# Data Files 
+*.parquet
+*.csv
+*.xlsx
+*.tsv
+*.jsonl
+data/
+cleaned_data/
+raw_data/
