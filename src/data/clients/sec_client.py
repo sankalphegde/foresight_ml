@@ -75,18 +75,26 @@ class SECClient:
 
     def _get_cached(self, url: str) -> dict | None:
         """Get cached response if exists."""
-        cache_file = self.cache_dir / self._cache_key(url)
-        if cache_file.exists():
-            with open(cache_file) as f:
-                data: dict[Any, Any] = json.load(f)
-                return data
+        try:
+            cache_file = self.cache_dir / self._cache_key(url)
+            if cache_file.exists():
+                with open(cache_file) as f:
+                    data: dict[Any, Any] = json.load(f)
+                    return data
+        except (OSError, IOError) as e:
+            # Silently ignore cache read errors (e.g., I/O errors on Windows Docker mounts)
+            pass
         return None
 
     def _save_cache(self, url: str, data: dict) -> None:
         """Save response to cache."""
-        cache_file = self.cache_dir / self._cache_key(url)
-        with open(cache_file, "w") as f:
-            json.dump(data, f)
+        try:
+            cache_file = self.cache_dir / self._cache_key(url)
+            with open(cache_file, "w") as f:
+                json.dump(data, f)
+        except (OSError, IOError) as e:
+            # Silently ignore cache write errors (e.g., I/O errors on Windows Docker mounts)
+            pass
 
     def get(self, endpoint: str, use_cache: bool = True) -> dict:
         """GET request with caching and rate limiting.

@@ -25,5 +25,39 @@ services:
       - airflow-data:/opt/airflow
     restart: unless-stopped
 
+  # SEC XBRL Incremental Ingestion Job
+  sec-xbrl-increment:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion
+    container_name: sec-xbrl-increment
+    environment:
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID:-financial-distress-ew}
+      - GCS_BUCKET=${GCS_BUCKET}
+      - SEC_USER_AGENT=${SEC_USER_AGENT}
+    volumes:
+      - ${APPDATA}/gcloud:/root/.config/gcloud:ro
+      - ./cache:/app/cache
+    command: ["uv", "run", "python", "-m", "src.ingestion.sec_xbrl_increment_job"]
+    profiles:
+      - ingestion
+
+  # FRED Incremental Ingestion Job
+  fred-increment:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion
+    container_name: fred-increment
+    environment:
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID:-financial-distress-ew}
+      - GCS_BUCKET=${GCS_BUCKET}
+      - FRED_API_KEY=${FRED_API_KEY}
+    volumes:
+      - ${APPDATA}/gcloud:/root/.config/gcloud:ro
+      - ./cache:/app/cache
+    command: ["uv", "run", "python", "-m", "src.ingestion.fred_increment_job"]
+    profiles:
+      - ingestion
+
 volumes:
   airflow-data:
