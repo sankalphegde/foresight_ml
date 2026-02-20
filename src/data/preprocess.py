@@ -136,15 +136,29 @@ def preprocess_sec(df: pd.DataFrame) -> pd.DataFrame:
     if n_dropped_fp:
         log.info("Dropped %d rows with invalid fiscal_period", n_dropped_fp)
 
-    # 5. Rebuild quarter_key for consistency
+    # 5. Filter unreasonable fiscal_year (e.g. Excel date serial numbers)
+    n_before = len(df)
+    df = df[df["fiscal_year"].between(1990, 2030)]
+    n_dropped_yr = n_before - len(df)
+    if n_dropped_yr:
+        log.info("Dropped %d rows with fiscal_year outside 1990-2030", n_dropped_yr)
+
+    # 6. Drop quarter_end_date if mostly null (raw schema artifact)
+    if "quarter_end_date" in df.columns:
+        null_pct = df["quarter_end_date"].isna().mean()
+        if null_pct > 0.9:
+            df = df.drop(columns=["quarter_end_date"])
+            log.info("Dropped quarter_end_date column (%.1f%% null)", null_pct * 100)
+
+    # 7. Rebuild quarter_key for consistency
     df["quarter_key"] = df["fiscal_year"].astype(str) + "_" + df["fiscal_period"]
 
-    # 6. Parse dates
+    # 8. Parse dates
     for col in ["filed_date", "end_date", "start_date"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # 7. Deduplicate: keep latest filed_date per (cik, fiscal_year, fiscal_period, tag)
+    # 9. Deduplicate: keep latest filed_date per (cik, fiscal_year, fiscal_period, tag)
     n_before = len(df)
     sort_col = "filed_date" if "filed_date" in df.columns else None
     if sort_col is not None:
