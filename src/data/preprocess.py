@@ -1,15 +1,20 @@
 """
 Preprocessing module for SEC XBRL and FRED raw data.
 
-Reads partitioned parquet files from GCS raw layer,
-applies formatting and basic fixes, and writes interim
-parquet files back to GCS.
+Reads partitioned parquet files from local raw layer
+(synced from GCS via gsutil), applies formatting and basic
+fixes, and writes interim parquet files locally + uploads to GCS.
 
-Raw layer contract:
-  SEC:  gs://{BUCKET}/raw/sec_xbrl/cik=XXXXXXXXXX/data.parquet
-  FRED: gs://{BUCKET}/raw/fred/series_id=SERIES.parquet
+Raw layer contract (local mirror of GCS):
+  SEC:  data/raw/sec_xbrl/cik=XXXXXXXXXX/data.parquet
+  FRED: data/raw/fred/series_id=SERIES.parquet
 
 Interim outputs:
+  data/interim/sec_xbrl_long.parquet
+  data/interim/fred_timeseries.parquet
+  data/interim/preprocess_report.json
+
+  Uploaded to:
   gs://{BUCKET}/interim/sec_xbrl_long.parquet
   gs://{BUCKET}/interim/fred_timeseries.parquet
   gs://{BUCKET}/interim/preprocess_report.json
@@ -21,24 +26,23 @@ import json
 import logging
 import os
 import re
+import subprocess
 from pathlib import Path
 
 import pandas as pd
-from google.cloud import storage
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 BUCKET_NAME = os.getenv("GCP_BUCKET_RAW", "financial-distress-data")
 
-GCS_SEC_RAW_PREFIX = os.getenv("GCS_SEC_RAW_PREFIX", "raw/sec_xbrl/")
-GCS_FRED_RAW_PREFIX = os.getenv("GCS_FRED_RAW_PREFIX", "raw/fred/")
+LOCAL_SEC_RAW = Path(os.getenv("LOCAL_SEC_RAW", "data/raw/sec_xbrl"))
+LOCAL_FRED_RAW = Path(os.getenv("LOCAL_FRED_RAW", "data/raw/fred"))
+LOCAL_OUT_DIR = Path(os.getenv("LOCAL_OUT_DIR", "data/interim"))
 
 GCS_SEC_OUT = os.getenv("GCS_SEC_OUT", "interim/sec_xbrl_long.parquet")
 GCS_FRED_OUT = os.getenv("GCS_FRED_OUT", "interim/fred_timeseries.parquet")
 GCS_REPORT_OUT = os.getenv("GCS_REPORT_OUT", "interim/preprocess_report.json")
-
-LOCAL_OUT_DIR = Path(os.getenv("LOCAL_OUT_DIR", "data/interim"))
 
 VALID_FISCAL_PERIODS = {"Q1", "Q2", "Q3", "Q4", "FY"}
 
@@ -46,69 +50,51 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# GCS helpers
+# Upload helper (uses gsutil to avoid SDK billing issues)
 # ---------------------------------------------------------------------------
 
-def _gcs_client() -> storage.Client:
-    return storage.Client()
-
-
-def list_blobs(bucket: str, prefix: str, suffix: str = ".parquet") -> list[str]:
-    """Return blob names under *prefix* that end with *suffix*."""
-    client = _gcs_client()
-    blobs = client.list_blobs(bucket, prefix=prefix)
-    return [b.name for b in blobs if b.name.endswith(suffix)]
-
-
-def read_parquet_from_gcs(bucket: str, blob_name: str) -> pd.DataFrame:
-    """Read a single parquet file from GCS into a DataFrame."""
-    import io
-    client = _gcs_client()
-    blob = client.bucket(bucket).blob(blob_name)
-    data = blob.download_as_bytes()
-    return pd.read_parquet(io.BytesIO(data))
-
-
 def upload_to_gcs(local_path: Path, bucket: str, gcs_path: str) -> None:
-    """Upload a local file to GCS."""
-    client = _gcs_client()
-    blob = client.bucket(bucket).blob(gcs_path)
-    blob.upload_from_filename(str(local_path))
-    log.info("Uploaded -> gs://%s/%s", bucket, gcs_path)
+    """Upload a local file to GCS using gsutil."""
+    dest = f"gs://{bucket}/{gcs_path}"
+    try:
+        subprocess.run(
+            ["gsutil", "cp", str(local_path), dest],
+            check=True, capture_output=True, text=True,
+        )
+        log.info("Uploaded -> %s", dest)
+    except FileNotFoundError:
+        log.warning("gsutil not found; skipping upload of %s", dest)
+    except subprocess.CalledProcessError as e:
+        log.warning("gsutil upload failed for %s: %s", dest, e.stderr.strip())
 
 
 # ---------------------------------------------------------------------------
 # SEC preprocessing
 # ---------------------------------------------------------------------------
 
-def _extract_cik_from_blob(blob_name: str) -> str | None:
-    """Extract 10-digit CIK from blob path like raw/sec_xbrl/cik=0000001750/data.parquet."""
-    m = re.search(r"cik=(\d+)", blob_name)
-    return m.group(1).zfill(10) if m else None
+def load_sec_raw(raw_dir: Path) -> pd.DataFrame:
+    """Load all SEC XBRL partitioned parquet files from local directory."""
+    parquet_files = sorted(raw_dir.glob("cik=*/data.parquet"))
+    if not parquet_files:
+        raise FileNotFoundError(f"No SEC parquet files found under {raw_dir}")
 
-
-def load_sec_raw(bucket: str, prefix: str) -> pd.DataFrame:
-    """Load all SEC XBRL partitioned parquet files into one DataFrame."""
-    blobs = list_blobs(bucket, prefix)
-    if not blobs:
-        raise FileNotFoundError(f"No SEC parquet files found under gs://{bucket}/{prefix}")
-
-    log.info("Found %d SEC parquet files", len(blobs))
+    log.info("Found %d SEC parquet files", len(parquet_files))
     frames: list[pd.DataFrame] = []
-    for i, blob_name in enumerate(blobs):
+    for i, fp in enumerate(parquet_files):
         if (i + 1) % 200 == 0:
-            log.info("  Reading SEC file %d / %d ...", i + 1, len(blobs))
-        df = read_parquet_from_gcs(bucket, blob_name)
-        # The hive partition column 'cik' may or may not be auto-included
-        if "cik" not in df.columns:
-            cik = _extract_cik_from_blob(blob_name)
-            if cik is None:
-                log.warning("Skipping blob with unparseable CIK: %s", blob_name)
-                continue
-            df["cik"] = cik
-        # Normalize cik to string to avoid type conflicts across files
-        if "cik" in df.columns:
-            df["cik"] = df["cik"].astype(str)
+            log.info("  Reading SEC file %d / %d ...", i + 1, len(parquet_files))
+
+        df = pd.read_parquet(fp)
+
+        # Extract CIK from directory name (cik=0000001750)
+        m = re.search(r"cik=(\d+)", str(fp))
+        cik = m.group(1).zfill(10) if m else None
+        if cik is None:
+            log.warning("Skipping file with unparseable CIK: %s", fp)
+            continue
+
+        # Always set cik from directory to ensure consistency
+        df["cik"] = cik
         frames.append(df)
 
     return pd.concat(frames, ignore_index=True)
@@ -176,26 +162,21 @@ def preprocess_sec(df: pd.DataFrame) -> pd.DataFrame:
 # FRED preprocessing
 # ---------------------------------------------------------------------------
 
-def _extract_series_id_from_blob(blob_name: str) -> str | None:
-    """Extract series_id from blob like raw/fred/series_id=CPIAUCSL.parquet."""
-    m = re.search(r"series_id=([^/]+)\.parquet", blob_name)
-    return m.group(1) if m else None
+def load_fred_raw(raw_dir: Path) -> pd.DataFrame:
+    """Load all FRED partitioned parquet files from local directory."""
+    parquet_files = sorted(raw_dir.glob("series_id=*.parquet"))
+    if not parquet_files:
+        raise FileNotFoundError(f"No FRED parquet files found under {raw_dir}")
 
-
-def load_fred_raw(bucket: str, prefix: str) -> pd.DataFrame:
-    """Load all FRED partitioned parquet files into one DataFrame."""
-    blobs = list_blobs(bucket, prefix)
-    if not blobs:
-        raise FileNotFoundError(f"No FRED parquet files found under gs://{bucket}/{prefix}")
-
-    log.info("Found %d FRED parquet files", len(blobs))
+    log.info("Found %d FRED parquet files", len(parquet_files))
     frames: list[pd.DataFrame] = []
-    for blob_name in blobs:
-        sid = _extract_series_id_from_blob(blob_name)
-        if sid is None:
-            log.warning("Skipping blob with unparseable series_id: %s", blob_name)
+    for fp in parquet_files:
+        m = re.search(r"series_id=([^/]+)\.parquet", fp.name)
+        if m is None:
+            log.warning("Skipping file with unparseable series_id: %s", fp)
             continue
-        df = read_parquet_from_gcs(bucket, blob_name)
+        sid = m.group(1)
+        df = pd.read_parquet(fp)
         df["series_id"] = sid
         frames.append(df)
 
@@ -207,7 +188,7 @@ def preprocess_fred(df: pd.DataFrame) -> pd.DataFrame:
 
     Rules:
       1. Standardize columns
-      2. Parse date, ensure it is quarter-end
+      2. Parse date, snap to quarter-end
       3. Cast value to float
       4. Deduplicate by (series_id, date)
       5. Sort ascending by series_id, date
@@ -274,23 +255,23 @@ def build_report(sec: pd.DataFrame, fred: pd.DataFrame) -> dict:
 # ---------------------------------------------------------------------------
 
 def run_preprocessing(
+    sec_raw_dir: Path = LOCAL_SEC_RAW,
+    fred_raw_dir: Path = LOCAL_FRED_RAW,
+    out_dir: Path = LOCAL_OUT_DIR,
     bucket: str = BUCKET_NAME,
-    sec_prefix: str = GCS_SEC_RAW_PREFIX,
-    fred_prefix: str = GCS_FRED_RAW_PREFIX,
-    sec_out: str = GCS_SEC_OUT,
-    fred_out: str = GCS_FRED_OUT,
-    report_out: str = GCS_REPORT_OUT,
+    sec_gcs_out: str = GCS_SEC_OUT,
+    fred_gcs_out: str = GCS_FRED_OUT,
+    report_gcs_out: str = GCS_REPORT_OUT,
 ) -> dict:
     """Execute the full preprocessing pipeline.
 
     Returns the validation report dict (useful for Airflow XCom).
     """
-    out_dir = LOCAL_OUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # --- SEC ---
-    log.info("Loading SEC raw data from gs://%s/%s ...", bucket, sec_prefix)
-    sec_raw = load_sec_raw(bucket, sec_prefix)
+    log.info("Loading SEC raw data from %s ...", sec_raw_dir)
+    sec_raw = load_sec_raw(sec_raw_dir)
     log.info("SEC raw rows: %d", len(sec_raw))
 
     sec = preprocess_sec(sec_raw)
@@ -302,8 +283,8 @@ def run_preprocessing(
     log.info("Saved SEC interim: %s", sec_local)
 
     # --- FRED ---
-    log.info("Loading FRED raw data from gs://%s/%s ...", bucket, fred_prefix)
-    fred_raw = load_fred_raw(bucket, fred_prefix)
+    log.info("Loading FRED raw data from %s ...", fred_raw_dir)
+    fred_raw = load_fred_raw(fred_raw_dir)
     log.info("FRED raw rows: %d", len(fred_raw))
 
     fred = preprocess_fred(fred_raw)
@@ -321,10 +302,10 @@ def run_preprocessing(
         json.dump(report, f, indent=2, default=str)
     log.info("Saved report: %s", report_local)
 
-    # --- Upload ---
-    upload_to_gcs(sec_local, bucket, sec_out)
-    upload_to_gcs(fred_local, bucket, fred_out)
-    upload_to_gcs(report_local, bucket, report_out)
+    # --- Upload to GCS ---
+    upload_to_gcs(sec_local, bucket, sec_gcs_out)
+    upload_to_gcs(fred_local, bucket, fred_gcs_out)
+    upload_to_gcs(report_local, bucket, report_gcs_out)
 
     log.info("Preprocessing complete.")
     return report
