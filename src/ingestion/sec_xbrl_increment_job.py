@@ -49,7 +49,7 @@ def load_existing(storage_client: "storage.Client", cik: str) -> "pd.DataFrame |
     if not blob.exists():
         return None
     with blob.open("rb") as f:
-        return pd.read_parquet(f)  # type: ignore
+        return pd.read_parquet(f)  
 
 
 def save(storage_client: "storage.Client", cik: str, df: "pd.DataFrame") -> None:
@@ -57,7 +57,7 @@ def save(storage_client: "storage.Client", cik: str, df: "pd.DataFrame") -> None
     blob_path = f"{RAW_PREFIX}/cik={cik}/data.parquet"
     bucket = storage_client.bucket(BUCKET)
     with bucket.blob(blob_path).open("wb") as f:
-        df.to_parquet(f, index=False)  # type: ignore
+        df.to_parquet(f, index=False)  
     print(f"Saved -> {blob_path}")
 
 
@@ -68,7 +68,7 @@ def main() -> None:
     bucket = storage_client.bucket(BUCKET)
 
     companies_df = pd.read_csv(
-        bucket.blob("reference/companies.csv").open("r")  # type: ignore
+        bucket.blob("reference/companies.csv").open("r")  
     )
 
     sec = SECClient(user_agent=USER_AGENT)
@@ -79,7 +79,7 @@ def main() -> None:
 
     for idx, row in companies_df.iterrows():
         cik = str(row["cik"]).zfill(10)
-        print(f"[{idx+1}/{total_companies}] Processing {cik}")  # type: ignore
+        print(f"[{idx+1}/{total_companies}] Processing {cik}")  
         try:
             new_df = xbrl.extract_long_format(cik)
         except Exception as e:
