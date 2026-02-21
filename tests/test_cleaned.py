@@ -1,3 +1,5 @@
+"""Test suite for validating the cleaned financial data pipeline."""
+
 import pytest
 import pandas as pd
 import numpy as np
