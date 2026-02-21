@@ -1,5 +1,5 @@
-"""
-Production SEC XBRL ingestion.
+"""Production SEC XBRL ingestion.
+
 Handles:
 - Initial full load
 - Incremental updates
@@ -21,6 +21,7 @@ RAW_PREFIX = "raw/sec_xbrl"
 
 
 def quarter_key(df: pd.DataFrame) -> pd.Series:
+    """Generate a combined string key for the fiscal quarter."""
     return (
         df["fiscal_year"].astype(int).astype(str)
         + "_"
@@ -29,6 +30,7 @@ def quarter_key(df: pd.DataFrame) -> pd.Series:
 
 
 def clean(df: pd.DataFrame) -> pd.DataFrame:
+    """Clean and format SEC XBRL data columns."""
     df = df.copy()
     df["cik"] = df["cik"].astype(str).str.zfill(10)
     df["fiscal_year"] = pd.to_numeric(df["fiscal_year"], errors="coerce")
@@ -39,31 +41,34 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def load_existing(storage_client, cik):
+def load_existing(storage_client: "storage.Client", cik: str) -> "pd.DataFrame | None":
+    """Load existing SEC data for a given CIK from cloud storage."""
     blob_path = f"{RAW_PREFIX}/cik={cik}/data.parquet"
     bucket = storage_client.bucket(BUCKET)
     blob = bucket.blob(blob_path)
     if not blob.exists():
         return None
     with blob.open("rb") as f:
-        return pd.read_parquet(f)
+        return pd.read_parquet(f)  
 
 
-def save(storage_client, cik, df):
+def save(storage_client: "storage.Client", cik: str, df: "pd.DataFrame") -> None:
+    """Save updated SEC data for a given CIK to cloud storage."""
     blob_path = f"{RAW_PREFIX}/cik={cik}/data.parquet"
     bucket = storage_client.bucket(BUCKET)
     with bucket.blob(blob_path).open("wb") as f:
-        df.to_parquet(f, index=False)
+        df.to_parquet(f, index=False)  
     print(f"Saved -> {blob_path}")
 
 
-def main():
+def main() -> None:
+    """Execute the main ingestion pipeline for SEC XBRL data."""
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
     storage_client = storage.Client(project=project_id)
     bucket = storage_client.bucket(BUCKET)
 
     companies_df = pd.read_csv(
-        bucket.blob("reference/companies.csv").open("r")
+        bucket.blob("reference/companies.csv").open("r")  
     )
 
     sec = SECClient(user_agent=USER_AGENT)
@@ -74,8 +79,7 @@ def main():
 
     for idx, row in companies_df.iterrows():
         cik = str(row["cik"]).zfill(10)
-        print(f"[{idx+1}/{total_companies}] Processing {cik}")
-
+        print(f"[{idx+1}/{total_companies}] Processing {cik}")  
         try:
             new_df = xbrl.extract_long_format(cik)
         except Exception as e:
