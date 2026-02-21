@@ -21,7 +21,7 @@ def load_existing(storage_client: "storage.Client", series_id: str) -> "pd.DataF
     if not blob.exists():
         return None
     with blob.open("rb") as f:
-        return pd.read_parquet(f)  # type: ignore
+        return pd.read_parquet(f) 
 
 
 def save(storage_client: "storage.Client", series_id: str, df: "pd.DataFrame") -> None:
@@ -29,7 +29,7 @@ def save(storage_client: "storage.Client", series_id: str, df: "pd.DataFrame") -
     blob_path = f"{RAW_PREFIX}/series_id={series_id}.parquet"
     bucket = storage_client.bucket(BUCKET)
     with bucket.blob(blob_path).open("wb") as f:
-        df.to_parquet(f, index=False)  # type: ignore
+        df.to_parquet(f, index=False)  
     print("Saved", blob_path)
 
 
