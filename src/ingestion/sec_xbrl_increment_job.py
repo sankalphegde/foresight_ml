@@ -1,5 +1,5 @@
-"""
-Production SEC XBRL ingestion.
+"""Production SEC XBRL ingestion.
+
 Handles:
 - Initial full load
 - Incremental updates
@@ -21,6 +21,7 @@ RAW_PREFIX = "raw/sec_xbrl"
 
 
 def quarter_key(df: pd.DataFrame) -> pd.Series:
+    """Generate a combined string key for the fiscal quarter."""
     return (
         df["fiscal_year"].astype(int).astype(str)
         + "_"
@@ -29,6 +30,7 @@ def quarter_key(df: pd.DataFrame) -> pd.Series:
 
 
 def clean(df: pd.DataFrame) -> pd.DataFrame:
+    """Clean and format SEC XBRL data columns."""
     df = df.copy()
     df["cik"] = df["cik"].astype(str).str.zfill(10)
     df["fiscal_year"] = pd.to_numeric(df["fiscal_year"], errors="coerce")
@@ -40,6 +42,7 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_existing(storage_client, cik):
+    """Load existing SEC data for a given CIK from cloud storage."""
     blob_path = f"{RAW_PREFIX}/cik={cik}/data.parquet"
     bucket = storage_client.bucket(BUCKET)
     blob = bucket.blob(blob_path)
@@ -50,6 +53,7 @@ def load_existing(storage_client, cik):
 
 
 def save(storage_client, cik, df):
+    """Save updated SEC data for a given CIK to cloud storage."""
     blob_path = f"{RAW_PREFIX}/cik={cik}/data.parquet"
     bucket = storage_client.bucket(BUCKET)
     with bucket.blob(blob_path).open("wb") as f:
@@ -58,6 +62,7 @@ def save(storage_client, cik, df):
 
 
 def main():
+    """Execute the main ingestion pipeline for SEC XBRL data."""
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
     storage_client = storage.Client(project=project_id)
     bucket = storage_client.bucket(BUCKET)

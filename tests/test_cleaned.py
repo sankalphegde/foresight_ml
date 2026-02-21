@@ -11,7 +11,7 @@ import numpy as np
 def cleaned_data():
     """Loads the final cleaned parquet files from GCS."""
     print("\nLoading cleaned data from GCS for testing...")
-    df = pd.read_parquet('gs://financial-distress-data/cleaned_data/final_v2/train_*.parquet')
+    df = pd.read_parquet('gs://financial-distress-data/cleaned_data/final_v2/train_000000000000.parquet')
     return df
 
 # -------------------------------------------------------------------

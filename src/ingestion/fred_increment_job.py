@@ -1,5 +1,5 @@
-"""
-Production FRED ingestion.
+"""Production FRED ingestion.
+
 Stores full time series per series_id.
 """
 
@@ -14,6 +14,7 @@ RAW_PREFIX = "raw/fred"
 
 
 def load_existing(storage_client, series_id):
+    """Load existing FRED data from cloud storage."""
     blob_path = f"{RAW_PREFIX}/series_id={series_id}.parquet"
     bucket = storage_client.bucket(BUCKET)
     blob = bucket.blob(blob_path)
@@ -24,6 +25,7 @@ def load_existing(storage_client, series_id):
 
 
 def save(storage_client, series_id, df):
+    """Save updated FRED data to cloud storage."""
     blob_path = f"{RAW_PREFIX}/series_id={series_id}.parquet"
     bucket = storage_client.bucket(BUCKET)
     with bucket.blob(blob_path).open("wb") as f:
@@ -32,11 +34,12 @@ def save(storage_client, series_id, df):
 
 
 def main():
+    """Execute the main ingestion pipeline for FRED data."""
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
     storage_client = storage.Client(project=project_id)
     fred = FREDClient(api_key=API_KEY)
 
-    for name, series_id in fred.INDICATORS.items():
+    for _name, series_id in fred.INDICATORS.items():
         print("Fetching", series_id)
 
         # Fetch native frequency
