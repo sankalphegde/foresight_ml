@@ -13,7 +13,7 @@ API_KEY = os.environ["FRED_API_KEY"]
 RAW_PREFIX = "raw/fred"
 
 
-def load_existing(storage_client, series_id):
+def load_existing(storage_client: "storage.Client", series_id: str) -> "pd.DataFrame | None":
     """Load existing FRED data from cloud storage."""
     blob_path = f"{RAW_PREFIX}/series_id={series_id}.parquet"
     bucket = storage_client.bucket(BUCKET)
@@ -21,19 +21,19 @@ def load_existing(storage_client, series_id):
     if not blob.exists():
         return None
     with blob.open("rb") as f:
-        return pd.read_parquet(f)
+        return pd.read_parquet(f)  # type: ignore
 
 
-def save(storage_client, series_id, df):
+def save(storage_client: "storage.Client", series_id: str, df: "pd.DataFrame") -> None:
     """Save updated FRED data to cloud storage."""
     blob_path = f"{RAW_PREFIX}/series_id={series_id}.parquet"
     bucket = storage_client.bucket(BUCKET)
     with bucket.blob(blob_path).open("wb") as f:
-        df.to_parquet(f, index=False)
+        df.to_parquet(f, index=False)  # type: ignore
     print("Saved", blob_path)
 
 
-def main():
+def main() -> None: 
     """Execute the main ingestion pipeline for FRED data."""
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
     storage_client = storage.Client(project=project_id)
