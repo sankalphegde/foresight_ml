@@ -1,3 +1,5 @@
+"""Entry point for distress labeling pipeline."""
+
 from src.config.settings import settings
 from src.utils.gcs import read_parquet_from_gcs, write_parquet_to_gcs
 from src.utils.logging import get_logger
@@ -8,6 +10,9 @@ logger = get_logger(__name__)
 
 
 def main() -> None:
+    
+    """Run labeling job and persist labeled dataset."""
+
     logger.info("Reading panel dataset")
     df = read_parquet_from_gcs(
         [f"gs://{settings.gcs_bucket}/{settings.panel_output_path}"]

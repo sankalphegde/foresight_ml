@@ -1,3 +1,5 @@
+"""Entry point for panel dataset construction."""
+
 from src.config.settings import settings
 from src.utils.gcs import list_parquet_files, read_parquet_from_gcs, write_parquet_to_gcs
 from src.panel.builder import PanelBuilder
@@ -7,6 +9,9 @@ logger = get_logger(__name__)
 
 
 def main() -> None:
+
+    """Build panel dataset from cleaned financial data."""
+    
     logger.info("Listing cleaned parquet files")
     paths = list_parquet_files(settings.gcs_bucket, settings.cleaned_path)
 

@@ -1,3 +1,5 @@
+"""Panel dataset construction and column standardization logic."""
+
 import pandas as pd
 from typing import List
 from src.utils.logging import get_logger
@@ -7,6 +9,8 @@ logger = get_logger(__name__)
 
 
 class PanelBuilder:
+
+    """Transforms cleaned raw data into standardized panel format."""
 
     RAW_TO_STANDARD = {
         "cik": "firm_id",
@@ -25,9 +29,15 @@ class PanelBuilder:
     ]
 
     def __init__(self, df: pd.DataFrame):
+
+        """Initialize builder with cleaned DataFrame."""
+
         self.df = df.copy()
 
     def build(self) -> pd.DataFrame:
+
+        """Return standardized panel DataFrame."""
+        
         logger.info("Standardizing column names")
         self.df = self.df.rename(columns=self.RAW_TO_STANDARD)
 

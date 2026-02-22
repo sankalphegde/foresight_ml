@@ -1,8 +1,13 @@
+"""Logging configuration utilities."""
+
 import logging
 import sys
 
 
 def get_logger(name: str) -> logging.Logger:
+
+    """Create and configure a module-level logger."""
+    
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
 

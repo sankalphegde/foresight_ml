@@ -1,3 +1,5 @@
+"""Accounting-based financial distress labeling logic."""
+
 import pandas as pd
 from src.utils.logging import get_logger
 
@@ -5,12 +7,15 @@ logger = get_logger(__name__)
 
 
 class DistressLabeler:
+    """Creates forward-looking distress labels based on accounting signals."""
 
     def __init__(self, df: pd.DataFrame, horizon: int):
+        """Initialize the labeler with a panel DataFrame and forecast horizon."""
         self.df = df.copy()
         self.horizon = horizon
 
     def apply(self) -> pd.DataFrame:
+        """Generate distress labels and return the updated DataFrame."""
         logger.info("Creating accounting-based distress label")
 
         self.df["neg_income"] = self.df["net_income"] < 0
