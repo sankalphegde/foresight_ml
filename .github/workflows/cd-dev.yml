@@ -14,7 +14,7 @@ env:
   PROJECT_NUMBER: 771179250808
   REGION: us-central1
   ARTIFACT_REPO: mlops
-  IMAGE_NAME: sec-ingestion
+  IMAGE_NAME: data-ingestion
 
 jobs:
   deploy:
@@ -39,16 +39,32 @@ jobs:
       - name: Build Docker Image
         run: |
           IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$ARTIFACT_REPO/$IMAGE_NAME:${{ github.sha }}
-          docker build -t $IMAGE_URI -f Deployment/sec_ingestion.Dockerfile .
+          docker build -f deployment/docker/Dockerfile.ingestion -t $IMAGE_URI .
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
       - name: Push Docker Image
         run: docker push $IMAGE_URI
 
-      - name: Deploy Cloud Run Job
+      - name: Deploy SEC Job
         run: |
           gcloud run jobs deploy sec-ingestion \
             --image=$IMAGE_URI \
             --region=$REGION \
             --service-account=sec-job-sa@$PROJECT_ID.iam.gserviceaccount.com \
+            --command="uv" \
+            --args="run,python,src.ingestion.sec_xbrl_increment_job" \
+            --set-env-vars="GCS_BUCKET=financial-distress-data" \
+            --set-secrets="SEC_USER_AGENT=sec-user-agent:latest" \
+            --project=$PROJECT_ID
+
+      - name: Deploy FRED Job
+        run: |
+          gcloud run jobs deploy fred-ingestion \
+            --image=$IMAGE_URI \
+            --region=$REGION \
+            --service-account=fred-job-sa@$PROJECT_ID.iam.gserviceaccount.com \
+            --command="uv" \
+            --args="run,python,src.ingestion.fred_increment_job" \
+            --set-env-vars="GCS_BUCKET=financial-distress-data" \
+            --set-secrets="FRED_API_KEY=fred-api-key:latest" \
             --project=$PROJECT_ID
