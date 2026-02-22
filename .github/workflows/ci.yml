@@ -84,11 +84,15 @@ jobs:
           restore-keys: |
             pytest-${{ runner.os }}-py${{ hashFiles('.python-version') }}-
             pytest-${{ runner.os }}-
-      - name: Auth with GCP
 
+      - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          workload_identity_provider: projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-deployer@PROJECT_ID.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Install dependencies
         run: make setup
