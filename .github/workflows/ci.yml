@@ -4,9 +4,14 @@ on:
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
+
+permissions:
+  id-token: write   # Required for WIF
+  contents: read    # Required to checkout code
 
 jobs:
   checks:
@@ -88,8 +93,8 @@ jobs:
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-          service_account: github-deployer@PROJECT_ID.iam.gserviceaccount.com
+          workload_identity_provider: projects/771179250808/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-deployer@financial-distress-ew.iam.gserviceaccount.com
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
