@@ -1,94 +1,29 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
-
   pull_request:
     branches:
       - main
 
 permissions:
-  id-token: write   # Required for WIF
-  contents: read    # Required to checkout code
+  id-token: write
+  contents: read
 
 jobs:
-  checks:
-    name: Code Quality
+  ci:
+    name: Lint, Typecheck, Tests
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/setup-python@v6
         with:
           python-version-file: ".python-version"
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.0
-
-      - name: Cache mypy
-        uses: actions/cache@v4
-        with:
-          path: .mypy_cache
-          key: mypy-${{ runner.os }}-py${{ hashFiles('.python-version') }}-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            mypy-${{ runner.os }}-py${{ hashFiles('.python-version') }}-
-            mypy-${{ runner.os }}-
-
-      - name: Cache ruff
-        uses: actions/cache@v4
-        with:
-          path: .ruff_cache
-          key: ruff-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('**/*.py') }}
-          restore-keys: |
-            ruff-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}-
-            ruff-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: make setup
-
-      - name: Run all checks
-        env:
-          SKIP: terraform-fmt,terraform-validate
-        run: make check
-
-  test:
-    name: Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version-file: ".python-version"
-
-      - name: Cache pytest
-        uses: actions/cache@v4
-        with:
-          path: .pytest_cache
-          key: pytest-${{ runner.os }}-py${{ hashFiles('.python-version') }}-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            pytest-${{ runner.os }}-py${{ hashFiles('.python-version') }}-
-            pytest-${{ runner.os }}-
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
@@ -96,11 +31,13 @@ jobs:
           workload_identity_provider: projects/771179250808/locations/global/workloadIdentityPools/github-pool/providers/github-provider
           service_account: github-deployer@financial-distress-ew.iam.gserviceaccount.com
 
-      - name: Set up gcloud
-        uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v2
 
       - name: Install dependencies
         run: make setup
+
+      - name: Run lint + type checks
+        run: make check
 
       - name: Run tests
         env:
