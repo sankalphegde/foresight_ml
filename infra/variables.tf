@@ -32,3 +32,9 @@ variable "sec_user_agent" {
   type        = string
   default     = "foresight-ml contact@example.com"
 }
+
+variable "airflow_authorized_users" {
+  description = "List of users authorized to access Airflow (e.g., user:email@example.com)"
+  type        = list(string)
+  default     = []
+}

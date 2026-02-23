@@ -29,3 +29,7 @@ fred_api_key = "your-fred-api-key"
 # Optional: User agent for SEC API requests
 # Should include your contact email
 sec_user_agent = "foresight-ml your-email@example.com"
+
+# Optional: List of users authorized to access Airflow
+# Format: ["user:email1@example.com", "user:email2@example.com"]
+airflow_authorized_users = ["user:your-email@example.com"]

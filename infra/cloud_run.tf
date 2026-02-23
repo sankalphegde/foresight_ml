@@ -91,10 +91,19 @@ resource "google_cloud_run_v2_service" "airflow" {
   ]
 }
 
-# Allow public access to Airflow UI (change to IAM for production)
-resource "google_cloud_run_v2_service_iam_member" "airflow_public" {
+# Require authentication via IAP (users must be granted run.invoker role)
+# To grant access: gcloud run services add-iam-policy-binding foresight-airflow \
+#   --region=us-central1 \
+#   --member="user:YOUR_EMAIL@example.com" \
+#   --role="roles/run.invoker"
+
+
+# Grant access to authorized users
+resource "google_cloud_run_v2_service_iam_member" "airflow_users" {
+  for_each = toset(var.airflow_authorized_users)
+
   location = google_cloud_run_v2_service.airflow.location
   name     = google_cloud_run_v2_service.airflow.name
   role     = "roles/run.invoker"
-  member   = "allUsers"
+  member   = each.value
 }

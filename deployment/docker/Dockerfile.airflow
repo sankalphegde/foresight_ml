@@ -33,12 +33,8 @@ ENV AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
 ENV AIRFLOW__WEBSERVER__SECRET_KEY=foresight_secret_key_change_me
 ENV PYTHONPATH=/opt/airflow
 
-# Initialize database schema at build time
-RUN airflow db migrate
-
 # Expose webserver port
 EXPOSE 8080
 
 # Use standalone mode for single-container deployment
-# This runs both scheduler and webserver together
 CMD ["airflow", "standalone"]

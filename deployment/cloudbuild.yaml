@@ -15,25 +15,8 @@ steps:
     env:
       - 'DOCKER_BUILDKIT=$_DOCKER_BUILDKIT'
 
-  # Build SEC XBRL ingestion job image
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      [
-        'build',
-        '-t',
-        'us-central1-docker.pkg.dev/$PROJECT_ID/foresight/sec-xbrl:$_IMAGE_TAG',
-        '--build-arg',
-        'BUILDKIT_INLINE_CACHE=1',
-        '-f',
-        'deployment/docker/Dockerfile.sec_xbrl',
-        '.'  # Build from uploaded source root
-      ]
-    env:
-      - 'DOCKER_BUILDKIT=$_DOCKER_BUILDKIT'
-
 images:
   - 'us-central1-docker.pkg.dev/$PROJECT_ID/foresight/airflow:$_IMAGE_TAG'
-  - 'us-central1-docker.pkg.dev/$PROJECT_ID/foresight/sec-xbrl:$_IMAGE_TAG'
 
 substitutions:
   _DOCKER_BUILDKIT: '0'  # Default value
