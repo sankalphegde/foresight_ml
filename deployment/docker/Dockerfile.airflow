@@ -26,9 +26,14 @@ COPY --chown=airflow:root src /opt/airflow/src
 # Copy DAGs
 COPY --chown=airflow:root src/airflow/dags /opt/airflow/dags
 
+# Fixed credentials for SimpleAuthManager (Airflow 3 standalone)
+COPY --chown=airflow:root deployment/docker/simple_auth_manager_passwords.json.generated /home/airflow/simple_auth_manager_passwords.json.generated
+
 # Set environment variables
 ENV AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
 ENV AIRFLOW__CORE__LOAD_EXAMPLES=false
+ENV AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS=admin:admin
+ENV AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE=/home/airflow/simple_auth_manager_passwords.json.generated
 ENV AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
 ENV AIRFLOW__WEBSERVER__SECRET_KEY=foresight_secret_key_change_me
 ENV PYTHONPATH=/opt/airflow

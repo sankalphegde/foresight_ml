@@ -53,8 +53,16 @@ resource "google_cloud_run_v2_service" "airflow" {
         value = "LocalExecutor"
       }
       env {
+        name  = "AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS"
+        value = "admin:admin"
+      }
+      env {
+        name  = "AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE"
+        value = "/home/airflow/simple_auth_manager_passwords.json.generated"
+      }
+      env {
         name  = "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN"
-        value = "sqlite:////opt/airflow/airflow.db"
+        value = "sqlite:////opt/airflow/data/airflow.db"
       }
 
       resources {
@@ -67,7 +75,7 @@ resource "google_cloud_run_v2_service" "airflow" {
       # Persistent disk for SQLite database
       volume_mounts {
         name       = "airflow-db"
-        mount_path = "/opt/airflow"
+        mount_path = "/opt/airflow/data"
       }
     }
 

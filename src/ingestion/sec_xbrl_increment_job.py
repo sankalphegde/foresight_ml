@@ -14,8 +14,6 @@ from datetime import datetime
 from src.data.clients.sec_client import SECClient
 from src.data.clients.sec_xbrl_client import SECXBRLClient
 
-BUCKET = os.environ["GCS_BUCKET"]
-USER_AGENT = os.environ["SEC_USER_AGENT"]
 REFRESH_LAST_N_QUARTERS = 8
 RAW_PREFIX = "raw/sec_xbrl"
 
@@ -41,10 +39,10 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def load_existing(storage_client: "storage.Client", cik: str) -> "pd.DataFrame | None":
+def load_existing(storage_client: "storage.Client", bucket_name: str, cik: str) -> "pd.DataFrame | None":
     """Load existing SEC data for a given CIK from cloud storage."""
     blob_path = f"{RAW_PREFIX}/cik={cik}/data.parquet"
-    bucket = storage_client.bucket(BUCKET)
+    bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(blob_path)
     if not blob.exists():
         return None
@@ -52,10 +50,10 @@ def load_existing(storage_client: "storage.Client", cik: str) -> "pd.DataFrame |
         return pd.read_parquet(f)  
 
 
-def save(storage_client: "storage.Client", cik: str, df: "pd.DataFrame") -> None:
+def save(storage_client: "storage.Client", bucket_name: str, cik: str, df: "pd.DataFrame") -> None:
     """Save updated SEC data for a given CIK to cloud storage."""
     blob_path = f"{RAW_PREFIX}/cik={cik}/data.parquet"
-    bucket = storage_client.bucket(BUCKET)
+    bucket = storage_client.bucket(bucket_name)
     with bucket.blob(blob_path).open("wb") as f:
         df.to_parquet(f, index=False)  
     print(f"Saved -> {blob_path}")
@@ -63,15 +61,23 @@ def save(storage_client: "storage.Client", cik: str, df: "pd.DataFrame") -> None
 
 def main() -> None:
     """Execute the main ingestion pipeline for SEC XBRL data."""
+    bucket_name = os.environ.get("GCS_BUCKET")
+    user_agent = os.environ.get("SEC_USER_AGENT")
+    if not bucket_name:
+        raise RuntimeError("Missing required environment variable: GCS_BUCKET")
+    if not user_agent:
+        raise RuntimeError("Missing required environment variable: SEC_USER_AGENT")
+
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
     storage_client = storage.Client(project=project_id)
-    bucket = storage_client.bucket(BUCKET)
+    bucket = storage_client.bucket(bucket_name)
 
     companies_df = pd.read_csv(
         bucket.blob("reference/companies.csv").open("r")  
     )
+    companies_df = companies_df.head(5)
 
-    sec = SECClient(user_agent=USER_AGENT)
+    sec = SECClient(user_agent=user_agent)
     xbrl = SECXBRLClient(sec)
 
     total_companies = len(companies_df)
@@ -90,11 +96,11 @@ def main() -> None:
 
         new_df = clean(new_df)
 
-        existing_df = load_existing(storage_client, cik)
+        existing_df = load_existing(storage_client, bucket_name, cik)
 
         if existing_df is None:
             print("Full historical load.")
-            save(storage_client, cik, new_df)
+            save(storage_client, bucket_name, cik, new_df)
             continue
 
         existing_df = clean(existing_df)
@@ -143,7 +149,7 @@ def main() -> None:
             keep="last"
         )
 
-        save(storage_client, cik, updated)
+        save(storage_client, bucket_name, cik, updated)
 
 if __name__ == "__main__":
     main()

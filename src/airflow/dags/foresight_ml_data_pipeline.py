@@ -7,12 +7,12 @@ from datetime import datetime
 from typing import Any
 
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 
 sys.path.insert(0, "/opt/airflow")
 
-from src.ingestion.fred_job import main as fred_main  # noqa: E402
-from src.ingestion.sec_job import main as sec_main  # noqa: E402
+from src.ingestion.fred_increment_job import main as fred_main  # noqa: E402
+from src.ingestion.sec_xbrl_increment_job import main as sec_main  # noqa: E402
 
 
 def run_fred_ingestion(**context: Any) -> None:
@@ -39,20 +39,18 @@ def run_sec_ingestion(**context: Any) -> None:
 
 with DAG(
     dag_id="foresight_ingestion",
-    start_date=datetime(2020, 1, 1),  # Start from 2020 (6 years of data)
-    schedule="@daily",  # Run daily to collect all historical data quickly
-    catchup=True,  # Enable backfill to get historical data
+    schedule="@daily",
+    start_date=datetime(2026, 2, 1),
+    catchup=False,
     max_active_runs=3,  # Limit concurrent runs
     tags=["foresight-ml", "ingestion"],
 ) as dag:
     fred_task = PythonOperator(
         task_id="run_fred_ingestion",
         python_callable=run_fred_ingestion,
-        provide_context=True,
     )
 
     sec_task = PythonOperator(
         task_id="run_sec_ingestion",
         python_callable=run_sec_ingestion,
-        provide_context=True,
     )
