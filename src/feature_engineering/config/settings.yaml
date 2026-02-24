@@ -1,0 +1,33 @@
+# ============================================================
+# GCP & BigQuery Configuration
+# ============================================================
+# Fill in your GCP project details before running --mode bigquery
+
+gcp:
+  project_id: "financial-distress-ew"      # e.g., "my-mlops-project-12345"
+  dataset: "financial_distress_features"            # BigQuery dataset name
+  location: "US"                           # BigQuery dataset location
+
+# BigQuery table names
+tables:
+  raw_financials: "raw_features"
+  engineered_features: "engineered_features"
+  bias_report: "bias_report"
+
+# Feature engineering parameters
+feature_engineering:
+  rolling_windows: [4, 8]                  # Rolling window sizes in quarters
+  growth_lag: 4                            # Lag for YoY growth (4 quarters = 1 year)
+  outlier_clip_std: 5                      # Clip features beyond ±N standard deviations
+
+# Bias analysis parameters
+bias_analysis:
+  time_split_year: 2016                    # Pre/post split for temporal bias
+  fed_funds_threshold: 2.0                 # High vs low fed funds rate split
+  key_features_for_plots:                  # Features highlighted in bias visualizations
+    - current_ratio
+    - debt_to_equity
+    - net_margin
+    - roa
+    - operating_margin
+    - cash_flow_to_debt
