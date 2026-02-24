@@ -2,6 +2,7 @@
 
 # ruff: noqa: I001
 import os
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -101,6 +102,45 @@ def run_labeling(**context: Any) -> None:
     label_main()
 
 
+def run_feature_bias_pipeline(**context: Any) -> None:
+    """Run feature engineering + bias analysis pipeline in BigQuery mode."""
+    pipeline_root = Path("/opt/airflow/src/feature_engineering")
+    config_path = pipeline_root / "config" / "settings.yaml"
+
+    if not pipeline_root.exists():
+        raise FileNotFoundError(f"Feature engineering root not found: {pipeline_root}")
+    if not config_path.exists():
+        raise FileNotFoundError(f"Feature engineering config not found: {config_path}")
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "pipelines.run_pipeline",
+        "--mode",
+        "bigquery",
+        "--config",
+        str(config_path),
+    ]
+
+    completed = subprocess.run(
+        cmd,
+        cwd=str(pipeline_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if completed.stdout:
+        print(completed.stdout)
+    if completed.stderr:
+        print(completed.stderr)
+
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"Feature/bias pipeline failed with exit code {completed.returncode}"
+        )
+
+
 with DAG(
     dag_id="foresight_ingestion",
     schedule="@daily",
@@ -139,4 +179,9 @@ with DAG(
         python_callable=run_labeling,
     )
 
-    [fred_task, sec_task] >> preprocess_task >> bigquery_clean_task >> panel_task >> labeling_task
+    feature_bias_task = PythonOperator(
+        task_id="run_feature_bias_pipeline",
+        python_callable=run_feature_bias_pipeline,
+    )
+
+    [fred_task, sec_task] >> preprocess_task >> bigquery_clean_task >> panel_task >> labeling_task >> feature_bias_task
