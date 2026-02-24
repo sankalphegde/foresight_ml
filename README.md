@@ -1,597 +1,430 @@
-# Foresight-ML: Corporate Financial Distress Early-Warning System
+# Foresight-ML: MLOps Data Pipeline (Airflow DAG Submission)
 
-End-to-end MLOps pipeline for predicting corporate financial distress using public SEC filings and economic indicators.
+End-to-end data pipeline for corporate financial distress modeling, built for the MLOps course requirements.
 
-> **🏗️ Stack**: Airflow on Cloud Run + GCS + BigQuery + DVC
-> **📊 Data**: 2020-2026 SEC/FRED data with DVC versioning
-> **⚡ Deploy**: `terraform apply` (single command)
+## Project overview
 
----
+This project builds a reproducible MLOps data pipeline that prepares corporate financial distress training data from raw public financial + macroeconomic signals.
 
-## Table of Contents
-
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Quick Start](#quick-start)
-- [Data Sources](#data-sources)
-- [Project Structure](#project-structure)
-- [DVC Setup](#dvc-setup)
-- [Development](#development)
-- [CI/CD](#cicd)
-- [Testing](#testing)
-- [Common Tasks](#common-tasks)
-- [Configuration](#configuration)
-- [Troubleshooting](#troubleshooting)
-- [Tech Stack](#tech-stack)
+Goal of this phase:
+- orchestrate the full workflow in Airflow DAG form,
+- validate data quality and detect anomalies,
+- generate feature/bias analysis outputs,
+- and keep data artifacts reproducible with DVC.
 
 ---
 
-## Overview
+## Data sources
 
-MLOps pipeline for predicting corporate financial distress using:
-- **SEC filings**: 10-K/10-Q financial statements
-- **Economic indicators**: FRED data (interest rates, inflation, credit spreads)
-- **ML models**: Time-series classification with daily updates
+The pipeline uses two public sources:
+- **SEC EDGAR (XBRL filings):** firm-level financial statement tags from periodic filings (10-Q/10-K style disclosures), ingested incrementally.
+- **FRED (Federal Reserve Economic Data):** macro indicators (e.g., rates/inflation/labor proxies) ingested and aligned for downstream feature construction.
+
+Source roles in pipeline:
+- SEC provides company-level fundamentals.
+- FRED provides macro context.
+- Both are combined during cleaning/feature stages for modeling and bias analysis.
+
+---
+
+## 1) What this submission includes
+
+This repository contains a production-style DAG pipeline that covers:
+- Data acquisition (SEC + FRED ingestion)
+- Preprocessing and cleaning
+- Panel and label generation
+- Feature engineering + bias analysis
+- Validation, schema/statistics summary, and anomaly detection
+- Unit tests
+- Data versioning with DVC
+- Reproducible local execution with Docker + Airflow
+
+---
+
+## 2) Rubric coverage (quick checklist)
+
+| Requirement | Status | Where implemented |
+|---|---|---|
+| Data acquisition | Completed | `src/ingestion/fred_increment_job.py`, `src/ingestion/sec_xbrl_increment_job.py` |
+| Data preprocessing | Completed | `src/data/cleaned/data_cleaned.sql`, `src/main_panel.py`, `src/main_labeling.py` |
+| Test modules | Completed | `tests/` (ingestion, preprocessing, pipeline, feature, validation) |
+| Airflow DAG orchestration | Completed | `src/airflow/dags/foresight_ml_data_pipeline.py` |
+| DVC versioning | Completed | `data/final/final_v2.dvc`, `Makefile` DVC targets |
+| Tracking/logging | Completed | Airflow task logs + Python logging in pipeline modules |
+| Schema & statistics generation | Completed | `src/data/validate_anomalies.py` (`null_counts`, `null_rates`, `numeric_ranges`, required columns) |
+| Anomaly detection & alerts | Completed | IQR anomaly detection + optional DAG fail flag `VALIDATION_FAIL_ON_STATUS=true` |
+| Bias detection/data slicing | Completed | `src/feature_engineering/pipelines/bias_analysis.py`, feature/bias pipeline |
+| Pipeline flow optimization (Gantt) | Completed | Airflow Gantt used; bottleneck task identified and mode switch added |
+| Reproducibility | Completed | Local run steps + environment/config instructions below |
+| Error handling | Completed | Environment checks, runtime checks, explicit task failures on invalid states |
 
 ---
 
 ## Architecture
 
+```text
+			+-----------------------------------+
+			| Airflow DAG (foresight_ingestion) |
+			| daily orchestration               |
+			+---------------+-------------------+
+							|
+				+-----------+-----------+
+				|                       |
+				v                       v
+	 +--------------------+    +---------------------+
+	 | FRED ingestion      |   | SEC ingestion       |
+	 | (incremental)       |   | (incremental/demo)  |
+	 +----------+----------+   +----------+----------+
+				\                       /
+				 \                     /
+				  v                   v
+			  +-------------------------------+
+			  | GCS raw zone                  |
+			  | raw/fred/* , raw/sec_xbrl/*   |
+			  +---------------+---------------+
+							  |
+							  v
+			  +-------------------------------+
+			  | BigQuery cleaning SQL         |
+			  | cleaned_foresight.final_v2    |
+			  +---------------+---------------+
+							  |
+							  v
+			  +-------------------------------+
+			  | panel + labeling (GCS)        |
+			  | features/panel_v1, labeled_v1 |
+			  +---------------+---------------+
+							  |
+							  v
+			  +-------------------------------+
+			  | feature + bias pipeline       |
+			  | engineered_features (BQ)      |
+			  +---------------+---------------+
+							  |
+							  v
+			  +-------------------------------+
+			  | validation + anomaly          |
+			  | validation_report + anomalies |
+			  +-------------------------------+
 ```
-┌────────────────────────────┐
-│  Airflow (Cloud Run)       │
-│  ├─ FRED ingestion         │
-│  └─ SEC ingestion          │
-└───────────┬────────────────┘
-           │
-           ▼
-    ┌───────────────┐
-    │ GCS + BigQuery│
-    └──────┬────────┘
-           │
-           ▼
-    ┌────────────┐
-    │ Local Dev  │
-    │ (DVC)      │
-    └────────────┘
-```
-
-- **Airflow (Cloud Run)**: Orchestrates data ingestion
-- **GCS**: Stores raw data and DVC remote storage
-- **BigQuery**: Structured data warehouse
-- **DVC**: Version control for data and models (local dev only)
-- **Terraform**: Infrastructure as code
-
-### Data Flow
-
-1. **Ingestion**: Airflow DAG runs daily, fetches data from SEC/FRED APIs
-2. **Storage**: Raw data → GCS with partitioning (year/quarter)
-3. **Analytics**: Data loaded into BigQuery
-4. **Local Development**: Pull data → process/experiment → track with DVC
 
 ---
 
-## Quick Start
+## 3) Current DAG flow
+
+DAG ID: `foresight_ingestion`
+
+Task order:
+1. `run_fred_ingestion`
+2. `run_sec_ingestion`
+3. `run_preprocess_ingested_data`
+4. `run_bigquery_cleaning`
+5. `run_panel_build`
+6. `run_labeling`
+7. `run_feature_bias_pipeline`
+8. `run_validation_anomaly`
+
+### Feature/Bias runtime mode
+
+The DAG supports an explicit mode switch:
+- `FEATURE_BIAS_MODE=safe` (default): skips heavy visualizations for stable grading/demo runs
+- `FEATURE_BIAS_MODE=full`: runs full visualization workload
+
+Internally this controls `SKIP_HEAVY_VISUALIZATIONS` for the feature pipeline.
+
+---
+
+## 4) Project structure (relevant parts)
+
+```text
+Foresight-ML/
+├─ src/
+│  ├─ airflow/dags/foresight_ml_data_pipeline.py
+│  ├─ ingestion/
+│  │  ├─ fred_increment_job.py
+│  │  └─ sec_xbrl_increment_job.py
+│  ├─ data/
+│  │  ├─ cleaned/data_cleaned.sql
+│  │  └─ validate_anomalies.py
+│  ├─ feature_engineering/
+│  │  ├─ pipelines/run_pipeline.py
+│  │  ├─ pipelines/feature_engineering.py
+│  │  ├─ pipelines/bias_analysis.py
+│  │  └─ config/settings.yaml
+│  ├─ main_panel.py
+│  └─ main_labeling.py
+├─ tests/
+│  ├─ test_data_ingestion.py
+│  ├─ test_preprocess.py
+│  ├─ test_pipeline.py
+│  ├─ test_validation.py
+│  └─ test_feature_engineering/
+├─ infra/
+├─ deployment/docker/
+├─ docker-compose.yml
+├─ Makefile
+├─ pyproject.toml
+└─ data/final/final_v2.dvc
+```
+
+---
+
+## 5) Local setup (reproducible)
 
 ### Prerequisites
+- Python 3.12+
+- Docker Desktop
+- Access to GCP project + service account key for local run
 
-- **Python 3.12+** ([download](https://www.python.org/downloads/))
-- **Terraform 1.6+** ([install](https://developer.hashicorp.com/terraform/downloads))
-- **Docker** ([install](https://docs.docker.com/get-docker/))
-- **GCP account** with billing enabled
-- **FRED API key** ([get key](https://fred.stlouisfed.org/docs/api/))
-
-### 1. Clone and Configure
+### Environment
+Create a `.env` file in repo root with at least:
 
 ```bash
-git clone <repo-url>
-cd foresight-ml
+GCP_PROJECT_ID=financial-distress-ew
+GCS_BUCKET=financial-distress-data
+FRED_API_KEY=<your-fred-key>
+SEC_USER_AGENT="foresight-ml your-email@example.com"
+GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/.gcp/foresight-data-sa.json
 
-# Copy and edit environment file
-cp example.env .env
-# Edit .env with:
-#   - GCP_PROJECT_ID
-#   - FRED_API_KEY
-#   - SEC_USER_AGENT
-
-source .env
+# Optional stability/behavior flags
+FEATURE_BIAS_MODE=safe
+VALIDATION_FAIL_ON_STATUS=false
+GCS_VALIDATION_REPORT_OUT=processed/validation_report.json
+GCS_ANOMALIES_OUT=processed/anomalies.parquet
 ```
 
-### 2. Authenticate with GCP
+### Install + quality tools
 
 ```bash
-# Login and set project
-gcloud auth login
-gcloud auth application-default login --scopes=https://www.googleapis.com/auth/cloud-platform
-gcloud config set project $GCP_PROJECT_ID
-
-# Enable required APIs
-gcloud services enable \
-  artifactregistry.googleapis.com \
-  bigquery.googleapis.com \
-  cloudbuild.googleapis.com \
-  run.googleapis.com \
-  storage.googleapis.com
-```
-
-### 3. Deploy Infrastructure
-
-```bash
-cd infra
-terraform init
-terraform plan    # Review what will be created
-terraform apply   # Type 'yes' to confirm
-
-# Get Airflow URL
-terraform output airflow_url
-```
-
-**What gets created:**
-- GCS bucket: `{project-id}-foresight-ml-data`
-- BigQuery dataset: `foresight_ml_dev`
-- Artifact Registry repository
-- Cloud Run service (Airflow)
-- IAM service accounts with minimal permissions
-
-### 4. Access Airflow
-
-```bash
-# Get URL
-terraform output airflow_url
-
-# Login: admin / admin
-# Enable the DAG: foresight_ml_data_pipeline
-```
-
----
-
-## Data Sources
-
-All data is publicly available:
-
-### SEC EDGAR
-- **Content**: 10-K/10-Q filings with XBRL financial statements
-- **Companies**: S&P 500 constituents
-- **Frequency**: Quarterly/Annual
-- **Storage**: `gs://.../raw/sec/year=YYYY/quarter=Q/`
-- **API**: https://www.sec.gov/edgar/sec-api-documentation
-
-### FRED (Federal Reserve Economic Data)
-- **Indicators**:
-  - Interest rates (10-year Treasury, Fed Funds)
-  - Inflation (CPI, PCE)
-  - Credit spreads (BAA-AAA)
-- **Frequency**: Daily/Monthly
-- **Storage**: `gs://.../raw/fred/year=YYYY/month=MM/`
-- **API**: https://fred.stlouisfed.org/docs/api/
-
-### Data Timeline
-- **Historical**: 2020-01-01 to present (~6 years)
-- **Ingestion**: Daily with catchup enabled
-- **Backfill**: ~25 days to complete initial load
-
----
-
-## Project Structure
-
-```
-foresight_ml/
-├── infra/                          # Terraform infrastructure
-│   ├── artifact_registry.tf        # Docker registry + Cloud Build
-│   ├── bigquery.tf                 # BigQuery dataset
-│   ├── cloud_run.tf                # Airflow deployment
-│   ├── storage.tf                  # GCS buckets
-│   ├── iam.tf                      # Service accounts
-│   └── variables.tf
-│
-├── src/
-│   ├── airflow/dags/
-│   │   └── foresight_ml_data_pipeline.py  # Main orchestration DAG
-│   ├── ingestion/
-│   │   ├── fred_job.py             # FRED data fetcher
-│   │   └── sec_job.py              # SEC filing fetcher
-│   ├── data/
-│   │   ├── clients/                # API client wrappers
-│   │   ├── preprocess.py           # Data cleaning
-│   │   └── split.py                # Train/test split
-│   ├── models/
-│   │   ├── train.py                # Model training
-│   │   ├── evaluate.py             # Model evaluation
-│   │   └── predict.py              # Inference
-│   └── utils/
-│       └── config.py               # Configuration management
-│
-├── deployment/
-│   ├── cloudbuild.yaml             # Automated Docker builds
-│   └── docker/
-│       └── Dockerfile.airflow      # Airflow container
-│
-├── tests/                          # Unit + integration tests
-├── notebooks/                      # EDA + experiments
-├── monitoring/                     # Drift detection
-├── data/                           # Local data (gitignored, DVC tracked)
-├── cache/                          # API response cache
-│
-├── Makefile                        # Development commands
-├── pyproject.toml                  # Python dependencies (uv)
-├── docker-compose.yml              # Local Airflow
-└── README.md
-```
-
----
-
-## DVC Setup
-
-DVC tracks data and model versions locally. Use it for experiments, processed datasets, and model artifacts.
-
-### Initial Setup
-
-```bash
-# Install dependencies
 make setup
-
-# Load environment
-source .env
-
-# Initialize DVC with GCS remote
-make dvc-setup
 ```
 
-### Tracking Data
+### Start local Airflow
 
 ```bash
-# Track a file or directory
-uv run dvc add data/companies.csv
-uv run dvc add data/processed/
-
-# If the final dataset lives in GCS, track it via DVC import
-export FINAL_DATASET_GCS_URI=gs://<bucket>/<path>/final_dataset.parquet
-make dvc-track-final
-
-# Commit .dvc metadata to Git
-git add data/companies.csv.dvc data/processed.dvc .gitignore
-git commit -m "Track data with DVC"
-
-# Push actual data to GCS
-make dvc-push
-```
-
-For imported datasets, commit the generated metadata files:
-
-```bash
-git add data/final/final_dataset.parquet.dvc dvc.lock .gitignore
-git commit -m "Track final dataset from GCS with DVC"
-```
-
-### Collaborating with DVC
-
-```bash
-# On another machine, after git clone:
-make setup
-source .env
-make dvc-setup
-make dvc-pull  # Downloads all tracked data from GCS
-
-# Check what changed
-uv run dvc status
-
-# After making changes
-uv run dvc add data/processed/
-git add data/processed.dvc
-git commit -m "Update processed data"
-make dvc-push
-```
-
----
-
-## Development
-
-### Local Setup
-
-```bash
-# Install uv, dependencies, pre-commit hooks
-make setup
-
-# Start local Airflow
 make local-up
+```
 
-# Access Airflow UI
-open http://localhost:8080  # admin/admin
+UI:
+- URL: `http://localhost:8080`
+- Username: `admin`
+- Password: `admin123`
 
-# Stop Airflow
+Stop:
+
+```bash
 make local-down
 ```
 
-### Code Quality
+---
+
+## 6) Run the full pipeline
+
+Trigger from Airflow UI or CLI:
 
 ```bash
-# Run all checks (format + lint + type check + terraform)
-make check
+docker compose exec airflow airflow dags unpause foresight_ingestion
+docker compose exec airflow airflow dags trigger foresight_ingestion --run-id manual_submission_$(date +%Y%m%d_%H%M%S)
+```
 
-# Individual commands
-make format          # Auto-format with ruff
-make lint            # Check code style
-make typecheck       # Run mypy
-make terraform-check # Validate Terraform
+Check task states:
 
-# Run tests
+```bash
+docker compose exec airflow airflow tasks states-for-dag-run foresight_ingestion <RUN_ID>
+```
+
+---
+
+## 7) Outputs and persistence
+
+### GCS
+- Raw SEC: `raw/sec_xbrl/cik=<cik>/data.parquet`
+- Raw FRED: `raw/fred/series_id=<id>.parquet`
+- Cleaned export (from SQL): `cleaned_data/final_v2/train_*.parquet`
+- Panel: `features/panel_v1/panel.parquet`
+- Labeled: `features/labeled_v1/labeled_panel.parquet`
+- Validation report: `processed/validation_report.json`
+- Anomalies: `processed/anomalies.parquet`
+
+### BigQuery
+- `cleaned_foresight.final_v2`
+- `financial_distress_features.engineered_features`
+- `financial_distress_features.cleaned_engineered_features`
+
+---
+
+## 8) Testing
+
+Run all tests:
+
+```bash
 make test
-
-# Run specific test
-uv run pytest tests/test_data_ingestion.py -v -k test_fred
 ```
 
-### Running Jobs Locally
+Run the full suite directly:
 
 ```bash
-# Load API keys
-source .env
-
-# Run FRED ingestion
-uv run python -m src.ingestion.fred_job
-
-# Run SEC ingestion
-uv run python -m src.ingestion.sec_job
+uv run pytest tests/ -q
 ```
+
+Run ingestion tests:
+
+```bash
+uv run pytest tests/test_data_ingestion.py -q
+```
+
+Run preprocessing/cleaning tests:
+
+```bash
+uv run pytest tests/test_preprocess.py tests/test_cleaned.py -q
+```
+
+Run pipeline/model tests:
+
+```bash
+uv run pytest tests/test_pipeline.py tests/test_model.py tests/test_data.py -q
+```
+
+Run validation tests only:
+
+```bash
+uv run pytest tests/test_validation.py -q
+```
+
+Run feature engineering tests:
+
+```bash
+uv run pytest tests/test_feature_engineering -q
+```
+
+Current key test modules include:
+- `tests/test_data_ingestion.py`
+- `tests/test_preprocess.py`
+- `tests/test_cleaned.py`
+- `tests/test_pipeline.py`
+- `tests/test_model.py`
+- `tests/test_data.py`
+- `tests/test_validation.py`
+- `tests/test_feature_engineering/test_feature_engineering.py`
+- `tests/test_feature_engineering/test_bias_analysis.py`
 
 ---
 
 ## CI/CD
 
-### GitHub Actions
+GitHub Actions workflows are included under `.github/workflows/`:
+- `ci.yml`: quality gates for linting, typing, tests, and validation checks
+- `cd-dev.yml`: deployment pipeline for dev environment updates
 
-Workflow file: `.github/workflows/ci.yml`
+Typical CI checks include:
+- Ruff lint/style checks
+- mypy static type checks
+- pytest test execution (including validation module tests)
+- Terraform formatting/validation where configured
 
-**On every push:**
-- Code formatting check (ruff)
-- Linting (ruff)
-- Type checking (mypy)
-- Terraform validation
-- Unit tests
-- Integration tests (with API keys)
+This ensures code quality and reproducibility before deployment.
 
-### Required Secrets
+---
 
-Configure in **GitHub Settings → Secrets → Actions**:
+## 9) DVC data versioning
 
-| Secret | Value |
-|--------|-------|
-| `FRED_API_KEY` | Your FRED API key |
-| `SEC_USER_AGENT` | `app-name your@email.com` |
-
-### Deployment
-
-Infrastructure changes are deployed manually via Terraform:
+Initialize and configure DVC remote:
 
 ```bash
-cd infra
-terraform plan
-terraform apply
+make dvc-setup
 ```
 
-For code changes, rebuild the Docker image:
+Push/pull tracked data:
 
 ```bash
-cd infra
-# Terraform will detect Dockerfile changes and rebuild
-terraform apply
+make dvc-push
+make dvc-pull
+```
+
+Track final dataset from GCS URI:
+
+```bash
+export FINAL_DATASET_GCS_URI=gs://<bucket>/<path>/final_dataset.parquet
+make dvc-track-final
 ```
 
 ---
 
-## Testing
+## 10) Schema/statistics/anomaly details
 
-### Run All Tests
+`src/data/validate_anomalies.py` generates:
+- Required column checks (`cik`, `filing_date`, `ticker`, `accession_number`)
+- Duplicate count on (`cik`, `accession_number`)
+- Null counts and null rates by column
+- Numeric min/max ranges by column
+- IQR-based anomaly rows + per-column anomaly counts
+
+Alert behavior:
+- If `VALIDATION_FAIL_ON_STATUS=true`, DAG task fails when validation status is `fail`.
+- If false, task uploads artifacts and logs status while allowing downstream review.
+
+---
+
+## 11) Bias detection and mitigation notes
+
+Bias analysis is implemented in the feature pipeline:
+- Data slicing across company size, sector proxy, time split, macro regime, and distress label
+- Drift metrics and high-drift alerts (PSI)
+- Slice-level summaries and fairness diagnostics
+
+Mitigation strategy documented in generated bias report (recommendations include class imbalance handling, drift investigation, and stratified evaluation).
+
+---
+
+## 12) Gantt bottleneck workflow optimization
+
+For course submission:
+1. Open Airflow UI run details
+2. Go to **Gantt** view
+3. Capture screenshot
+4. Analyze longest tasks
+
+Recent bottleneck identified:
+- `run_feature_bias_pipeline` (historically longest)
+
+Optimization applied:
+- Added `FEATURE_BIAS_MODE=safe` default to reduce heavy plotting risk and improve run reliability.
+
+---
+
+## 13) Logging and troubleshooting
+
+- Airflow logs are available per task in UI and container logs.
+- Typical failure guards included for missing env vars, missing SQL/config files, and validation status failures.
+
+Useful commands:
 
 ```bash
-make test
-```
-
-### Unit Tests Only (No API Calls)
-
-```bash
-FRED_API_KEY="" SEC_USER_AGENT="" make test
-```
-
-### Integration Tests (Requires API Keys)
-
-```bash
-source .env
-uv run pytest tests/test_data_ingestion.py -v
-```
-
-### Test Coverage
-
-```bash
-uv run pytest --cov=src tests/
+docker compose ps
+docker compose logs airflow --since 15m
+docker compose exec airflow airflow tasks list foresight_ingestion
 ```
 
 ---
 
-## Common Tasks
+## 14) Notes for graders
 
-### View Logs
-
-```bash
-# Cloud Run logs
-gcloud run services logs tail foresight-airflow --region us-central1
-
-# Follow logs
-gcloud run services logs tail foresight-airflow --region us-central1 --follow
-```
-
-### Check Data in GCS
-
-```bash
-# List buckets
-gsutil ls
-
-# Check FRED data
-gsutil ls gs://$GCS_BUCKET/raw/fred/
-
-# Check SEC data
-gsutil ls gs://$GCS_BUCKET/raw/sec/
-
-# Download a file
-gsutil cp gs://$GCS_BUCKET/raw/fred/year=2024/month=01/data.json .
-```
-
-### Query BigQuery
-
-```bash
-# List datasets
-bq ls
-
-# Query data
-bq query --use_legacy_sql=false \
-  "SELECT * FROM \`$GCP_PROJECT_ID.foresight_ml_dev.raw_filings\` LIMIT 10"
-```
-
-### Update Infrastructure
-
-```bash
-cd infra
-terraform plan
-terraform apply
-```
-
-### Force Rebuild Docker Image
-
-Edit `force_rebuild` in `infra/artifact_registry.tf` or just touch the Dockerfile:
-
-```bash
-touch deployment/docker/Dockerfile.airflow
-cd infra && terraform apply
-```
-
-### Cleanup
-
-```bash
-cd infra
-terraform destroy  # Type 'yes' to confirm
-```
+- Use `FEATURE_BIAS_MODE=safe` for reliable full DAG execution on limited local resources.
+- Use `FEATURE_BIAS_MODE=full` if full visualization artifacts are required and resources are sufficient.
+- Validation is intentionally placed after feature+bias stage to match current design.
 
 ---
 
-## Configuration
+## 15) Tech stack
 
-### Environment Variables
-
-Required in `.env`:
-
-```bash
-# GCP Configuration
-export GCP_PROJECT_ID="your-project-id"
-export GCS_BUCKET="${GCP_PROJECT_ID}-foresight-ml-data"
-
-# API Keys
-export FRED_API_KEY="your-fred-api-key"
-export SEC_USER_AGENT="foresight-ml your-email@example.com"
-
-# Terraform Variables
-export TF_VAR_project_id="${GCP_PROJECT_ID}"
-export TF_VAR_fred_api_key="${FRED_API_KEY}"
-export TF_VAR_sec_user_agent="${SEC_USER_AGENT}"
-export TF_VAR_region="us-central1"
-```
-
-### Getting API Keys
-
-**FRED:**
-1. Visit https://fred.stlouisfed.org/docs/api/
-2. Sign in/create account
-3. Click "Request API Key"
-4. Add to `.env`: `FRED_API_KEY=your-key-here`
-
-**SEC:**
-- No API key required
-- Must provide User-Agent with contact email
-- Format: `SEC_USER_AGENT="app-name your@email.com"`
+- Python 3.12
+- Apache Airflow (local image: `apache/airflow:slim-3.1.7-python3.12`)
+- Google Cloud Storage + BigQuery
+- Docker Compose
+- Terraform
+- DVC
+- pytest, mypy, ruff
 
 ---
 
-## Troubleshooting
-
-### Terraform Issues
-
-**Permission Denied:**
-```bash
-# Re-authenticate with full scope
-gcloud auth application-default login --scopes=https://www.googleapis.com/auth/cloud-platform
-
-# Check project
-gcloud config get-value project
-```
-
-**Resource Already Exists:**
-```bash
-# Import existing resource
-cd infra
-terraform import google_storage_bucket.data_lake $GCP_PROJECT_ID-foresight-ml-data
-```
-
-### Airflow Not Starting
-
-```bash
-# Check Cloud Run status
-gcloud run services describe foresight-airflow --region us-central1
-
-# View logs
-gcloud run services logs tail foresight-airflow --region us-central1
-```
-
-### API Rate Limits
-
-**FRED:** 120 requests/minute
-**SEC:** 10 requests/second
-
-Adjust `sleep()` calls in ingestion jobs if hitting limits.
-
-### DVC Issues
-
-```bash
-# Re-configure remote
-uv run dvc remote modify storage credentialpath $GOOGLE_APPLICATION_CREDENTIALS
-
-# Check status
-uv run dvc status
-
-# Force push
-uv run dvc push --force
-```
-
----
-
-## Tech Stack
-
-| Component | Technology | Version |
-|-----------|-----------|---------|
-| **Orchestration** | Apache Airflow | 2.8+ |
-| **Cloud Platform** | Google Cloud Platform | - |
-| **Compute** | Cloud Run | - |
-| **Storage** | GCS, BigQuery | - |
-| **Infrastructure** | Terraform | 1.6+ |
-| **Language** | Python | 3.12 |
-| **Package Manager** | uv | 0.5+ |
-| **Data Versioning** | DVC | 3.66+ |
-| **Containerization** | Docker | - |
-| **CI/CD** | GitHub Actions | - |
-| **Linting** | Ruff | - |
-| **Type Checking** | mypy | - |
-| **Testing** | pytest | - |
-
----
-
-## References
-
-- [Apache Airflow Docs](https://airflow.apache.org/docs/)
-- [Google Cloud Run](https://cloud.google.com/run/docs)
-- [FRED API](https://fred.stlouisfed.org/docs/api/)
-- [SEC EDGAR API](https://www.sec.gov/edgar/sec-api-documentation)
-- [DVC Documentation](https://dvc.org/doc)
-- [Terraform GCP Provider](https://registry.terraform.io/providers/hashicorp/google/latest/docs)
-- [uv Package Manager](https://docs.astral.sh/uv/)
-
----
-
-**Last Updated:** February 2026
+Last updated: February 2026
