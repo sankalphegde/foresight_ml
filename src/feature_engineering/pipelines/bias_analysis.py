@@ -105,11 +105,17 @@ def create_slices(
 
     # 1. Company Size
     if "company_size_bucket" in df.columns:
-        slices["company_size"] = dict(df.groupby("company_size_bucket", observed=True))
+        company_size_slices = {}
+        for name, group in df.groupby("company_size_bucket", observed=True):
+            company_size_slices[name] = group
+        slices["company_size"] = company_size_slices
 
     # 2. Sector Proxy
     if "sector_proxy" in df.columns:
-        slices["sector_proxy"] = dict(df.groupby("sector_proxy", observed=True))
+        sector_slices = {}
+        for name, group in df.groupby("sector_proxy", observed=True):
+            sector_slices[name] = group
+        slices["sector_proxy"] = sector_slices
 
     # 3. Time Period
     if "fiscal_year" in df.columns:
