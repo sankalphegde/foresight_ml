@@ -628,7 +628,9 @@ def run_bigquery(config: dict) -> None:
     # Pull from the CLEANED table for bias analysis and visualizations
     cleaned_table = f"{project_id}.{dataset}.cleaned_engineered_features"
     logger.info(f"Pulling cleaned results from: {cleaned_table}")
-    df = client.query(f"SELECT * FROM `{cleaned_table}`").to_dataframe()
+    df = client.query(f"SELECT * FROM `{cleaned_table}`").to_dataframe(
+        create_bqstorage_client=False
+    )
 
     # Verify no remaining NULLs in feature columns
     null_count = df.isnull().sum().sum()
