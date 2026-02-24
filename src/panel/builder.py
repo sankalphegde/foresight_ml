@@ -1,7 +1,7 @@
 """Panel dataset construction and column standardization logic."""
 
 import pandas as pd
-from typing import List
+
 from src.utils.logging import get_logger
 from src.utils.validation import validate_schema
 
@@ -9,7 +9,6 @@ logger = get_logger(__name__)
 
 
 class PanelBuilder:
-
     """Transforms cleaned raw data into standardized panel format."""
 
     RAW_TO_STANDARD = {
@@ -29,15 +28,11 @@ class PanelBuilder:
     ]
 
     def __init__(self, df: pd.DataFrame):
-
         """Initialize builder with cleaned DataFrame."""
-
         self.df = df.copy()
 
     def build(self) -> pd.DataFrame:
-
         """Return standardized panel DataFrame."""
-        
         logger.info("Standardizing column names")
         self.df = self.df.rename(columns=self.RAW_TO_STANDARD)
 
@@ -62,11 +57,7 @@ class PanelBuilder:
         return self.df
 
     def _check_missing_quarters(self) -> None:
-        quarter_diff = (
-            self.df.groupby("firm_id")["date"]
-            .diff()
-            .dt.days
-        )
+        quarter_diff = self.df.groupby("firm_id")["date"].diff().dt.days
 
         gaps = quarter_diff[quarter_diff > 120]
         if not gaps.empty:
@@ -80,10 +71,6 @@ class PanelBuilder:
         ]
 
         for col in lag_columns:
-            self.df[f"{col}_lag1"] = (
-                self.df.groupby("firm_id")[col].shift(1)
-            )
+            self.df[f"{col}_lag1"] = self.df.groupby("firm_id")[col].shift(1)
 
-            self.df[f"{col}_lag4"] = (
-                self.df.groupby("firm_id")[col].shift(4)
-            )
+            self.df[f"{col}_lag4"] = self.df.groupby("firm_id")[col].shift(4)

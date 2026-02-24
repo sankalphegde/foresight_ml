@@ -6,6 +6,10 @@ resource "google_artifact_registry_repository" "foresight" {
   format        = "DOCKER"
 }
 
+# DEPRECATED: Cloud Build for Cloud Run Airflow (not needed for Composer)
+# Composer uses its own PyPI packages instead of custom Docker images
+
+/*
 # Trigger Cloud Build to build and push Airflow image
 resource "null_resource" "build_airflow_image" {
   # Trigger rebuild when Dockerfile or source code changes
@@ -25,3 +29,4 @@ resource "null_resource" "build_airflow_image" {
     google_artifact_registry_repository.foresight
   ]
 }
+*/

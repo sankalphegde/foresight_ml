@@ -1,3 +1,15 @@
+# ====================================================================
+# DEPRECATED: Cloud Run Airflow (replaced by Cloud Composer)
+# Keeping this commented for reference. Cloud Composer provides:
+# - Persistent Cloud SQL database (vs ephemeral SQLite)
+# - Auto-scaling workers
+# - Better monitoring and logging
+# - Managed upgrades
+# ====================================================================
+
+# Uncomment below if you want to use Cloud Run instead of Composer
+
+/*
 # Cloud Run Service for Airflow
 resource "google_cloud_run_v2_service" "airflow" {
   name     = "foresight-airflow"
@@ -115,3 +127,4 @@ resource "google_cloud_run_v2_service_iam_member" "airflow_users" {
   role     = "roles/run.invoker"
   member   = each.value
 }
+*/

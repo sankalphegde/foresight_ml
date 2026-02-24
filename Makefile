@@ -1,4 +1,4 @@
-.PHONY: help setup local-up local-down lint format typecheck terraform-check test check dvc-setup dvc-push dvc-pull
+.PHONY: help setup local-up local-down lint format typecheck terraform-check test check dvc-setup dvc-push dvc-pull composer-deploy composer-status
 
 help:
 	@echo "Foresight-ML Data Pipeline"
@@ -10,6 +10,10 @@ help:
 	@echo "Local Development:"
 	@echo "  make local-up        - Start local Airflow"
 	@echo "  make local-down      - Stop local Airflow"
+	@echo ""
+	@echo "Cloud Composer Deployment:"
+	@echo "  make composer-deploy - Deploy DAGs to Cloud Composer"
+	@echo "  make composer-status - Check Composer environment status"
 	@echo ""
 	@echo "Data Version Control:"
 	@echo "  make dvc-push        - Push tracked data to GCS"
@@ -88,3 +92,25 @@ dvc-push:
 dvc-pull:
 	@echo "Pulling data from GCS..."
 	uv run dvc pull
+
+composer-deploy:
+	@if [ -z "$$TF_VAR_environment" ]; then \
+		echo "Error: TF_VAR_environment not set. Run: source .env"; \
+		exit 1; \
+	fi
+	@echo "Deploying DAGs to Cloud Composer (foresight-ml-$$TF_VAR_environment)..."
+	gcloud composer environments storage dags import \
+		--environment=foresight-ml-$$TF_VAR_environment \
+		--location=$${TF_VAR_region:-us-central1} \
+		--source=src/airflow/dags
+	@echo "DAGs deployed successfully!"
+
+composer-status:
+	@if [ -z "$$TF_VAR_environment" ]; then \
+		echo "Error: TF_VAR_environment not set. Run: source .env"; \
+		exit 1; \
+	fi
+	@echo "Checking Composer environment status..."
+	gcloud composer environments describe foresight-ml-$$TF_VAR_environment \
+		--location=$${TF_VAR_region:-us-central1} \
+		--format="table(name,state,config.softwareConfig.imageVersion,config.airflowUri)"

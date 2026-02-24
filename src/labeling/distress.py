@@ -1,6 +1,7 @@
 """Accounting-based financial distress labeling logic."""
 
 import pandas as pd
+
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -24,13 +25,13 @@ class DistressLabeler:
             self.df.groupby("firm_id")["neg_income"]
             .rolling(2)
             .sum()
-            .reset_index(level=0, drop=True) == 2
+            .reset_index(level=0, drop=True)
+            == 2
         )
 
         logger.info("Shifting label forward for prediction horizon")
-        self.df["distress_label"] = (
-            self.df.groupby("firm_id")["two_consecutive_losses"]
-            .shift(-self.horizon)
+        self.df["distress_label"] = self.df.groupby("firm_id")["two_consecutive_losses"].shift(
+            -self.horizon
         )
 
         self.df["distress_label"] = self.df["distress_label"].fillna(False).astype(int)

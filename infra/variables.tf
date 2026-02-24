@@ -38,3 +38,15 @@ variable "airflow_authorized_users" {
   type        = list(string)
   default     = []
 }
+
+variable "composer_machine_type" {
+  description = "Machine type for Composer worker nodes"
+  type        = string
+  default     = "n1-standard-1"
+}
+
+variable "composer_environment_size" {
+  description = "Size of the Composer environment (ENVIRONMENT_SIZE_SMALL, MEDIUM, LARGE)"
+  type        = string
+  default     = "ENVIRONMENT_SIZE_SMALL"
+}

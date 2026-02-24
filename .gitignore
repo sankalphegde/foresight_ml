@@ -58,9 +58,11 @@ temp/
 .dvc/cache
 .dvc/plots
 
-# Data Files 
+# Data Files
 *.parquet
 *.csv
 *.xlsx
 *.tsv
 *.jsonlgi
+# Auto-generated export files
+*-export.yaml

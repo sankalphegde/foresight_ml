@@ -1,5 +1,4 @@
-"""
-Preprocessing module for SEC XBRL and FRED raw data.
+"""Preprocessing module for SEC XBRL and FRED raw data.
 
 Reads partitioned parquet files from local raw layer
 (synced from GCS via gsutil), applies formatting and basic
@@ -53,13 +52,16 @@ log = logging.getLogger(__name__)
 # Upload helper (uses gsutil to avoid SDK billing issues)
 # ---------------------------------------------------------------------------
 
+
 def upload_to_gcs(local_path: Path, bucket: str, gcs_path: str) -> None:
     """Upload a local file to GCS using gsutil."""
     dest = f"gs://{bucket}/{gcs_path}"
     try:
         subprocess.run(
             ["gsutil", "cp", str(local_path), dest],
-            check=True, capture_output=True, text=True,
+            check=True,
+            capture_output=True,
+            text=True,
         )
         log.info("Uploaded -> %s", dest)
     except FileNotFoundError:
@@ -71,6 +73,7 @@ def upload_to_gcs(local_path: Path, bucket: str, gcs_path: str) -> None:
 # ---------------------------------------------------------------------------
 # SEC preprocessing
 # ---------------------------------------------------------------------------
+
 
 def load_sec_raw(raw_dir: Path) -> pd.DataFrame:
     """Load all SEC XBRL partitioned parquet files from local directory."""
@@ -176,6 +179,7 @@ def preprocess_sec(df: pd.DataFrame) -> pd.DataFrame:
 # FRED preprocessing
 # ---------------------------------------------------------------------------
 
+
 def load_fred_raw(raw_dir: Path) -> pd.DataFrame:
     """Load all FRED partitioned parquet files from local directory."""
     parquet_files = sorted(raw_dir.glob("series_id=*.parquet"))
@@ -241,8 +245,10 @@ def preprocess_fred(df: pd.DataFrame) -> pd.DataFrame:
 # Validation report
 # ---------------------------------------------------------------------------
 
+
 def build_report(sec: pd.DataFrame, fred: pd.DataFrame) -> dict:
     """Build a JSON-serializable validation report."""
+
     def _col_stats(df: pd.DataFrame) -> dict:
         stats: dict = {
             "row_count": int(len(df)),
@@ -252,7 +258,8 @@ def build_report(sec: pd.DataFrame, fred: pd.DataFrame) -> dict:
         num_cols = df.select_dtypes(include="number").columns
         stats["numeric_ranges"] = {
             c: {"min": float(df[c].min()), "max": float(df[c].max())}
-            for c in num_cols if len(df) > 0
+            for c in num_cols
+            if len(df) > 0
         }
         return stats
 
@@ -260,13 +267,16 @@ def build_report(sec: pd.DataFrame, fred: pd.DataFrame) -> dict:
         "sec": _col_stats(sec),
         "fred": _col_stats(fred),
         "unique_ciks": int(sec["cik"].nunique()) if "cik" in sec.columns else 0,
-        "unique_fred_series": int(fred["series_id"].nunique()) if "series_id" in fred.columns else 0,
+        "unique_fred_series": int(fred["series_id"].nunique())
+        if "series_id" in fred.columns
+        else 0,
     }
 
 
 # ---------------------------------------------------------------------------
 # Main entry point (Airflow-friendly)
 # ---------------------------------------------------------------------------
+
 
 def run_preprocessing(
     sec_raw_dir: Path = LOCAL_SEC_RAW,
@@ -289,8 +299,7 @@ def run_preprocessing(
     log.info("SEC raw rows: %d", len(sec_raw))
 
     sec = preprocess_sec(sec_raw)
-    log.info("SEC after preprocessing: %d rows, %d unique CIKs",
-             len(sec), sec["cik"].nunique())
+    log.info("SEC after preprocessing: %d rows, %d unique CIKs", len(sec), sec["cik"].nunique())
 
     sec_local = out_dir / "sec_xbrl_long.parquet"
     sec.to_parquet(sec_local, index=False)
@@ -302,8 +311,7 @@ def run_preprocessing(
     log.info("FRED raw rows: %d", len(fred_raw))
 
     fred = preprocess_fred(fred_raw)
-    log.info("FRED after preprocessing: %d rows, %d series",
-             len(fred), fred["series_id"].nunique())
+    log.info("FRED after preprocessing: %d rows, %d series", len(fred), fred["series_id"].nunique())
 
     fred_local = out_dir / "fred_timeseries.parquet"
     fred.to_parquet(fred_local, index=False)

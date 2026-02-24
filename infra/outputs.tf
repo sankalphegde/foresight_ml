@@ -58,15 +58,36 @@ output "dev_service_account_key" {
 }
 
 output "airflow_service_account_email" {
-  description = "Airflow service account email for Cloud Run"
+  description = "Airflow service account email for Cloud Run (deprecated)"
   value       = google_service_account.airflow.email
 }
 
-# Cloud Run outputs
-output "airflow_url" {
-  description = "Airflow web UI URL"
-  value       = google_cloud_run_v2_service.airflow.uri
+output "composer_service_account_email" {
+  description = "Composer service account email"
+  value       = google_service_account.composer.email
 }
+
+# Cloud Composer outputs
+output "composer_airflow_uri" {
+  description = "Cloud Composer Airflow web UI URL"
+  value       = google_composer_environment.foresight_ml.config[0].airflow_uri
+}
+
+output "composer_dag_gcs_prefix" {
+  description = "GCS path where Composer expects DAG files"
+  value       = google_composer_environment.foresight_ml.config[0].dag_gcs_prefix
+}
+
+output "composer_environment_name" {
+  description = "Cloud Composer environment name"
+  value       = google_composer_environment.foresight_ml.name
+}
+
+# Cloud Run outputs (deprecated - keeping for reference)
+# output "airflow_url" {
+#   description = "Airflow web UI URL (Cloud Run - deprecated)"
+#   value       = google_cloud_run_v2_service.airflow.uri
+# }
 
 # Instructions
 output "setup_instructions" {
@@ -74,26 +95,31 @@ output "setup_instructions" {
   value       = <<-EOT
     Deployment complete! Next steps:
 
-    1. Save service account key:
+    1. Save service account key (for local development):
        terraform output -raw dev_service_account_key | base64 -d > gcp-key.json
 
-    2. Build and push Airflow image:
-       cd deployment
-       gcloud builds submit --config cloudbuild.yaml
+    2. Upload DAGs to Cloud Composer:
+       gcloud composer environments storage dags import \
+         --environment=foresight-ml-${var.environment} \
+         --location=${var.region} \
+         --source=src/airflow/dags/
 
     3. Access Airflow UI:
-       ${google_cloud_run_v2_service.airflow.uri}
-       (Login: admin / admin)
+       Open: $(terraform output -raw composer_airflow_uri)
+       Authentication: Use your Google Cloud credentials
 
-    4. The DAG will automatically backfill historical data from 2020-01-01
-       With daily runs, all 6 years of data (~2,190 days) will be collected within ~25 days
+    4. Available DAGs:
+       - foresight_ingestion: Daily data ingestion (FRED + SEC)
+       - foresight_preprocessing: Weekly data preprocessing
 
     5. Monitor via Airflow UI:
        - DAG runs show in the UI
        - Logs available for each task
-       - Both FRED and SEC ingestion run in parallel
+       - Data stored in GCS: gs://${google_storage_bucket.data_lake.name}
 
-    6. Query data:
+    6. Query processed data:
        Open BigQuery console: https://console.cloud.google.com/bigquery?project=${var.project_id}
+
+    Note: Cloud Composer takes 20-30 minutes to provision on first run.
   EOT
 }

@@ -7,9 +7,9 @@ Handles:
 """
 
 import os
+
 import pandas as pd
 from google.cloud import storage
-from datetime import datetime
 
 from src.data.clients.sec_client import SECClient
 from src.data.clients.sec_xbrl_client import SECXBRLClient
@@ -20,11 +20,7 @@ RAW_PREFIX = "raw/sec_xbrl"
 
 def quarter_key(df: pd.DataFrame) -> pd.Series:
     """Generate a combined string key for the fiscal quarter."""
-    return (
-        df["fiscal_year"].astype(int).astype(str)
-        + "_"
-        + df["fiscal_period"]
-    )
+    return df["fiscal_year"].astype(int).astype(str) + "_" + df["fiscal_period"]
 
 
 def clean(df: pd.DataFrame) -> pd.DataFrame:
@@ -39,7 +35,9 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def load_existing(storage_client: "storage.Client", bucket_name: str, cik: str) -> "pd.DataFrame | None":
+def load_existing(
+    storage_client: "storage.Client", bucket_name: str, cik: str
+) -> "pd.DataFrame | None":
     """Load existing SEC data for a given CIK from cloud storage."""
     blob_path = f"{RAW_PREFIX}/cik={cik}/data.parquet"
     bucket = storage_client.bucket(bucket_name)
@@ -47,7 +45,7 @@ def load_existing(storage_client: "storage.Client", bucket_name: str, cik: str) 
     if not blob.exists():
         return None
     with blob.open("rb") as f:
-        return pd.read_parquet(f)  
+        return pd.read_parquet(f)
 
 
 def save(storage_client: "storage.Client", bucket_name: str, cik: str, df: "pd.DataFrame") -> None:
@@ -55,7 +53,7 @@ def save(storage_client: "storage.Client", bucket_name: str, cik: str, df: "pd.D
     blob_path = f"{RAW_PREFIX}/cik={cik}/data.parquet"
     bucket = storage_client.bucket(bucket_name)
     with bucket.blob(blob_path).open("wb") as f:
-        df.to_parquet(f, index=False)  
+        df.to_parquet(f, index=False)
     print(f"Saved -> {blob_path}")
 
 
@@ -72,9 +70,7 @@ def main() -> None:
     storage_client = storage.Client(project=project_id)
     bucket = storage_client.bucket(bucket_name)
 
-    companies_df = pd.read_csv(
-        bucket.blob("reference/companies.csv").open("r")  
-    )
+    companies_df = pd.read_csv(bucket.blob("reference/companies.csv").open("r"))
     companies_df = companies_df.head(5)
 
     sec = SECClient(user_agent=user_agent)
@@ -85,7 +81,7 @@ def main() -> None:
 
     for idx, row in companies_df.iterrows():
         cik = str(row["cik"]).zfill(10)
-        print(f"[{idx+1}/{total_companies}] Processing {cik}")  
+        print(f"[{idx+1}/{total_companies}] Processing {cik}")
         try:
             new_df = xbrl.extract_long_format(cik)
         except Exception as e:
@@ -114,9 +110,7 @@ def main() -> None:
                 + existing_df["fiscal_period"].map(quarter_map)
             )
         else:
-            existing_df["quarter_end_date"] = pd.to_datetime(
-                existing_df["quarter_end_date"]
-            )
+            existing_df["quarter_end_date"] = pd.to_datetime(existing_df["quarter_end_date"])
 
         # Identify most recent N quarters
         latest_quarters = (
@@ -127,9 +121,7 @@ def main() -> None:
         )
 
         # REMOVE those recent quarters from existing
-        existing_df = existing_df[
-            ~existing_df["quarter_key"].isin(latest_quarters)
-        ]
+        existing_df = existing_df[~existing_df["quarter_key"].isin(latest_quarters)]
 
         # Identify quarters already safely stored
         old_quarters = set(existing_df["quarter_key"].unique())
@@ -137,19 +129,17 @@ def main() -> None:
         # Keep:
         # - new quarters
         # - refreshed quarters
-        incremental_df = new_df[
-            ~new_df["quarter_key"].isin(old_quarters)
-        ]
+        incremental_df = new_df[~new_df["quarter_key"].isin(old_quarters)]
 
         updated = pd.concat([existing_df, incremental_df], ignore_index=True)
 
         # Optional dedup safety
         updated = updated.drop_duplicates(
-            subset=["cik", "fiscal_year", "fiscal_period", "tag"],
-            keep="last"
+            subset=["cik", "fiscal_year", "fiscal_period", "tag"], keep="last"
         )
 
         save(storage_client, bucket_name, cik, updated)
+
 
 if __name__ == "__main__":
     main()
