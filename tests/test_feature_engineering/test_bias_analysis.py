@@ -1,6 +1,5 @@
-"""
-Unit Tests — Bias Analysis
-============================
+"""Unit Tests — Bias Analysis.
+
 Tests for:
   - Slice creation
   - Per-slice statistics
@@ -13,13 +12,12 @@ import pandas as pd
 import pytest
 
 from src.feature_engineering.pipelines.bias_analysis import (
-    compute_psi,
-    compute_js_divergence,
-    create_slices,
     analyze_slice_statistics,
+    compute_js_divergence,
+    compute_psi,
+    create_slices,
     run_bias_analysis,
 )
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
 
@@ -61,24 +59,30 @@ def sample_engineered_df():
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestPSI:
+    """Tests for Population Stability Index computation."""
+
     def test_identical_distributions(self):
+        """Identical distributions should have PSI close to zero."""
         data = pd.Series(np.random.normal(0, 1, 1000))
         psi = compute_psi(data, data)
         assert psi < 0.01, "Identical distributions should have PSI ≈ 0"
 
     def test_different_distributions(self):
+        """Shifted distributions should have PSI > 0.1."""
         ref = pd.Series(np.random.normal(0, 1, 1000))
         comp = pd.Series(np.random.normal(3, 1, 1000))
         psi = compute_psi(ref, comp)
         assert psi > 0.1, "Shifted distributions should have PSI > 0.1"
 
     def test_small_sample_returns_nan(self):
+        """Samples with fewer than 10 elements should return NaN."""
         ref = pd.Series([1, 2, 3])
         comp = pd.Series([4, 5, 6])
         psi = compute_psi(ref, comp)
         assert np.isnan(psi)
 
     def test_constant_returns_zero(self):
+        """Constant-valued distributions should produce PSI of zero."""
         ref = pd.Series([5.0] * 100)
         comp = pd.Series([5.0] * 100)
         psi = compute_psi(ref, comp)
@@ -86,12 +90,16 @@ class TestPSI:
 
 
 class TestJSDivergence:
+    """Tests for Jensen-Shannon divergence computation."""
+
     def test_identical_distributions(self):
+        """Identical distributions should have near-zero JS divergence."""
         data = pd.Series(np.random.normal(0, 1, 1000))
         js = compute_js_divergence(data, data)
         assert js < 0.05
 
     def test_different_distributions(self):
+        """Shifted distributions should have JS divergence > 0.1."""
         ref = pd.Series(np.random.normal(0, 1, 1000))
         comp = pd.Series(np.random.normal(5, 1, 1000))
         js = compute_js_divergence(ref, comp)
@@ -103,7 +111,10 @@ class TestJSDivergence:
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestSliceCreation:
+    """Tests for data slice creation across bias dimensions."""
+
     def test_creates_all_dimensions(self, sample_engineered_df):
+        """All four slicing dimensions should be present."""
         slices = create_slices(sample_engineered_df)
         assert "company_size" in slices
         assert "sector_proxy" in slices
@@ -111,11 +122,13 @@ class TestSliceCreation:
         assert "macro_regime" in slices
 
     def test_size_slices_cover_all_data(self, sample_engineered_df):
+        """Size slices should cover every row with no gaps."""
         slices = create_slices(sample_engineered_df)
         total = sum(len(s) for s in slices["company_size"].values())
         assert total == len(sample_engineered_df)
 
     def test_time_split(self, sample_engineered_df):
+        """Time split should partition data by fiscal_year threshold."""
         slices = create_slices(sample_engineered_df, time_split_year=2016)
         pre = slices["time_period"]["pre_2016"]
         post = slices["time_period"]["post_2016"]
@@ -123,6 +136,7 @@ class TestSliceCreation:
         assert (post["fiscal_year"] >= 2016).all()
 
     def test_macro_regime_split(self, sample_engineered_df):
+        """Macro regime split should partition by fed_funds threshold."""
         slices = create_slices(sample_engineered_df, fed_funds_threshold=2.0)
         low = slices["macro_regime"]["low_rate"]
         high = slices["macro_regime"]["high_rate"]
@@ -135,7 +149,10 @@ class TestSliceCreation:
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestSliceStatistics:
+    """Tests for per-slice summary statistics computation."""
+
     def test_statistics_computed(self, sample_engineered_df):
+        """All expected statistics columns should be present."""
         stats = analyze_slice_statistics(
             sample_engineered_df, ["current_ratio", "net_margin"]
         )
@@ -147,6 +164,7 @@ class TestSliceStatistics:
         assert "net_margin_outlier_rate" in stats
 
     def test_sample_count_correct(self, sample_engineered_df):
+        """Sample count should match the length of the input DataFrame."""
         stats = analyze_slice_statistics(sample_engineered_df, ["current_ratio"])
         assert stats["sample_count"] == len(sample_engineered_df)
 
@@ -156,7 +174,10 @@ class TestSliceStatistics:
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestRunBiasAnalysis:
+    """Tests for the full bias analysis pipeline."""
+
     def test_returns_report_and_details(self, sample_engineered_df):
+        """Pipeline should return a DataFrame report and a details dict."""
         report, details = run_bias_analysis(sample_engineered_df)
         assert isinstance(report, pd.DataFrame)
         assert isinstance(details, dict)
@@ -165,6 +186,7 @@ class TestRunBiasAnalysis:
         assert "alerts" in details
 
     def test_report_has_expected_columns(self, sample_engineered_df):
+        """Bias report should contain dimension, slice, and sample_count columns."""
         report, _ = run_bias_analysis(sample_engineered_df)
         assert "dimension" in report.columns
         assert "slice" in report.columns

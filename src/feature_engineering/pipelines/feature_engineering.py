@@ -1,5 +1,5 @@
-"""
-Feature Engineering Module
+"""Feature Engineering Module.
+
 ===========================
 Computes ~42 engineered features from cleaned financial statement data.
 All functions are pure (no side effects) and individually testable.
@@ -14,8 +14,9 @@ Feature Categories:
 """
 
 import logging
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +52,7 @@ def clip_outliers(df: pd.DataFrame, columns: list, n_std: float = 5.0) -> pd.Dat
 # ═══════════════════════════════════════════════════════════════════════════
 
 def compute_financial_ratios(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Compute 13 financial ratios across liquidity, leverage, profitability,
-    and efficiency categories.
+    """Compute 13 financial ratios across liquidity, leverage, profitability, and efficiency.
 
     All ratios use safe_divide() to return NaN instead of inf/error
     when the denominator is zero (e.g., a company with zero liabilities
@@ -133,8 +132,7 @@ GROWTH_COLUMNS = {
 
 
 def compute_growth_rates(df: pd.DataFrame, lag: int = 4) -> pd.DataFrame:
-    """
-    Compute year-over-year growth rates per company.
+    """Compute year-over-year growth rates per company.
 
     Uses pct_change(lag) where lag=4 quarters for YoY comparison.
     This captures the trajectory of financial health — a deteriorating
@@ -169,8 +167,7 @@ ROLLING_FEATURES = [
 def compute_rolling_stats(
     df: pd.DataFrame, windows: list[int] = None
 ) -> pd.DataFrame:
-    """
-    Compute rolling mean and std for key features over specified windows.
+    """Compute rolling mean and std for key features over specified windows.
 
     Rolling statistics smooth out quarterly noise and capture trends:
     - Rolling MEAN shows the trend direction
@@ -193,10 +190,10 @@ def compute_rolling_stats(
 
             grouped = df.groupby(id_col)[feature]
             df[mean_col] = grouped.transform(
-                lambda x: x.rolling(window=w, min_periods=1).mean()
+                lambda x, w=w: x.rolling(window=w, min_periods=1).mean()
             )
             df[std_col] = grouped.transform(
-                lambda x: x.rolling(window=w, min_periods=2).std()
+                lambda x, w=w: x.rolling(window=w, min_periods=2).std()
             )
 
     n_features = len(ROLLING_FEATURES) * len(windows) * 2
@@ -212,8 +209,7 @@ def compute_rolling_stats(
 # ═══════════════════════════════════════════════════════════════════════════
 
 def compute_zscore_and_interactions(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Compute composite and interaction features.
+    """Compute composite and interaction features.
 
     - altman_z_approx: Approximation of the classic Altman Z-score using
       available fields. The original formula uses market cap (not available),
@@ -279,9 +275,7 @@ def compute_zscore_and_interactions(df: pd.DataFrame) -> pd.DataFrame:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def compute_macro_interactions(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Create interaction terms between macroeconomic indicators and
-    company-level financial ratios.
+    """Create interaction terms between macroeconomic indicators and company-level ratios.
 
     These capture how macro conditions amplify or dampen firm-level risk:
     - fed_rate_x_leverage: Rising rates hurt highly leveraged companies more
@@ -306,8 +300,7 @@ def compute_macro_interactions(df: pd.DataFrame) -> pd.DataFrame:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def compute_size_bucket(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Assign companies to size quartiles based on total Assets.
+    """Assign companies to size quartiles based on total Assets.
 
     Labels: small (Q1), mid (Q2), large (Q3), mega (Q4).
     This enables stratified bias analysis — distress models may
@@ -328,8 +321,7 @@ def compute_size_bucket(df: pd.DataFrame) -> pd.DataFrame:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def compute_sector_proxy(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Derive a sector proxy from financial profile characteristics.
+    """Derive a sector proxy from financial profile characteristics.
 
     Since sector/industry codes are not in the dataset, we approximate using:
     - High R&D intensity (>15% of revenue) → 'tech_pharma'
@@ -387,8 +379,7 @@ def engineer_features(
     growth_lag: int = 4,
     clip_std: float = 5.0,
 ) -> pd.DataFrame:
-    """
-    Main entry point: run all feature engineering steps in order.
+    """Main entry point: run all feature engineering steps in order.
 
     Pipeline:
       1. Financial ratios (13 features)

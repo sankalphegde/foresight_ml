@@ -1,5 +1,5 @@
-"""
-Bias Analysis Module
+"""Bias Analysis Module.
+
 =====================
 Analyzes feature distributions and fairness across population slices.
 Detects whether the dataset or engineered features exhibit systematic
@@ -13,8 +13,9 @@ Slicing Dimensions:
 """
 
 import logging
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 from scipy.spatial.distance import jensenshannon
 
 logger = logging.getLogger(__name__)
@@ -25,8 +26,7 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def compute_psi(reference: pd.Series, comparison: pd.Series, bins: int = 10) -> float:
-    """
-    Compute Population Stability Index between two distributions.
+    """Compute Population Stability Index between two distributions.
 
     PSI measures how much a distribution has shifted:
       PSI < 0.10 → No significant shift
@@ -63,8 +63,8 @@ def compute_psi(reference: pd.Series, comparison: pd.Series, bins: int = 10) -> 
 def compute_js_divergence(
     reference: pd.Series, comparison: pd.Series, bins: int = 10
 ) -> float:
-    """
-    Compute Jensen-Shannon divergence between two distributions.
+    """Compute Jensen-Shannon divergence between two distributions.
+
     Returns a value in [0, 1] where 0 = identical distributions.
     """
     ref_clean = reference.dropna()
@@ -99,8 +99,7 @@ def create_slices(
     time_split_year: int = 2016,
     fed_funds_threshold: float = 2.0,
 ) -> dict[str, dict[str, pd.DataFrame]]:
-    """
-    Create analysis slices from the dataset.
+    """Create analysis slices from the dataset.
 
     Returns a nested dict: {dimension_name: {slice_name: DataFrame}}.
     """
@@ -108,17 +107,15 @@ def create_slices(
 
     # 1. Company Size
     if "company_size_bucket" in df.columns:
-        slices["company_size"] = {
-            name: group
-            for name, group in df.groupby("company_size_bucket", observed=True)
-        }
+        slices["company_size"] = dict(
+            df.groupby("company_size_bucket", observed=True)
+        )
 
     # 2. Sector Proxy
     if "sector_proxy" in df.columns:
-        slices["sector_proxy"] = {
-            name: group
-            for name, group in df.groupby("sector_proxy", observed=True)
-        }
+        slices["sector_proxy"] = dict(
+            df.groupby("sector_proxy", observed=True)
+        )
 
     # 3. Time Period
     if "fiscal_year" in df.columns:
@@ -183,8 +180,8 @@ def compute_drift_matrix(
     slices_dict: dict[str, pd.DataFrame],
     feature_columns: list[str],
 ) -> pd.DataFrame:
-    """
-    Compute PSI between all pairs of slices for each feature.
+    """Compute PSI between all pairs of slices for each feature.
+
     Returns a DataFrame with (slice_pair, feature) as index.
     """
     slice_names = list(slices_dict.keys())
@@ -234,8 +231,7 @@ def run_bias_analysis(
     fed_funds_threshold: float = 2.0,
     feature_columns: list[str] = None,
 ) -> tuple[pd.DataFrame, dict]:
-    """
-    Run full bias analysis across all slicing dimensions.
+    """Run full bias analysis across all slicing dimensions.
 
     Parameters:
       df: DataFrame with engineered features

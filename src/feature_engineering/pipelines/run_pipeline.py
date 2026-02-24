@@ -1,5 +1,5 @@
-"""
-Pipeline Orchestrator
+"""Pipeline Orchestrator.
+
 ======================
 CLI entry point for running the feature engineering and bias analysis pipeline.
 
@@ -21,9 +21,9 @@ import sys
 import pandas as pd
 import yaml
 
+from pipelines.bias_analysis import KEY_FEATURES, run_bias_analysis
 from pipelines.data_cleaning import clean_data
-from pipelines.feature_engineering import engineer_features, ENGINEERED_FEATURES
-from pipelines.bias_analysis import run_bias_analysis, KEY_FEATURES
+from pipelines.feature_engineering import ENGINEERED_FEATURES, engineer_features
 from pipelines.visualizations import generate_all_visualizations
 
 # ── Logging Setup ────────────────────────────────────────────────────────
@@ -41,8 +41,7 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def run_local(input_path: str, output_dir: str, config: dict = None) -> None:
-    """
-    Run the full pipeline locally using Pandas.
+    """Run the full pipeline locally using Pandas.
 
     Steps:
       1. Load parquet data
@@ -159,8 +158,7 @@ def run_local(input_path: str, output_dir: str, config: dict = None) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def handle_missing_engineered_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Handle missing data in the engineered features table pulled from BigQuery.
+    """Handle missing data in the engineered features table pulled from BigQuery.
 
     Root Cause: The BQ SQL uses SAFE_DIVIDE which returns NULL when the
     denominator is 0. Many raw columns (Revenues, GrossProfit, R&D, SGA,
@@ -230,8 +228,7 @@ def generate_bias_report_markdown(
     analysis_details: dict,
     output_path: str,
 ) -> str:
-    """
-    Generate a comprehensive markdown bias report acting as a senior data analyst.
+    """Generate a comprehensive markdown bias report acting as a senior data analyst.
 
     Covers:
       - Executive summary
@@ -241,8 +238,9 @@ def generate_bias_report_markdown(
       - Drift detection results
       - Fairness metrics and recommendations
     """
-    import numpy as np
     from datetime import datetime
+
+    import numpy as np
 
     alerts = analysis_details.get("alerts", [])
     drift_matrices = analysis_details.get("drift_matrices", {})
@@ -275,12 +273,12 @@ def generate_bias_report_markdown(
     lines = []
     lines.append("# Financial Distress Pipeline — Bias Analysis Report")
     lines.append(f"\n*Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
-    lines.append(f"\n---\n")
+    lines.append("\n---\n")
 
     # Executive Summary
     lines.append("## 1. Executive Summary\n")
-    lines.append(f"| Metric | Value |")
-    lines.append(f"|---|---|")
+    lines.append("| Metric | Value |")
+    lines.append("|---|---|")
     lines.append(f"| Total Observations | {len(df):,} |")
     lines.append(f"| Unique Firms | {df['firm_id'].nunique() if 'firm_id' in df.columns else 'N/A':,} |")
     if "fiscal_year" in df.columns:
@@ -359,6 +357,7 @@ def generate_bias_report_markdown(
         lines.append("indicate data leakage if they are outcomes of distress rather than causes.\n")
 
         from scipy import stats as sp_stats
+
         from pipelines.bias_analysis import compute_psi
 
         df_healthy = df[df["distress_label"] == 0]
@@ -424,10 +423,10 @@ def generate_bias_report_markdown(
         small_ct = sum(1 for r in separation_results if "SMALL" in r["signal"])
         neg_ct = sum(1 for r in separation_results if "NEGLIGIBLE" in r["signal"])
 
-        lines.append(f"> [!NOTE]")
+        lines.append("> [!NOTE]")
         lines.append(f"> **Effect size summary**: {large_ct} large / {medium_ct} medium / "
                      f"{small_ct} small / {neg_ct} negligible out of {len(separation_results)} features.")
-        lines.append(f"> Cohen's d thresholds: |d| ≥ 0.8 large, ≥ 0.5 medium, ≥ 0.2 small.\n")
+        lines.append("> Cohen's d thresholds: |d| ≥ 0.8 large, ≥ 0.5 medium, ≥ 0.2 small.\n")
 
         # Leakage warning for very high separation
         leakage_candidates = [r for r in separation_results if abs(r["cohens_d"]) >= 0.8]
@@ -556,8 +555,7 @@ def generate_bias_report_markdown(
 
 
 def run_bigquery(config: dict) -> None:
-    """
-    Run the pipeline on BigQuery.
+    """Run the pipeline on BigQuery.
 
     Steps:
       1. Read SQL template and substitute config values
@@ -592,14 +590,14 @@ def run_bigquery(config: dict) -> None:
 
     # Read and parameterize SQL
     sql_path = os.path.join(os.path.dirname(__file__), "feature_engineering_bq.sql")
-    with open(sql_path, "r") as f:
+    with open(sql_path) as f:
         sql = f.read()
 
     sql = sql.replace("${PROJECT}", project_id)
     sql = sql.replace("${DATASET}", dataset)
     sql = sql.replace("${RAW_TABLE}", raw_table)
 
-    logger.info(f"Executing feature engineering SQL on BigQuery...")
+    logger.info("Executing feature engineering SQL on BigQuery...")
     logger.info(f"  Project: {project_id}")
     logger.info(f"  Dataset: {dataset}")
     logger.info(f"  Raw Table: {raw_table}")
@@ -614,7 +612,7 @@ def run_bigquery(config: dict) -> None:
     clean_sql_path = os.path.join(
         os.path.dirname(__file__), "clean_engineered_features_bq.sql"
     )
-    with open(clean_sql_path, "r") as f:
+    with open(clean_sql_path) as f:
         clean_sql = f.read()
 
     clean_sql = clean_sql.replace("${PROJECT}", project_id)
@@ -648,27 +646,24 @@ def run_bigquery(config: dict) -> None:
         fed_funds_threshold=fed_funds_threshold,
     )
 
-    skip_heavy_visualizations = os.getenv("SKIP_HEAVY_VISUALIZATIONS", "false").lower() == "true"
-    if skip_heavy_visualizations:
-        logger.info("Skipping heavy visualizations (SKIP_HEAVY_VISUALIZATIONS=true).")
-    else:
-        plots_dir = "data/plots"
-        all_feature_cols = [c for c in ENGINEERED_FEATURES if c in df.columns]
-        rolling_cols = [c for c in df.columns if "_rolling_" in c]
-        all_feature_cols.extend(rolling_cols)
-        valid_key_features = [f for f in key_features if f in df.columns]
+    # Generate visualizations
+    plots_dir = "data/plots"
+    all_feature_cols = [c for c in ENGINEERED_FEATURES if c in df.columns]
+    rolling_cols = [c for c in df.columns if "_rolling_" in c]
+    all_feature_cols.extend(rolling_cols)
+    valid_key_features = [f for f in key_features if f in df.columns]
 
-        generate_all_visualizations(
-            df_raw=df,  # In BQ mode, we don't have the raw data separately
-            df_engineered=df,
-            bias_report=bias_report,
-            analysis_details=analysis_details,
-            feature_columns=all_feature_cols,
-            key_features=valid_key_features,
-            output_dir=plots_dir,
-            time_split_year=time_split_year,
-            fed_funds_threshold=fed_funds_threshold,
-        )
+    generate_all_visualizations(
+        df_raw=df,  # In BQ mode, we don't have the raw data separately
+        df_engineered=df,
+        bias_report=bias_report,
+        analysis_details=analysis_details,
+        feature_columns=all_feature_cols,
+        key_features=valid_key_features,
+        output_dir=plots_dir,
+        time_split_year=time_split_year,
+        fed_funds_threshold=fed_funds_threshold,
+    )
 
     # Save bias report CSV
     bias_report.to_csv("data/bias_report.csv", index=False)
@@ -689,6 +684,7 @@ def run_bigquery(config: dict) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def main():
+    """CLI entry point for running the pipeline."""
     parser = argparse.ArgumentParser(
         description="Feature Engineering & Bias Analysis Pipeline"
     )
@@ -721,7 +717,7 @@ def main():
     # Load config
     config = {}
     if os.path.exists(args.config):
-        with open(args.config, "r") as f:
+        with open(args.config) as f:
             config = yaml.safe_load(f)
         logger.info(f"Loaded config from: {args.config}")
 

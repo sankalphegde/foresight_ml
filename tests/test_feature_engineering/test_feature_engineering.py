@@ -1,6 +1,5 @@
-"""
-Unit Tests — Feature Engineering & Data Cleaning
-==================================================
+"""Unit Tests — Feature Engineering & Data Cleaning.
+
 Tests for:
   - NaN imputation/dropping logic
   - Financial ratio computation
@@ -17,20 +16,17 @@ import pytest
 from src.feature_engineering.pipelines.data_cleaning import (
     clean_data,
     drop_uninformative_columns,
-    impute_macro_columns,
     impute_financial_columns,
+    impute_macro_columns,
 )
 from src.feature_engineering.pipelines.feature_engineering import (
-    safe_divide,
+    clip_outliers,
     compute_financial_ratios,
     compute_growth_rates,
     compute_rolling_stats,
-    compute_zscore_and_interactions,
-    compute_size_bucket,
-    clip_outliers,
     engineer_features,
+    safe_divide,
 )
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
 
@@ -97,16 +93,21 @@ def sample_clean_df(sample_raw_df):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestDropColumns:
+    """Tests for dropping uninformative columns."""
+
     def test_drops_eps_columns(self, sample_raw_df):
+        """EPS columns (100% null) should be dropped."""
         result = drop_uninformative_columns(sample_raw_df.copy())
         assert "EarningsPerShareBasic" not in result.columns
         assert "EarningsPerShareDiluted" not in result.columns
 
     def test_drops_quality_check_flag(self, sample_raw_df):
+        """Quality check flag (zero-variance) should be dropped."""
         result = drop_uninformative_columns(sample_raw_df.copy())
         assert "quality_check_flag" not in result.columns
 
     def test_preserves_other_columns(self, sample_raw_df):
+        """Non-dropped columns should remain intact."""
         result = drop_uninformative_columns(sample_raw_df.copy())
         assert "Assets" in result.columns
         assert "Revenues" in result.columns
@@ -114,7 +115,10 @@ class TestDropColumns:
 
 
 class TestImputeMacroColumns:
+    """Tests for macroeconomic column imputation."""
+
     def test_no_nulls_after_imputation(self, sample_raw_df):
+        """All macro columns should have zero nulls after imputation."""
         result = impute_macro_columns(sample_raw_df.copy())
         assert result["fed_funds"].isnull().sum() == 0
         assert result["unemployment"].isnull().sum() == 0
@@ -129,6 +133,8 @@ class TestImputeMacroColumns:
 
 
 class TestImputeFinancialColumns:
+    """Tests for financial statement column imputation."""
+
     def test_handles_already_clean_data(self, sample_raw_df):
         """Financial columns have 0% null — should pass through unchanged."""
         result = impute_financial_columns(sample_raw_df.copy())
@@ -143,7 +149,10 @@ class TestImputeFinancialColumns:
 
 
 class TestCleanData:
+    """Tests for the full data cleaning pipeline."""
+
     def test_full_clean_pipeline(self, sample_raw_df):
+        """Full pipeline should drop columns, impute, and preserve rows."""
         result = clean_data(sample_raw_df.copy())
         # Dropped columns gone
         assert "EarningsPerShareBasic" not in result.columns
@@ -158,13 +167,17 @@ class TestCleanData:
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestSafeDivide:
+    """Tests for safe_divide helper guarding against zero denominators."""
+
     def test_normal_division(self):
+        """Standard division should produce correct results."""
         num = pd.Series([10.0, 20.0, 30.0])
         denom = pd.Series([2.0, 4.0, 5.0])
         result = safe_divide(num, denom)
         np.testing.assert_array_almost_equal(result, [5.0, 5.0, 6.0])
 
     def test_zero_denominator_returns_nan(self):
+        """Zero denominator should produce NaN, not raise."""
         num = pd.Series([10.0, 20.0])
         denom = pd.Series([0.0, 5.0])
         result = safe_divide(num, denom)
@@ -172,6 +185,7 @@ class TestSafeDivide:
         assert result[1] == 4.0
 
     def test_both_zero(self):
+        """Both zero should produce NaN."""
         num = pd.Series([0.0])
         denom = pd.Series([0.0])
         result = safe_divide(num, denom)
@@ -179,7 +193,10 @@ class TestSafeDivide:
 
 
 class TestFinancialRatios:
+    """Tests for financial ratio computation."""
+
     def test_ratios_created(self, sample_clean_df):
+        """All 13 expected ratio columns should exist after computation."""
         result = compute_financial_ratios(sample_clean_df.copy())
         expected_ratios = [
             "current_ratio", "quick_ratio", "cash_ratio",
@@ -191,6 +208,7 @@ class TestFinancialRatios:
             assert ratio in result.columns, f"Missing ratio: {ratio}"
 
     def test_current_ratio_formula(self, sample_clean_df):
+        """Current ratio should equal AssetsCurrent / LiabilitiesCurrent."""
         result = compute_financial_ratios(sample_clean_df.copy())
         expected = sample_clean_df["AssetsCurrent"] / sample_clean_df["LiabilitiesCurrent"]
         # Only check where denominator is non-zero
@@ -201,13 +219,17 @@ class TestFinancialRatios:
         )
 
     def test_no_inf_values(self, sample_clean_df):
+        """Financial ratios should not contain infinite values."""
         result = compute_financial_ratios(sample_clean_df.copy())
         for col in ["current_ratio", "debt_to_equity", "gross_margin"]:
             assert not np.isinf(result[col].dropna()).any(), f"Inf in {col}"
 
 
 class TestGrowthRates:
+    """Tests for year-over-year growth rate computation."""
+
     def test_growth_columns_created(self, sample_clean_df):
+        """Growth rate columns should be created with expected names."""
         result = compute_growth_rates(sample_clean_df.copy(), lag=4)
         assert "revenue_growth_yoy" in result.columns
         assert "assets_growth_yoy" in result.columns
@@ -223,7 +245,10 @@ class TestGrowthRates:
 
 
 class TestRollingStats:
+    """Tests for rolling statistics computation."""
+
     def test_rolling_columns_created(self, sample_clean_df):
+        """Rolling mean and std columns should be created."""
         df = compute_financial_ratios(sample_clean_df.copy())
         df = compute_growth_rates(df, lag=4)
         result = compute_rolling_stats(df, windows=[4])
@@ -232,14 +257,20 @@ class TestRollingStats:
 
 
 class TestClipOutliers:
+    """Tests for outlier clipping functionality."""
+
     def test_clipping_works(self):
+        """Extreme values should be clipped within ±n_std."""
         df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 100]})
         result = clip_outliers(df.copy(), ["x"], n_std=2.0)
         assert result["x"].max() < 100
 
 
 class TestEngineerFeatures:
+    """Tests for the full feature engineering pipeline."""
+
     def test_full_pipeline(self, sample_clean_df):
+        """Pipeline should add columns and preserve rows."""
         result = engineer_features(sample_clean_df.copy())
         # Should have more columns than input
         assert result.shape[1] > sample_clean_df.shape[1]
@@ -251,6 +282,7 @@ class TestEngineerFeatures:
         assert "sector_proxy" in result.columns
 
     def test_no_inf_in_output(self, sample_clean_df):
+        """Output should contain no infinite values."""
         result = engineer_features(sample_clean_df.copy())
         numeric = result.select_dtypes(include=[np.number])
         assert not np.isinf(numeric.values).any(), "Infinite values in output"

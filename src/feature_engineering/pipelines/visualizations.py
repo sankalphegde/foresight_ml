@@ -1,5 +1,5 @@
-"""
-Visualizations Module
+"""Visualizations Module.
+
 ======================
 Generates all charts for feature analysis and bias analysis.
 Outputs 15 PNG files to the specified output directory.
@@ -10,15 +10,14 @@ Charts 8-15: Bias Analysis
 
 import logging
 import os
-from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")  # Non-interactive backend for server/pipeline use
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-import seaborn as sns
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 logger = logging.getLogger(__name__)
 
@@ -648,7 +647,8 @@ def plot_label_feature_comparison(
     feature_columns: list[str],
     output_dir: str,
 ) -> str:
-    """
+    """Compare feature means between healthy and distressed firms.
+
     Horizontal bar chart comparing feature means between healthy (label=0)
     and distressed (label=1) firms.
     """
@@ -694,7 +694,8 @@ def plot_distress_rate_by_slice(
     df: pd.DataFrame,
     output_dir: str,
 ) -> str:
-    """
+    """Show distress rate across company size and sector proxy slices.
+
     Grouped bar chart showing distress rate (%) across company size
     and sector proxy slices.
     """
@@ -713,7 +714,7 @@ def plot_distress_rate_by_slice(
         axes[0].set_title("Distress Rate by Company Size", fontsize=11, fontweight="bold")
         axes[0].set_ylabel("Distress Rate (%)", fontsize=10)
         axes[0].set_xlabel("Company Size Bucket", fontsize=10)
-        for bar, val in zip(bars, rates_size.values):
+        for bar, val in zip(bars, rates_size.values, strict=False):
             axes[0].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.05,
                         f"{val:.2f}%", ha="center", va="bottom", fontsize=9, fontweight="bold")
         axes[0].axhline(y=df["distress_label"].mean() * 100, color="gray",
@@ -730,7 +731,7 @@ def plot_distress_rate_by_slice(
         axes[1].set_title("Distress Rate by Sector", fontsize=11, fontweight="bold")
         axes[1].set_ylabel("Distress Rate (%)", fontsize=10)
         axes[1].tick_params(axis="x", rotation=30, labelsize=8)
-        for bar, val in zip(bars, rates_sector.values):
+        for bar, val in zip(bars, rates_sector.values, strict=False):
             axes[1].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
                         f"{val:.2f}%", ha="center", va="bottom", fontsize=9, fontweight="bold")
         axes[1].axhline(y=df["distress_label"].mean() * 100, color="gray",
@@ -749,9 +750,10 @@ def plot_disparate_impact(
     df: pd.DataFrame,
     output_dir: str,
 ) -> str:
-    """
-    Horizontal bar chart showing Disparate Impact Ratio (DIR) for each
-    slice, with the 0.8 and 1.25 fairness thresholds marked.
+    """Show Disparate Impact Ratio (DIR) for each slice.
+
+    Horizontal bar chart showing DIR for each slice, with the 0.8 and
+    1.25 fairness thresholds marked.
     """
     if "distress_label" not in df.columns:
         return ""
@@ -820,8 +822,8 @@ def generate_dashboard_html(
     feature_count: int = 0,
     alert_count: int = 0,
 ) -> str:
-    """
-    Generate a self-contained HTML dashboard that displays all 15 plots.
+    """Generate a self-contained HTML dashboard that displays all 15 plots.
+
     Images are referenced via relative paths so the HTML works from the
     plots directory without a server.
 
@@ -1047,8 +1049,7 @@ def generate_all_visualizations(
     time_split_year: int = 2016,
     fed_funds_threshold: float = 2.0,
 ) -> list[str]:
-    """
-    Generate all 15 visualizations.
+    """Generate all 15 visualizations.
 
     Parameters:
       df_raw: Original DataFrame BEFORE imputation (for missing data charts)
