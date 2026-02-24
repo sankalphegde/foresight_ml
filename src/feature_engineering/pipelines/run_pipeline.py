@@ -648,24 +648,27 @@ def run_bigquery(config: dict) -> None:
         fed_funds_threshold=fed_funds_threshold,
     )
 
-    # Generate visualizations
-    plots_dir = "data/plots"
-    all_feature_cols = [c for c in ENGINEERED_FEATURES if c in df.columns]
-    rolling_cols = [c for c in df.columns if "_rolling_" in c]
-    all_feature_cols.extend(rolling_cols)
-    valid_key_features = [f for f in key_features if f in df.columns]
+    skip_heavy_visualizations = os.getenv("SKIP_HEAVY_VISUALIZATIONS", "false").lower() == "true"
+    if skip_heavy_visualizations:
+        logger.info("Skipping heavy visualizations (SKIP_HEAVY_VISUALIZATIONS=true).")
+    else:
+        plots_dir = "data/plots"
+        all_feature_cols = [c for c in ENGINEERED_FEATURES if c in df.columns]
+        rolling_cols = [c for c in df.columns if "_rolling_" in c]
+        all_feature_cols.extend(rolling_cols)
+        valid_key_features = [f for f in key_features if f in df.columns]
 
-    generate_all_visualizations(
-        df_raw=df,  # In BQ mode, we don't have the raw data separately
-        df_engineered=df,
-        bias_report=bias_report,
-        analysis_details=analysis_details,
-        feature_columns=all_feature_cols,
-        key_features=valid_key_features,
-        output_dir=plots_dir,
-        time_split_year=time_split_year,
-        fed_funds_threshold=fed_funds_threshold,
-    )
+        generate_all_visualizations(
+            df_raw=df,  # In BQ mode, we don't have the raw data separately
+            df_engineered=df,
+            bias_report=bias_report,
+            analysis_details=analysis_details,
+            feature_columns=all_feature_cols,
+            key_features=valid_key_features,
+            output_dir=plots_dir,
+            time_split_year=time_split_year,
+            fed_funds_threshold=fed_funds_threshold,
+        )
 
     # Save bias report CSV
     bias_report.to_csv("data/bias_report.csv", index=False)

@@ -4,6 +4,8 @@
 import os
 import subprocess
 import sys
+import tempfile
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -18,6 +20,9 @@ from src.ingestion.fred_increment_job import main as fred_main  # noqa: E402
 from src.ingestion.sec_xbrl_increment_job import main as sec_main  # noqa: E402
 from src.main_labeling import main as label_main  # noqa: E402
 from src.main_panel import main as panel_main  # noqa: E402
+from src.config.settings import settings  # noqa: E402
+from src.data.validate_anomalies import validate_and_detect, upload_to_gcs  # noqa: E402
+from src.utils.gcs import read_parquet_from_gcs  # noqa: E402
 
 
 def run_fred_ingestion(**context: Any) -> None:
@@ -102,6 +107,42 @@ def run_labeling(**context: Any) -> None:
     label_main()
 
 
+def run_validation_anomaly(**context: Any) -> None:
+    """Run validation/anomaly checks on labeled panel and upload outputs to GCS."""
+    bucket_name = settings.gcs_bucket or os.getenv("GCS_BUCKET", "")
+    if not bucket_name:
+        raise RuntimeError("Missing required environment variable: GCS_BUCKET")
+
+    labeled_uri = f"gs://{bucket_name}/{settings.labeled_output_path}"
+    df = read_parquet_from_gcs([labeled_uri])
+
+    if "filed_date" in df.columns and "filing_date" not in df.columns:
+        df = df.rename(columns={"filed_date": "filing_date"})
+
+    anomalies, report = validate_and_detect(df)
+
+    report_gcs_path = os.getenv("GCS_VALIDATION_REPORT_OUT", "processed/validation_report.json")
+    anomalies_gcs_path = os.getenv("GCS_ANOMALIES_OUT", "processed/anomalies.parquet")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        report_path = Path(temp_dir) / "validation_report.json"
+        anomalies_path = Path(temp_dir) / "anomalies.parquet"
+
+        with report_path.open("w", encoding="utf-8") as report_file:
+            json.dump(report, report_file, indent=2)
+        anomalies.to_parquet(anomalies_path, index=False)
+
+        upload_to_gcs(report_path, bucket_name, report_gcs_path)
+        upload_to_gcs(anomalies_path, bucket_name, anomalies_gcs_path)
+
+    print(f"Validation status: {report['status']}")
+    print(f"Validation anomaly rows: {report['anomaly_count']}")
+
+    fail_on_status = os.getenv("VALIDATION_FAIL_ON_STATUS", "false").lower() == "true"
+    if fail_on_status and report["status"] != "pass":
+        raise RuntimeError("Validation status failed. Check validation_report.json in GCS.")
+
+
 def run_feature_bias_pipeline(**context: Any) -> None:
     """Run feature engineering + bias analysis pipeline in BigQuery mode."""
     pipeline_root = Path("/opt/airflow/src/feature_engineering")
@@ -122,18 +163,23 @@ def run_feature_bias_pipeline(**context: Any) -> None:
         str(config_path),
     ]
 
+    subprocess_env = os.environ.copy()
+    feature_bias_mode = os.getenv("FEATURE_BIAS_MODE", "safe").strip().lower()
+    skip_heavy_visualizations = feature_bias_mode != "full"
+    subprocess_env["SKIP_HEAVY_VISUALIZATIONS"] = "true" if skip_heavy_visualizations else "false"
+    print(
+        "Feature/Bias mode:",
+        feature_bias_mode,
+        "| SKIP_HEAVY_VISUALIZATIONS=",
+        subprocess_env["SKIP_HEAVY_VISUALIZATIONS"],
+    )
+
     completed = subprocess.run(
         cmd,
         cwd=str(pipeline_root),
-        capture_output=True,
-        text=True,
+        env=subprocess_env,
         check=False,
     )
-
-    if completed.stdout:
-        print(completed.stdout)
-    if completed.stderr:
-        print(completed.stderr)
 
     if completed.returncode != 0:
         raise RuntimeError(
@@ -179,9 +225,14 @@ with DAG(
         python_callable=run_labeling,
     )
 
+    validation_anomaly_task = PythonOperator(
+        task_id="run_validation_anomaly",
+        python_callable=run_validation_anomaly,
+    )
+
     feature_bias_task = PythonOperator(
         task_id="run_feature_bias_pipeline",
         python_callable=run_feature_bias_pipeline,
     )
 
-    [fred_task, sec_task] >> preprocess_task >> bigquery_clean_task >> panel_task >> labeling_task >> feature_bias_task
+    [fred_task, sec_task] >> preprocess_task >> bigquery_clean_task >> panel_task >> labeling_task >> feature_bias_task >> validation_anomaly_task
