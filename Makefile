@@ -1,4 +1,4 @@
-.PHONY: help setup local-up local-down lint format typecheck terraform-check test check dvc-setup dvc-push dvc-pull
+.PHONY: help setup local-up local-down demo-airflow lint format typecheck terraform-check test check dvc-setup dvc-push dvc-pull
 
 help:
 	@echo "Foresight-ML Data Pipeline"
@@ -10,6 +10,7 @@ help:
 	@echo "Local Development:"
 	@echo "  make local-up        - Start local Airflow"
 	@echo "  make local-down      - Stop local Airflow"
+	@echo "  make demo-airflow    - Start, unpause, trigger DAG, and show task states"
 	@echo ""
 	@echo "Data Version Control:"
 	@echo "  make dvc-push        - Push tracked data to GCS"
@@ -38,6 +39,15 @@ local-up:
 
 local-down:
 	docker-compose down
+
+demo-airflow:
+	@RUN_ID=$${RUN_ID:-demo_manual_$$(date +%Y%m%d_%H%M%S)}; \
+	echo "Using run_id=$$RUN_ID"; \
+	docker-compose up -d airflow; \
+	docker-compose exec airflow airflow dags unpause foresight_ingestion; \
+	docker-compose exec airflow airflow dags trigger foresight_ingestion --run-id $$RUN_ID; \
+	sleep 8; \
+	docker-compose exec airflow airflow tasks states-for-dag-run foresight_ingestion $$RUN_ID
 
 lint:
 	uv run ruff check src/ tests/ scripts/ monitoring/

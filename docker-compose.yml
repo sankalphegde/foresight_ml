@@ -13,7 +13,7 @@ services:
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
-      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/.gcp/service-account-key.json
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/.gcp/foresight-data-sa.json
       - GCP_PROJECT_ID=${GCP_PROJECT_ID:-financial-distress-ew}
       - GCS_BUCKET=${GCS_BUCKET}
       - FRED_API_KEY=${FRED_API_KEY}
