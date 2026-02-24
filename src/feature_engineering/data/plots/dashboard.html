@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Financial Distress Pipeline — Visualization Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg-primary:#0f1117;--bg-card:#1a1d27;--border:#2a2e3d;--accent:#6c63ff;--accent-glow:rgba(108,99,255,0.25);--text-primary:#e8eaf0;--text-secondary:#9ca3b4;--text-muted:#6b7280;--radius:16px}
+    body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.6;min-height:100vh}
+    .header{background:linear-gradient(180deg,rgba(108,99,255,0.08) 0%,transparent 100%);border-bottom:1px solid var(--border);padding:2.5rem 2rem 2rem;text-align:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px)}
+    .header h1{font-size:1.75rem;font-weight:700;background:linear-gradient(135deg,#6c63ff,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-0.02em}
+    .header p{color:var(--text-secondary);font-size:0.9rem;margin-top:0.4rem}
+    .stats-bar{display:flex;justify-content:center;gap:2rem;margin-top:1.2rem;flex-wrap:wrap}
+    .stat{display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text-secondary)}
+    .stat-value{font-weight:600;color:var(--text-primary);font-size:0.9rem}
+    .stat-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .stat-dot.green{background:#10b981}.stat-dot.blue{background:#3b82f6}.stat-dot.amber{background:#f59e0b}.stat-dot.purple{background:#8b5cf6}
+    .nav{display:flex;justify-content:center;gap:0.5rem;padding:1rem 2rem;background:rgba(15,17,23,0.9);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:99;backdrop-filter:blur(12px);flex-wrap:wrap}
+    .nav-btn{padding:0.5rem 1rem;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--text-secondary);font-family:inherit;font-size:0.82rem;font-weight:500;cursor:pointer;transition:all 0.2s ease}
+    .nav-btn:hover{background:var(--bg-card);color:var(--text-primary);border-color:var(--border)}
+    .nav-btn.active{background:var(--accent);color:white;border-color:var(--accent);box-shadow:0 2px 12px var(--accent-glow)}
+    .content{max-width:1400px;margin:0 auto;padding:2rem}
+    .section{margin-bottom:3rem}
+    .section-header{display:flex;align-items:center;gap:0.75rem;margin-bottom:1.5rem;padding-bottom:0.75rem;border-bottom:1px solid var(--border)}
+    .section-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+    .section-icon.corr{background:linear-gradient(135deg,rgba(108,99,255,0.2),rgba(59,130,246,0.2))}
+    .section-icon.dist{background:linear-gradient(135deg,rgba(16,185,129,0.2),rgba(6,182,212,0.2))}
+    .section-icon.miss{background:linear-gradient(135deg,rgba(245,158,11,0.2),rgba(239,68,68,0.2))}
+    .section-icon.bias{background:linear-gradient(135deg,rgba(139,92,246,0.2),rgba(236,72,153,0.2))}
+    .section-title{font-size:1.15rem;font-weight:600}
+    .section-subtitle{font-size:0.82rem;color:var(--text-muted);margin-top:0.1rem}
+    .card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:all 0.3s ease;margin-bottom:1.5rem}
+    .card:hover{border-color:rgba(108,99,255,0.3);box-shadow:0 8px 32px rgba(0,0,0,0.5),0 0 0 1px rgba(108,99,255,0.1);transform:translateY(-2px)}
+    .card-header{padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .card-header h3{font-size:0.95rem;font-weight:600}
+    .card-badge{font-size:0.7rem;font-weight:500;padding:0.2rem 0.6rem;border-radius:6px;background:rgba(108,99,255,0.15);color:#a5a0ff;white-space:nowrap}
+    .card-body{padding:1rem;display:flex;justify-content:center;background:rgba(0,0,0,0.15)}
+    .card-body img{max-width:100%;height:auto;border-radius:8px;cursor:pointer;transition:transform 0.3s ease}
+    .card-body img:hover{transform:scale(1.01)}
+    .card-description{padding:0.75rem 1.25rem;font-size:0.82rem;color:var(--text-secondary);border-top:1px solid var(--border);line-height:1.5}
+    .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(550px,1fr));gap:1.5rem}
+    .grid-2 .card{margin-bottom:0}
+    .full-width .card-body img{max-height:700px}
+    .lightbox{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.92);backdrop-filter:blur(8px);justify-content:center;align-items:center;padding:2rem;cursor:zoom-out;animation:fadeIn 0.2s ease}
+    .lightbox.active{display:flex}
+    .lightbox img{max-width:95vw;max-height:92vh;border-radius:12px;box-shadow:0 16px 64px rgba(0,0,0,0.6)}
+    .lightbox-close{position:absolute;top:1.5rem;right:2rem;font-size:1.5rem;color:var(--text-secondary);cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,0.08);border:none;transition:background 0.2s}
+    .lightbox-close:hover{background:rgba(255,255,255,0.15);color:white}
+    .footer{text-align:center;padding:2rem;color:var(--text-muted);font-size:0.78rem;border-top:1px solid var(--border)}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    @media(max-width:768px){.grid-2{grid-template-columns:1fr}.header h1{font-size:1.3rem}.content{padding:1rem}}
+    ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:var(--bg-primary)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Financial Distress Pipeline — Visualization Dashboard</h1>
+    <p>Feature Engineering &amp; Bias Analysis Results</p>
+    <div class="stats-bar">
+      <div class="stat"><span class="stat-dot green"></span><span class="stat-value">211,614</span> rows</div>
+      <div class="stat"><span class="stat-dot blue"></span><span class="stat-value">93</span> columns</div>
+      <div class="stat"><span class="stat-dot amber"></span><span class="stat-value">53</span> engineered features</div>
+      <div class="stat"><span class="stat-dot purple"></span><span class="stat-value">3</span> drift alerts</div>
+    </div>
+  </div>
+  <nav class="nav" id="nav">
+    <button class="nav-btn active" data-target="all">All</button>
+    <button class="nav-btn" data-target="correlation">Correlations</button>
+    <button class="nav-btn" data-target="distribution">Distributions</button>
+    <button class="nav-btn" data-target="missing">Missing Data</button>
+    <button class="nav-btn" data-target="bias">Bias Analysis</button>
+  </nav>
+  <div class="content"><div class="section" data-section="correlation">
+      <div class="section-header">
+        <div class="section-icon corr">📊</div>
+        <div><div class="section-title">Feature Correlations</div><div class="section-subtitle">Identify redundant and highly correlated feature pairs</div></div>
+      </div>
+      <div class="card full-width">
+          <div class="card-header"><h3>Correlation Heatmap</h3><span class="card-badge">Chart 1</span></div>
+          <div class="card-body"><img src="01_correlation_heatmap.png" alt="Correlation Heatmap" onclick="openLightbox(this)"></div>
+          <div class="card-description">Full correlation matrix of all engineered features. Blue = negative, Red = positive. Use to identify multicollinearity and feature reduction candidates.</div>
+        </div>
+<div class="card full-width">
+          <div class="card-header"><h3>Top 20 Most Correlated Feature Pairs</h3><span class="card-badge">Chart 2</span></div>
+          <div class="card-body"><img src="02_top_correlations.png" alt="Top 20 Most Correlated Feature Pairs" onclick="openLightbox(this)"></div>
+          <div class="card-description">The 20 feature pairs with strongest absolute correlation. Green = positive, Red = negative. High |ρ| > 0.9 pairs are candidates for removal.</div>
+        </div>
+    </div>
+<div class="section" data-section="distribution">
+      <div class="section-header">
+        <div class="section-icon dist">📈</div>
+        <div><div class="section-title">Feature Distributions</div><div class="section-subtitle">Shape, spread, and outliers of each engineered feature</div></div>
+      </div>
+      <div class="card full-width">
+          <div class="card-header"><h3>Feature Distribution Grid (Histogram + KDE)</h3><span class="card-badge">Chart 3</span></div>
+          <div class="card-body"><img src="03_feature_distributions.png" alt="Feature Distribution Grid (Histogram + KDE)" onclick="openLightbox(this)"></div>
+          <div class="card-description">Histogram with kernel density estimate for every engineered feature. Look for skewness, bimodality, and heavy tails that may require transformation.</div>
+        </div>
+<div class="grid-2"><div class="card ">
+          <div class="card-header"><h3>Financial Ratios by Category</h3><span class="card-badge">Chart 4</span></div>
+          <div class="card-body"><img src="04_ratio_boxplots.png" alt="Financial Ratios by Category" onclick="openLightbox(this)"></div>
+          <div class="card-description">Box plots grouped by Liquidity, Leverage, Profitability, and Efficiency. Outlier whiskers excluded for clarity.</div>
+        </div>
+<div class="card ">
+          <div class="card-header"><h3>Pairplot — Top 6 Features by Variance</h3><span class="card-badge">Chart 5</span></div>
+          <div class="card-body"><img src="05_pairplot.png" alt="Pairplot — Top 6 Features by Variance" onclick="openLightbox(this)"></div>
+          <div class="card-description">Scatter matrix of the 6 highest-variance features. Diagonal shows KDE, off-diagonal shows pairwise scatter.</div>
+        </div></div>
+    </div>
+<div class="section" data-section="missing">
+      <div class="section-header">
+        <div class="section-icon miss">⚠️</div>
+        <div><div class="section-title">Missing Data Analysis</div><div class="section-subtitle">Pre-imputation null patterns and column-level missingness rates</div></div>
+      </div>
+      <div class="grid-2"><div class="card ">
+          <div class="card-header"><h3>Missing Data Pattern (Pre-Imputation)</h3><span class="card-badge">Chart 6</span></div>
+          <div class="card-body"><img src="06_missing_heatmap.png" alt="Missing Data Pattern (Pre-Imputation)" onclick="openLightbox(this)"></div>
+          <div class="card-description">Red = missing, Green = present. Reveals structural missingness patterns — e.g., macro columns sharing the same null rows.</div>
+        </div>
+<div class="card ">
+          <div class="card-header"><h3>Missing Data by Column</h3><span class="card-badge">Chart 7</span></div>
+          <div class="card-body"><img src="07_missing_bar.png" alt="Missing Data by Column" onclick="openLightbox(this)"></div>
+          <div class="card-description">Per-column null percentage. Red = >50%, Orange = 10-50%, Blue = <10%. The 65.8% null in macro columns is handled via forward-fill.</div>
+        </div></div>
+    </div>
+<div class="section" data-section="bias">
+      <div class="section-header">
+        <div class="section-icon bias">🔍</div>
+        <div><div class="section-title">Bias Analysis</div><div class="section-subtitle">Feature distributions across company size, sector, time period, and macro regime</div></div>
+      </div>
+      <div class="card full-width">
+          <div class="card-header"><h3>Sample Distribution Across Slices</h3><span class="card-badge">Chart 8</span></div>
+          <div class="card-body"><img src="08_slice_sample_counts.png" alt="Sample Distribution Across Slices" onclick="openLightbox(this)"></div>
+          <div class="card-description">Sample sizes per slice across all 4 bias dimensions. Imbalanced slices can cause biased model performance.</div>
+        </div>
+<div class="grid-2"><div class="card ">
+          <div class="card-header"><h3>Features by Company Size (KDE)</h3><span class="card-badge">Chart 9</span></div>
+          <div class="card-body"><img src="09_features_by_size.png" alt="Features by Company Size (KDE)" onclick="openLightbox(this)"></div>
+          <div class="card-description">Overlaid density plots split by company size bucket. Significant separation indicates size-dependent feature behavior.</div>
+        </div>
+<div class="card ">
+          <div class="card-header"><h3>Features by Time Period (Violin)</h3><span class="card-badge">Chart 10</span></div>
+          <div class="card-body"><img src="10_features_by_time.png" alt="Features by Time Period (Violin)" onclick="openLightbox(this)"></div>
+          <div class="card-description">Pre-2016 vs Post-2016 comparison. Temporal stability means the model is less likely to suffer from concept drift.</div>
+        </div>
+<div class="card ">
+          <div class="card-header"><h3>Features by Sector Proxy (Box)</h3><span class="card-badge">Chart 11</span></div>
+          <div class="card-body"><img src="11_features_by_sector.png" alt="Features by Sector Proxy (Box)" onclick="openLightbox(this)"></div>
+          <div class="card-description">Box plots per inferred sector. Different sectors have fundamentally different financial profiles.</div>
+        </div>
+<div class="card ">
+          <div class="card-header"><h3>Macro Regime Comparison (KDE)</h3><span class="card-badge">Chart 12</span></div>
+          <div class="card-body"><img src="12_macro_regime_comparison.png" alt="Macro Regime Comparison (KDE)" onclick="openLightbox(this)"></div>
+          <div class="card-description">High vs Low federal funds rate regime. Overlapping distributions indicate feature robustness to rate environments.</div>
+        </div></div>
+<div class="card full-width">
+          <div class="card-header"><h3>Population Stability Index (PSI) Heatmap</h3><span class="card-badge">Chart 13</span></div>
+          <div class="card-body"><img src="13_psi_heatmap.png" alt="Population Stability Index (PSI) Heatmap" onclick="openLightbox(this)"></div>
+          <div class="card-description">PSI measures distributional shift. PSI < 0.10 = stable, 0.10–0.25 = moderate, > 0.25 = significant shift.</div>
+        </div>
+<div class="grid-2"><div class="card ">
+          <div class="card-header"><h3>Outlier Concentration by Slice</h3><span class="card-badge">Chart 14</span></div>
+          <div class="card-body"><img src="14_outlier_concentration.png" alt="Outlier Concentration by Slice" onclick="openLightbox(this)"></div>
+          <div class="card-description">Fraction of each slice's data that are outliers (beyond ±3σ). Concentrated outliers in one slice can bias training.</div>
+        </div>
+<div class="card ">
+          <div class="card-header"><h3>Missing Rate by Slice</h3><span class="card-badge">Chart 15</span></div>
+          <div class="card-body"><img src="15_missing_by_slice.png" alt="Missing Rate by Slice" onclick="openLightbox(this)"></div>
+          <div class="card-description">Per-feature missing data rates across bias slices. Non-uniform missingness could introduce systematic bias.</div>
+        </div></div>
+<div class="card full-width">
+          <div class="card-header"><h3>Feature Means: Healthy vs Distressed</h3><span class="card-badge">Chart 16</span></div>
+          <div class="card-body"><img src="16_label_feature_comparison.png" alt="Feature Means: Healthy vs Distressed" onclick="openLightbox(this)"></div>
+          <div class="card-description">Compares average feature values between non-distressed (green) and distressed (red) firms. Large differences indicate strong predictive signals or potential leakage.</div>
+        </div>
+<div class="card full-width">
+          <div class="card-header"><h3>Distress Rate by Slice</h3><span class="card-badge">Chart 17</span></div>
+          <div class="card-body"><img src="17_distress_rate_by_slice.png" alt="Distress Rate by Slice" onclick="openLightbox(this)"></div>
+          <div class="card-description">Bar charts showing distress label rate (%) across company size buckets and sector proxies. Color-coded: red >2%, amber >1%, green <1%. Dashed line = overall rate.</div>
+        </div>
+<div class="card full-width">
+          <div class="card-header"><h3>Disparate Impact Analysis (80% Rule)</h3><span class="card-badge">Chart 18</span></div>
+          <div class="card-body"><img src="18_disparate_impact.png" alt="Disparate Impact Analysis (80% Rule)" onclick="openLightbox(this)"></div>
+          <div class="card-description">Disparate Impact Ratio (DIR) per slice. Green bars fall within the fair zone (0.8–1.25). Red bars violate the 80% rule, indicating potential unfair bias against that group.</div>
+        </div>
+    </div>
+</div>
+  <div class="footer">Auto-generated by pipeline on 2026-02-21 20:23:02</div>
+  <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+    <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+    <img id="lightbox-img" src="" alt="Enlarged view">
+  </div>
+  <script>
+    const navBtns=document.querySelectorAll('.nav-btn'),sections=document.querySelectorAll('.section');
+    navBtns.forEach(b=>b.addEventListener('click',()=>{navBtns.forEach(x=>x.classList.remove('active'));b.classList.add('active');const t=b.dataset.target;sections.forEach(s=>{if(t==='all'||s.dataset.section===t){s.style.display='';s.style.animation='fadeIn 0.3s ease'}else{s.style.display='none'}})}));
+    const lb=document.getElementById('lightbox'),lbImg=document.getElementById('lightbox-img');
+    function openLightbox(i){lbImg.src=i.src;lbImg.alt=i.alt;lb.classList.add('active');document.body.style.overflow='hidden'}
+    function closeLightbox(){lb.classList.remove('active');document.body.style.overflow=''}
+    document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLightbox()});
+  </script>
+</body>
+</html>
