@@ -1,7 +1,0 @@
-steps:
-- name: 'gcr.io/cloud-builders/docker'
-  args:
-    ['build','-t','us-central1-docker.pkg.dev/financial-distress-ew/jobs/sec-xbrl-job:latest','-f','Dockerfile.sec_xbrl','.']
-  env: ['DOCKER_BUILDKIT=1']
-images:
-- 'us-central1-docker.pkg.dev/financial-distress-ew/jobs/sec-xbrl-job:latest'

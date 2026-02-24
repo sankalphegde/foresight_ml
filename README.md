@@ -169,6 +169,17 @@ Foresight-ML/
 
 ---
 
+## Legacy modules retained (non-destructive)
+
+The following ingestion modules are kept in the repository for backward compatibility and historical reference:
+- `src/ingestion/fred_job.py`
+- `src/ingestion/sec_job.py`
+
+Current Airflow execution path uses incremental ingestion modules (`fred_increment_job.py`, `sec_xbrl_increment_job.py`) from the DAG, so these legacy files are not part of the active DAG runtime.
+The active orchestration path is defined in `src/airflow/dags/foresight_ml_data_pipeline.py`.
+
+---
+
 ## 5) Local setup (reproducible)
 
 ### Prerequisites
@@ -177,7 +188,13 @@ Foresight-ML/
 - Access to GCP project + service account key for local run
 
 ### Environment
-Create a `.env` file in repo root with at least:
+Start from the template and create your local env file:
+
+```bash
+cp .env.example .env
+```
+
+Then update `.env` with your real values. Minimum keys:
 
 ```bash
 GCP_PROJECT_ID=financial-distress-ew
@@ -192,6 +209,12 @@ VALIDATION_FAIL_ON_STATUS=false
 GCS_VALIDATION_REPORT_OUT=processed/validation_report.json
 GCS_ANOMALIES_OUT=processed/anomalies.parquet
 ```
+
+Secrets handling:
+- Local development: values are read from `.env` (never commit real keys).
+- CI: values are injected from GitHub Actions secrets.
+- CD (ingestion Cloud Run jobs): credentials are injected via `gcloud run deploy --set-secrets`.
+- Terraform-managed Airflow service currently uses Terraform variables for env injection (not direct Secret Manager wiring in this repo).
 
 ### Install + quality tools
 
@@ -390,6 +413,8 @@ Recent bottleneck identified:
 Optimization applied:
 - Added `FEATURE_BIAS_MODE=safe` default to reduce heavy plotting risk and improve run reliability.
 
+![Pipeline Gantt Chart](docs/images/pipeline_gantt.png)
+
 ---
 
 ## 13) Logging and troubleshooting
@@ -424,6 +449,14 @@ docker compose exec airflow airflow tasks list foresight_ingestion
 - Terraform
 - DVC
 - pytest, mypy, ruff
+
+---
+
+## 16) Scalability Considerations
+
+The DAG is structured with independent, modular tasks and parallel ingestion branches, 
+allowing horizontal scaling strategies such as partitioned or entity-level ingestion 
+if required in larger production environments.
 
 ---
 
