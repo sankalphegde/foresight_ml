@@ -1,5 +1,4 @@
-"""
-Feature Engineering Module
+"""Feature Engineering Module
 ===========================
 Computes ~42 engineered features from cleaned financial statement data.
 All functions are pure (no side effects) and individually testable.
@@ -14,8 +13,9 @@ Feature Categories:
 """
 
 import logging
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════
 # Helper
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def safe_divide(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
     """Division guarded against zero denominators. Returns NaN where denom==0."""
@@ -50,9 +51,9 @@ def clip_outliers(df: pd.DataFrame, columns: list, n_std: float = 5.0) -> pd.Dat
 # 1. Financial Ratios (13 features)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def compute_financial_ratios(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Compute 13 financial ratios across liquidity, leverage, profitability,
+    """Compute 13 financial ratios across liquidity, leverage, profitability,
     and efficiency categories.
 
     All ratios use safe_divide() to return NaN instead of inf/error
@@ -82,9 +83,7 @@ def compute_financial_ratios(df: pd.DataFrame) -> pd.DataFrame:
 
     # Interest Coverage: can the company pay its interest from operations?
     # Values < 1.5 are typically considered risky.
-    df["interest_coverage"] = safe_divide(
-        df["OperatingIncomeLoss"], df["InterestExpense"]
-    )
+    df["interest_coverage"] = safe_divide(df["OperatingIncomeLoss"], df["InterestExpense"])
 
     # ── Profitability Ratios ──
     # Gross Margin: revenue retention after direct costs
@@ -133,8 +132,7 @@ GROWTH_COLUMNS = {
 
 
 def compute_growth_rates(df: pd.DataFrame, lag: int = 4) -> pd.DataFrame:
-    """
-    Compute year-over-year growth rates per company.
+    """Compute year-over-year growth rates per company.
 
     Uses pct_change(lag) where lag=4 quarters for YoY comparison.
     This captures the trajectory of financial health — a deteriorating
@@ -166,11 +164,8 @@ ROLLING_FEATURES = [
 ]
 
 
-def compute_rolling_stats(
-    df: pd.DataFrame, windows: list[int] = None
-) -> pd.DataFrame:
-    """
-    Compute rolling mean and std for key features over specified windows.
+def compute_rolling_stats(df: pd.DataFrame, windows: list[int] | None = None) -> pd.DataFrame:
+    """Compute rolling mean and std for key features over specified windows.
 
     Rolling statistics smooth out quarterly noise and capture trends:
     - Rolling MEAN shows the trend direction
@@ -193,10 +188,10 @@ def compute_rolling_stats(
 
             grouped = df.groupby(id_col)[feature]
             df[mean_col] = grouped.transform(
-                lambda x: x.rolling(window=w, min_periods=1).mean()
+                lambda x, rolling_window=w: x.rolling(window=rolling_window, min_periods=1).mean()
             )
             df[std_col] = grouped.transform(
-                lambda x: x.rolling(window=w, min_periods=2).std()
+                lambda x, rolling_window=w: x.rolling(window=rolling_window, min_periods=2).std()
             )
 
     n_features = len(ROLLING_FEATURES) * len(windows) * 2
@@ -211,9 +206,9 @@ def compute_rolling_stats(
 # 4. Z-Score & Interaction Terms (5 features)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def compute_zscore_and_interactions(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Compute composite and interaction features.
+    """Compute composite and interaction features.
 
     - altman_z_approx: Approximation of the classic Altman Z-score using
       available fields. The original formula uses market cap (not available),
@@ -261,14 +256,10 @@ def compute_zscore_and_interactions(df: pd.DataFrame) -> pd.DataFrame:
     df["leverage_x_margin"] = df["debt_to_equity"] * df["operating_margin"]
 
     # R&D intensity
-    df["rd_intensity"] = safe_divide(
-        df["ResearchAndDevelopmentExpense"], df["Revenues"]
-    )
+    df["rd_intensity"] = safe_divide(df["ResearchAndDevelopmentExpense"], df["Revenues"])
 
     # SGA intensity
-    df["sga_intensity"] = safe_divide(
-        df["SellingGeneralAndAdministrativeExpense"], df["Revenues"]
-    )
+    df["sga_intensity"] = safe_divide(df["SellingGeneralAndAdministrativeExpense"], df["Revenues"])
 
     logger.info("Computed 5 Z-score and interaction features.")
     return df
@@ -278,9 +269,9 @@ def compute_zscore_and_interactions(df: pd.DataFrame) -> pd.DataFrame:
 # 5. Macro Interaction Features (3 features)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def compute_macro_interactions(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Create interaction terms between macroeconomic indicators and
+    """Create interaction terms between macroeconomic indicators and
     company-level financial ratios.
 
     These capture how macro conditions amplify or dampen firm-level risk:
@@ -305,9 +296,9 @@ def compute_macro_interactions(df: pd.DataFrame) -> pd.DataFrame:
 # 6. Size Bucketing (1 feature)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def compute_size_bucket(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Assign companies to size quartiles based on total Assets.
+    """Assign companies to size quartiles based on total Assets.
 
     Labels: small (Q1), mid (Q2), large (Q3), mega (Q4).
     This enables stratified bias analysis — distress models may
@@ -327,9 +318,9 @@ def compute_size_bucket(df: pd.DataFrame) -> pd.DataFrame:
 # 7. Sector Proxy (1 feature)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def compute_sector_proxy(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Derive a sector proxy from financial profile characteristics.
+    """Derive a sector proxy from financial profile characteristics.
 
     Since sector/industry codes are not in the dataset, we approximate using:
     - High R&D intensity (>15% of revenue) → 'tech_pharma'
@@ -352,8 +343,7 @@ def compute_sector_proxy(df: pd.DataFrame) -> pd.DataFrame:
     df["sector_proxy"] = np.select(conditions, choices, default="services_other")
 
     logger.info(
-        f"Computed sector_proxy. Distribution: "
-        f"{df['sector_proxy'].value_counts().to_dict()}"
+        f"Computed sector_proxy. Distribution: {df['sector_proxy'].value_counts().to_dict()}"
     )
     return df
 
@@ -365,30 +355,48 @@ def compute_sector_proxy(df: pd.DataFrame) -> pd.DataFrame:
 # All engineered feature column names (for clipping and downstream reference)
 ENGINEERED_FEATURES = [
     # Ratios
-    "current_ratio", "quick_ratio", "cash_ratio",
-    "debt_to_equity", "debt_to_assets", "interest_coverage",
-    "gross_margin", "operating_margin", "net_margin", "roa", "roe",
-    "asset_turnover", "cash_flow_to_debt",
+    "current_ratio",
+    "quick_ratio",
+    "cash_ratio",
+    "debt_to_equity",
+    "debt_to_assets",
+    "interest_coverage",
+    "gross_margin",
+    "operating_margin",
+    "net_margin",
+    "roa",
+    "roe",
+    "asset_turnover",
+    "cash_flow_to_debt",
     # Growth
-    "revenue_growth_yoy", "assets_growth_yoy", "net_income_growth_yoy",
-    "operating_cf_growth_yoy", "liabilities_growth_yoy",
-    "rd_growth_yoy", "sga_growth_yoy", "gross_profit_growth_yoy",
+    "revenue_growth_yoy",
+    "assets_growth_yoy",
+    "net_income_growth_yoy",
+    "operating_cf_growth_yoy",
+    "liabilities_growth_yoy",
+    "rd_growth_yoy",
+    "sga_growth_yoy",
+    "gross_profit_growth_yoy",
     # Z-score & Interactions
-    "altman_z_approx", "cash_burn_rate", "leverage_x_margin",
-    "rd_intensity", "sga_intensity",
+    "altman_z_approx",
+    "cash_burn_rate",
+    "leverage_x_margin",
+    "rd_intensity",
+    "sga_intensity",
     # Macro interactions
-    "fed_rate_x_leverage", "unemployment_x_margin", "inflation_x_cash_ratio",
+    "fed_rate_x_leverage",
+    "unemployment_x_margin",
+    "inflation_x_cash_ratio",
 ]
 
 
 def engineer_features(
     df: pd.DataFrame,
-    rolling_windows: list[int] = None,
+    rolling_windows: list[int] | None = None,
     growth_lag: int = 4,
     clip_std: float = 5.0,
 ) -> pd.DataFrame:
-    """
-    Main entry point: run all feature engineering steps in order.
+    """Main entry point: run all feature engineering steps in order.
 
     Pipeline:
       1. Financial ratios (13 features)

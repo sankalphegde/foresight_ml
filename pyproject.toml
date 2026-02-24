@@ -71,6 +71,10 @@ exclude = [
 [tool.ruff.lint.isort]
 force-single-line = false
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+"src/feature_engineering/pipelines/*.py" = ["D"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"  # Use Google-style docstrings
 

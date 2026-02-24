@@ -1,5 +1,4 @@
-"""
-Data Cleaning & NaN Handling Module
+"""Data Cleaning & NaN Handling Module
 ====================================
 Handles all missing value imputation and column dropping BEFORE feature engineering.
 Every decision is documented with rationale for reproducibility and audit.
@@ -26,17 +25,19 @@ IMPUTED — Financial (0% null currently, but guarded for production):
 """
 
 import logging
-import pandas as pd
+from typing import cast
+
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 # ── Column Classification ───────────────────────────────────────────────────
 
 COLUMNS_TO_DROP = [
-    "EarningsPerShareBasic",      # 100% null
-    "EarningsPerShareDiluted",    # 100% null
-    "quality_check_flag",         # Single value, no information gain
+    "EarningsPerShareBasic",  # 100% null
+    "EarningsPerShareDiluted",  # 100% null
+    "quality_check_flag",  # Single value, no information gain
 ]
 
 MACRO_COLUMNS = [
@@ -97,14 +98,13 @@ def _log_null_summary(df: pd.DataFrame, stage: str) -> dict:
             pct = 100 * count / len(df)
             logger.info(f"  {col}: {count} nulls ({pct:.1f}%)")
     else:
-        logger.info(f"  No nulls remaining.")
+        logger.info("  No nulls remaining.")
 
-    return null_counts.to_dict()
+    return cast(dict, null_counts.to_dict())
 
 
 def drop_uninformative_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Drop columns that carry no useful information.
+    """Drop columns that carry no useful information.
 
     - EarningsPerShareBasic:   100% null — entirely missing, cannot impute.
     - EarningsPerShareDiluted: 100% null — entirely missing, cannot impute.
@@ -118,9 +118,7 @@ def drop_uninformative_columns(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             null_pct = 100 * df[col].isnull().sum() / len(df)
             nunique = df[col].nunique()
-            logger.info(
-                f"Dropping '{col}': {null_pct:.1f}% null, {nunique} unique values"
-            )
+            logger.info(f"Dropping '{col}': {null_pct:.1f}% null, {nunique} unique values")
             dropped.append(col)
 
     df = df.drop(columns=dropped, errors="ignore")
@@ -129,8 +127,7 @@ def drop_uninformative_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def impute_macro_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Impute macroeconomic columns using forward-fill by date, then backfill.
+    """Impute macroeconomic columns using forward-fill by date, then backfill.
 
     Rationale:
     ----------
@@ -169,16 +166,14 @@ def impute_macro_columns(df: pd.DataFrame) -> pd.DataFrame:
         imputed = before_nulls - after_nulls
         imputation_counts[col] = imputed
         logger.info(
-            f"Imputed '{col}': {imputed} values "
-            f"(before={before_nulls}, after={after_nulls})"
+            f"Imputed '{col}': {imputed} values (before={before_nulls}, after={after_nulls})"
         )
 
     return df
 
 
 def impute_financial_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Impute financial statement columns with company-specific forward-fill.
+    """Impute financial statement columns with company-specific forward-fill.
 
     Rationale:
     ----------
@@ -238,8 +233,7 @@ def impute_financial_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def validate_post_cleaning(df: pd.DataFrame) -> None:
-    """
-    Post-imputation validation checks.
+    """Post-imputation validation checks.
     Raises AssertionError if data quality issues remain.
     """
     # Check no infinite values
@@ -260,8 +254,7 @@ def validate_post_cleaning(df: pd.DataFrame) -> None:
 
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Main entry point: run all cleaning steps in order.
+    """Main entry point: run all cleaning steps in order.
 
     Pipeline:
       1. Log pre-cleaning null summary
@@ -275,7 +268,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     logger.info(f"Starting data cleaning. Shape: {df.shape}")
 
     # Record pre-cleaning state for audit
-    pre_nulls = _log_null_summary(df, "PRE-CLEANING")
+    _log_null_summary(df, "PRE-CLEANING")
 
     # Step 1: Drop uninformative columns
     df = drop_uninformative_columns(df)

@@ -66,16 +66,18 @@ def run_preprocess_demo(**context: Any) -> None:
     fred_probe = list(client.list_blobs(bucket_name, prefix="raw/fred/", max_results=1))
 
     if not sec_probe:
-        raise RuntimeError("No SEC raw data found at gs://{}/raw/sec_xbrl/".format(bucket_name))
+        raise RuntimeError(f"No SEC raw data found at gs://{bucket_name}/raw/sec_xbrl/")
     if not fred_probe:
-        raise RuntimeError("No FRED raw data found at gs://{}/raw/fred/".format(bucket_name))
+        raise RuntimeError(f"No FRED raw data found at gs://{bucket_name}/raw/fred/")
 
     print("Preprocess demo check passed: raw SEC/FRED data exists in GCS.")
 
 
 def run_bigquery_cleaning(**context: Any) -> None:
     """Run BigQuery cleaning SQL from repository file."""
-    project_id = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "financial-distress-ew"
+    project_id = (
+        os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "financial-distress-ew"
+    )
     bucket_name = os.getenv("GCS_BUCKET", "financial-distress-data")
 
     sql_path = Path("/opt/airflow/src/data/cleaned/data_cleaned.sql")
@@ -182,9 +184,7 @@ def run_feature_bias_pipeline(**context: Any) -> None:
     )
 
     if completed.returncode != 0:
-        raise RuntimeError(
-            f"Feature/bias pipeline failed with exit code {completed.returncode}"
-        )
+        raise RuntimeError(f"Feature/bias pipeline failed with exit code {completed.returncode}")
 
 
 with DAG(
@@ -235,4 +235,12 @@ with DAG(
         python_callable=run_feature_bias_pipeline,
     )
 
-    [fred_task, sec_task] >> preprocess_task >> bigquery_clean_task >> panel_task >> labeling_task >> feature_bias_task >> validation_anomaly_task
+    (
+        [fred_task, sec_task]
+        >> preprocess_task
+        >> bigquery_clean_task
+        >> panel_task
+        >> labeling_task
+        >> feature_bias_task
+        >> validation_anomaly_task
+    )

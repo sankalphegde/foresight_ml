@@ -1,5 +1,4 @@
-"""
-Visualizations Module
+"""Visualizations Module
 ======================
 Generates all charts for feature analysis and bias analysis.
 Outputs 15 PNG files to the specified output directory.
@@ -10,15 +9,14 @@ Charts 8-15: Bias Analysis
 
 import logging
 import os
-from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")  # Non-interactive backend for server/pipeline use
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-import seaborn as sns
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +42,8 @@ def _save_fig(fig: plt.Figure, output_dir: str, filename: str) -> str:
 # Chart 1: Correlation Heatmap
 # ═══════════════════════════════════════════════════════════════════════════
 
-def plot_correlation_heatmap(
-    df: pd.DataFrame, feature_cols: list[str], output_dir: str
-) -> str:
+
+def plot_correlation_heatmap(df: pd.DataFrame, feature_cols: list[str], output_dir: str) -> str:
     """Full correlation matrix of engineered features, clustered."""
     cols = [c for c in feature_cols if c in df.columns]
     corr = df[cols].corr()
@@ -75,9 +72,8 @@ def plot_correlation_heatmap(
 # Chart 2: Top-20 Correlated Feature Pairs
 # ═══════════════════════════════════════════════════════════════════════════
 
-def plot_top_correlations(
-    df: pd.DataFrame, feature_cols: list[str], output_dir: str
-) -> str:
+
+def plot_top_correlations(df: pd.DataFrame, feature_cols: list[str], output_dir: str) -> str:
     """Bar chart of the 20 most correlated feature pairs."""
     cols = [c for c in feature_cols if c in df.columns]
     corr = df[cols].corr()
@@ -86,11 +82,13 @@ def plot_top_correlations(
     pairs = []
     for i in range(len(corr.columns)):
         for j in range(i + 1, len(corr.columns)):
-            pairs.append({
-                "pair": f"{corr.columns[i]}\n× {corr.columns[j]}",
-                "correlation": corr.iloc[i, j],
-                "abs_corr": abs(corr.iloc[i, j]),
-            })
+            pairs.append(
+                {
+                    "pair": f"{corr.columns[i]}\n× {corr.columns[j]}",
+                    "correlation": corr.iloc[i, j],
+                    "abs_corr": abs(corr.iloc[i, j]),
+                }
+            )
 
     pairs_df = pd.DataFrame(pairs).nlargest(20, "abs_corr")
 
@@ -114,9 +112,8 @@ def plot_top_correlations(
 # Chart 3: Feature Distribution Grid
 # ═══════════════════════════════════════════════════════════════════════════
 
-def plot_feature_distributions(
-    df: pd.DataFrame, feature_cols: list[str], output_dir: str
-) -> str:
+
+def plot_feature_distributions(df: pd.DataFrame, feature_cols: list[str], output_dir: str) -> str:
     """Histogram + KDE for every engineered feature."""
     cols = [c for c in feature_cols if c in df.columns]
     n_cols = 4
@@ -151,6 +148,7 @@ def plot_feature_distributions(
 # ═══════════════════════════════════════════════════════════════════════════
 # Chart 4: Box Plot Grid by Category
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def plot_ratio_boxplots(df: pd.DataFrame, output_dir: str) -> str:
     """Box plots for financial ratios grouped by category."""
@@ -196,6 +194,7 @@ def plot_ratio_boxplots(df: pd.DataFrame, output_dir: str) -> str:
 # Chart 5: Pairplot (Key Features)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def plot_pairplot(df: pd.DataFrame, feature_cols: list[str], output_dir: str) -> str:
     """Scatter matrix for top 6 features by variance."""
     cols = [c for c in feature_cols if c in df.columns]
@@ -231,6 +230,7 @@ def plot_pairplot(df: pd.DataFrame, feature_cols: list[str], output_dir: str) ->
 # Chart 6: Missing Data Heatmap (Pre-Imputation)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def plot_missing_heatmap(df: pd.DataFrame, output_dir: str) -> str:
     """Heatmap showing NaN pattern across rows × columns (pre-imputation)."""
     null_matrix = df.isnull().astype(int)
@@ -258,6 +258,7 @@ def plot_missing_heatmap(df: pd.DataFrame, output_dir: str) -> str:
 # Chart 7: Missing Data Bar Chart
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def plot_missing_bar(df: pd.DataFrame, output_dir: str) -> str:
     """Per-column null percentage bar chart."""
     null_pct = (df.isnull().sum() / len(df) * 100).sort_values(ascending=False)
@@ -267,8 +268,13 @@ def plot_missing_bar(df: pd.DataFrame, output_dir: str) -> str:
         # Create a chart showing no missing data
         fig, ax = plt.subplots(figsize=(10, 4))
         ax.text(
-            0.5, 0.5, "No missing values detected",
-            ha="center", va="center", fontsize=14, transform=ax.transAxes,
+            0.5,
+            0.5,
+            "No missing values detected",
+            ha="center",
+            va="center",
+            fontsize=14,
+            transform=ax.transAxes,
         )
         ax.set_title(
             "Missing Data by Column (Post-Imputation)",
@@ -301,9 +307,8 @@ def plot_missing_bar(df: pd.DataFrame, output_dir: str) -> str:
 # Chart 8: Slice Sample Counts
 # ═══════════════════════════════════════════════════════════════════════════
 
-def plot_slice_sample_counts(
-    bias_report: pd.DataFrame, output_dir: str
-) -> str:
+
+def plot_slice_sample_counts(bias_report: pd.DataFrame, output_dir: str) -> str:
     """Bar chart of sample sizes per slice across all dimensions."""
     fig, axes = plt.subplots(1, 4, figsize=(20, 5))
     dimensions = bias_report["dimension"].unique()
@@ -323,9 +328,11 @@ def plot_slice_sample_counts(
         # Add count labels on bars
         for bar_idx, count in enumerate(dim_data["sample_count"]):
             ax.text(
-                bar_idx, count + count * 0.02,
+                bar_idx,
+                count + count * 0.02,
                 str(int(count)),
-                ha="center", fontsize=9,
+                ha="center",
+                fontsize=9,
             )
 
     fig.suptitle(
@@ -341,9 +348,8 @@ def plot_slice_sample_counts(
 # Chart 9: Feature Distribution by Size Bucket (KDE)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def plot_features_by_size(
-    df: pd.DataFrame, key_features: list[str], output_dir: str
-) -> str:
+
+def plot_features_by_size(df: pd.DataFrame, key_features: list[str], output_dir: str) -> str:
     """Overlaid KDE plots for key ratios split by company_size_bucket."""
     if "company_size_bucket" not in df.columns:
         return ""
@@ -378,6 +384,7 @@ def plot_features_by_size(
 # Chart 10: Feature Distribution by Time Period (Violin)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def plot_features_by_time(
     df: pd.DataFrame,
     key_features: list[str],
@@ -402,9 +409,15 @@ def plot_features_by_time(
         plot_data = df[[feat, "time_period"]].dropna()
         if len(plot_data) > 0:
             sns.violinplot(
-                data=plot_data, x="time_period", y=feat, ax=ax,
-                hue="time_period", palette=["#3498db", "#e74c3c"],
-                inner="box", cut=0, legend=False,
+                data=plot_data,
+                x="time_period",
+                y=feat,
+                ax=ax,
+                hue="time_period",
+                palette=["#3498db", "#e74c3c"],
+                inner="box",
+                cut=0,
+                legend=False,
             )
         ax.set_title(feat, fontsize=10, fontweight="bold")
         ax.set_xlabel("")
@@ -425,9 +438,8 @@ def plot_features_by_time(
 # Chart 11: Feature Distribution by Sector Proxy (Box)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def plot_features_by_sector(
-    df: pd.DataFrame, key_features: list[str], output_dir: str
-) -> str:
+
+def plot_features_by_sector(df: pd.DataFrame, key_features: list[str], output_dir: str) -> str:
     """Box plots per sector proxy for key financial ratios."""
     if "sector_proxy" not in df.columns:
         return ""
@@ -442,9 +454,14 @@ def plot_features_by_sector(
         plot_data = df[[feat, "sector_proxy"]].dropna()
         if len(plot_data) > 0:
             sns.boxplot(
-                data=plot_data, x="sector_proxy", y=feat, ax=ax,
-                hue="sector_proxy", palette="Set3",
-                showfliers=False, legend=False,
+                data=plot_data,
+                x="sector_proxy",
+                y=feat,
+                ax=ax,
+                hue="sector_proxy",
+                palette="Set3",
+                showfliers=False,
+                legend=False,
             )
         ax.set_title(feat, fontsize=10, fontweight="bold")
         ax.tick_params(axis="x", rotation=25, labelsize=8)
@@ -466,6 +483,7 @@ def plot_features_by_sector(
 # Chart 12: Macro Regime Comparison
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def plot_macro_regime_comparison(
     df: pd.DataFrame,
     key_features: list[str],
@@ -477,9 +495,7 @@ def plot_macro_regime_comparison(
         return ""
 
     df = df.copy()
-    df["macro_regime"] = np.where(
-        df["fed_funds"] <= fed_funds_threshold, "Low Rate", "High Rate"
-    )
+    df["macro_regime"] = np.where(df["fed_funds"] <= fed_funds_threshold, "Low Rate", "High Rate")
 
     features = [f for f in key_features[:6] if f in df.columns]
     n_rows = (len(features) + 2) // 3
@@ -511,9 +527,8 @@ def plot_macro_regime_comparison(
 # Chart 13: PSI Heatmap
 # ═══════════════════════════════════════════════════════════════════════════
 
-def plot_psi_heatmap(
-    drift_matrices: dict[str, pd.DataFrame], output_dir: str
-) -> str:
+
+def plot_psi_heatmap(drift_matrices: dict[str, pd.DataFrame], output_dir: str) -> str:
     """PSI heatmap across all feature × slice combinations."""
     # Combine all drift matrices
     all_drift = []
@@ -563,11 +578,14 @@ def plot_psi_heatmap(
 # Chart 14: Outlier Concentration by Slice
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def plot_outlier_concentration(
     bias_report: pd.DataFrame, key_features: list[str], output_dir: str
 ) -> str:
     """Stacked bar chart showing % of outliers in each slice."""
-    outlier_cols = [f"{f}_outlier_rate" for f in key_features if f"{f}_outlier_rate" in bias_report.columns]
+    outlier_cols = [
+        f"{f}_outlier_rate" for f in key_features if f"{f}_outlier_rate" in bias_report.columns
+    ]
 
     if not outlier_cols:
         return ""
@@ -601,14 +619,13 @@ def plot_outlier_concentration(
 # Chart 15: Missing Rate by Slice
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def plot_missing_by_slice(
     bias_report: pd.DataFrame, key_features: list[str], output_dir: str
 ) -> str:
     """Heatmap of missing data rates per feature per slice (pre-imputation)."""
     missing_cols = [
-        f"{f}_missing_rate"
-        for f in key_features
-        if f"{f}_missing_rate" in bias_report.columns
+        f"{f}_missing_rate" for f in key_features if f"{f}_missing_rate" in bias_report.columns
     ]
 
     if not missing_cols:
@@ -619,7 +636,9 @@ def plot_missing_by_slice(
     missing_data.index = labels
     missing_data.columns = [c.replace("_missing_rate", "") for c in missing_cols]
 
-    fig, ax = plt.subplots(figsize=(max(14, len(missing_data.columns) * 0.8), max(5, len(labels) * 0.5)))
+    fig, ax = plt.subplots(
+        figsize=(max(14, len(missing_data.columns) * 0.8), max(5, len(labels) * 0.5))
+    )
     sns.heatmap(
         missing_data * 100,
         cmap="YlOrRd",
@@ -643,13 +662,13 @@ def plot_missing_by_slice(
 # Label Bias Visualizations
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def plot_label_feature_comparison(
     df: pd.DataFrame,
     feature_columns: list[str],
     output_dir: str,
 ) -> str:
-    """
-    Horizontal bar chart comparing feature means between healthy (label=0)
+    """Horizontal bar chart comparing feature means between healthy (label=0)
     and distressed (label=1) firms.
     """
     if "distress_label" not in df.columns:
@@ -669,10 +688,26 @@ def plot_label_feature_comparison(
     y = np.arange(len(valid_features))
     bar_height = 0.35
 
-    ax.barh(y - bar_height / 2, means_h, bar_height, label="Healthy (label=0)",
-            color="#2ecc71", alpha=0.85, edgecolor="white", linewidth=0.5)
-    ax.barh(y + bar_height / 2, means_d, bar_height, label="Distressed (label=1)",
-            color="#e74c3c", alpha=0.85, edgecolor="white", linewidth=0.5)
+    ax.barh(
+        y - bar_height / 2,
+        means_h,
+        bar_height,
+        label="Healthy (label=0)",
+        color="#2ecc71",
+        alpha=0.85,
+        edgecolor="white",
+        linewidth=0.5,
+    )
+    ax.barh(
+        y + bar_height / 2,
+        means_d,
+        bar_height,
+        label="Distressed (label=1)",
+        color="#e74c3c",
+        alpha=0.85,
+        edgecolor="white",
+        linewidth=0.5,
+    )
 
     ax.set_yticks(y)
     ax.set_yticklabels(valid_features, fontsize=9)
@@ -694,8 +729,7 @@ def plot_distress_rate_by_slice(
     df: pd.DataFrame,
     output_dir: str,
 ) -> str:
-    """
-    Grouped bar chart showing distress rate (%) across company size
+    """Grouped bar chart showing distress rate (%) across company size
     and sector proxy slices.
     """
     if "distress_label" not in df.columns:
@@ -708,16 +742,29 @@ def plot_distress_rate_by_slice(
         rates_size = df.groupby("company_size_bucket")["distress_label"].mean() * 100
         rates_size = rates_size.sort_values(ascending=False)
         colors = ["#e74c3c" if v > 2 else "#f39c12" if v > 1 else "#2ecc71" for v in rates_size]
-        bars = axes[0].bar(rates_size.index, rates_size.values, color=colors,
-                          edgecolor="white", linewidth=0.5)
+        bars = axes[0].bar(
+            rates_size.index, rates_size.values, color=colors, edgecolor="white", linewidth=0.5
+        )
         axes[0].set_title("Distress Rate by Company Size", fontsize=11, fontweight="bold")
         axes[0].set_ylabel("Distress Rate (%)", fontsize=10)
         axes[0].set_xlabel("Company Size Bucket", fontsize=10)
-        for bar, val in zip(bars, rates_size.values):
-            axes[0].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.05,
-                        f"{val:.2f}%", ha="center", va="bottom", fontsize=9, fontweight="bold")
-        axes[0].axhline(y=df["distress_label"].mean() * 100, color="gray",
-                       linestyle="--", linewidth=1, label=f"Overall: {df['distress_label'].mean()*100:.2f}%")
+        for bar, val in zip(bars, rates_size.values, strict=False):
+            axes[0].text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.05,
+                f"{val:.2f}%",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                fontweight="bold",
+            )
+        axes[0].axhline(
+            y=df["distress_label"].mean() * 100,
+            color="gray",
+            linestyle="--",
+            linewidth=1,
+            label=f"Overall: {df['distress_label'].mean() * 100:.2f}%",
+        )
         axes[0].legend(fontsize=8)
 
     # Sector Proxy
@@ -725,16 +772,25 @@ def plot_distress_rate_by_slice(
         rates_sector = df.groupby("sector_proxy")["distress_label"].mean() * 100
         rates_sector = rates_sector.sort_values(ascending=False)
         colors = ["#e74c3c" if v > 2 else "#f39c12" if v > 1 else "#2ecc71" for v in rates_sector]
-        bars = axes[1].bar(rates_sector.index, rates_sector.values, color=colors,
-                          edgecolor="white", linewidth=0.5)
+        bars = axes[1].bar(
+            rates_sector.index, rates_sector.values, color=colors, edgecolor="white", linewidth=0.5
+        )
         axes[1].set_title("Distress Rate by Sector", fontsize=11, fontweight="bold")
         axes[1].set_ylabel("Distress Rate (%)", fontsize=10)
         axes[1].tick_params(axis="x", rotation=30, labelsize=8)
-        for bar, val in zip(bars, rates_sector.values):
-            axes[1].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
-                        f"{val:.2f}%", ha="center", va="bottom", fontsize=9, fontweight="bold")
-        axes[1].axhline(y=df["distress_label"].mean() * 100, color="gray",
-                       linestyle="--", linewidth=1)
+        for bar, val in zip(bars, rates_sector.values, strict=False):
+            axes[1].text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.02,
+                f"{val:.2f}%",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                fontweight="bold",
+            )
+        axes[1].axhline(
+            y=df["distress_label"].mean() * 100, color="gray", linestyle="--", linewidth=1
+        )
 
     plt.suptitle("Label Distribution Across Slices", fontsize=13, fontweight="bold", y=1.02)
     plt.tight_layout()
@@ -749,8 +805,7 @@ def plot_disparate_impact(
     df: pd.DataFrame,
     output_dir: str,
 ) -> str:
-    """
-    Horizontal bar chart showing Disparate Impact Ratio (DIR) for each
+    """Horizontal bar chart showing Disparate Impact Ratio (DIR) for each
     slice, with the 0.8 and 1.25 fairness thresholds marked.
     """
     if "distress_label" not in df.columns:
@@ -798,8 +853,9 @@ def plot_disparate_impact(
 
     # Value annotations
     for i, v in enumerate(dir_values):
-        ax.text(v + 0.02, i, f"{v:.3f}", va="center", fontsize=9,
-               color="#e74c3c" if v < 0.8 else "#333")
+        ax.text(
+            v + 0.02, i, f"{v:.3f}", va="center", fontsize=9, color="#e74c3c" if v < 0.8 else "#333"
+        )
 
     plt.tight_layout()
     path = os.path.join(output_dir, "18_disparate_impact.png")
@@ -813,6 +869,7 @@ def plot_disparate_impact(
 # Dashboard HTML Generator
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def generate_dashboard_html(
     output_dir: str,
     row_count: int = 0,
@@ -820,8 +877,7 @@ def generate_dashboard_html(
     feature_count: int = 0,
     alert_count: int = 0,
 ) -> str:
-    """
-    Generate a self-contained HTML dashboard that displays all 15 plots.
+    """Generate a self-contained HTML dashboard that displays all 15 plots.
     Images are referenced via relative paths so the HTML works from the
     plots directory without a server.
 
@@ -833,64 +889,159 @@ def generate_dashboard_html(
 
     # Chart metadata: (filename, title, badge, description, section, layout)
     charts = [
-        ("01_correlation_heatmap.png", "Correlation Heatmap", "Chart 1",
-         "Full correlation matrix of all engineered features. Blue = negative, Red = positive. Use to identify multicollinearity and feature reduction candidates.",
-         "correlation", "full"),
-        ("02_top_correlations.png", "Top 20 Most Correlated Feature Pairs", "Chart 2",
-         "The 20 feature pairs with strongest absolute correlation. Green = positive, Red = negative. High |ρ| > 0.9 pairs are candidates for removal.",
-         "correlation", "full"),
-        ("03_feature_distributions.png", "Feature Distribution Grid (Histogram + KDE)", "Chart 3",
-         "Histogram with kernel density estimate for every engineered feature. Look for skewness, bimodality, and heavy tails that may require transformation.",
-         "distribution", "full"),
-        ("04_ratio_boxplots.png", "Financial Ratios by Category", "Chart 4",
-         "Box plots grouped by Liquidity, Leverage, Profitability, and Efficiency. Outlier whiskers excluded for clarity.",
-         "distribution", "half"),
-        ("05_pairplot.png", "Pairplot — Top 6 Features by Variance", "Chart 5",
-         "Scatter matrix of the 6 highest-variance features. Diagonal shows KDE, off-diagonal shows pairwise scatter.",
-         "distribution", "half"),
-        ("06_missing_heatmap.png", "Missing Data Pattern (Pre-Imputation)", "Chart 6",
-         "Red = missing, Green = present. Reveals structural missingness patterns — e.g., macro columns sharing the same null rows.",
-         "missing", "half"),
-        ("07_missing_bar.png", "Missing Data by Column", "Chart 7",
-         "Per-column null percentage. Red = >50%, Orange = 10-50%, Blue = <10%. The 65.8% null in macro columns is handled via forward-fill.",
-         "missing", "half"),
-        ("08_slice_sample_counts.png", "Sample Distribution Across Slices", "Chart 8",
-         "Sample sizes per slice across all 4 bias dimensions. Imbalanced slices can cause biased model performance.",
-         "bias", "full"),
-        ("09_features_by_size.png", "Features by Company Size (KDE)", "Chart 9",
-         "Overlaid density plots split by company size bucket. Significant separation indicates size-dependent feature behavior.",
-         "bias", "half"),
-        ("10_features_by_time.png", "Features by Time Period (Violin)", "Chart 10",
-         "Pre-2016 vs Post-2016 comparison. Temporal stability means the model is less likely to suffer from concept drift.",
-         "bias", "half"),
-        ("11_features_by_sector.png", "Features by Sector Proxy (Box)", "Chart 11",
-         "Box plots per inferred sector. Different sectors have fundamentally different financial profiles.",
-         "bias", "half"),
-        ("12_macro_regime_comparison.png", "Macro Regime Comparison (KDE)", "Chart 12",
-         "High vs Low federal funds rate regime. Overlapping distributions indicate feature robustness to rate environments.",
-         "bias", "half"),
-        ("13_psi_heatmap.png", "Population Stability Index (PSI) Heatmap", "Chart 13",
-         "PSI measures distributional shift. PSI < 0.10 = stable, 0.10–0.25 = moderate, > 0.25 = significant shift.",
-         "bias", "full"),
-        ("14_outlier_concentration.png", "Outlier Concentration by Slice", "Chart 14",
-         "Fraction of each slice's data that are outliers (beyond ±3σ). Concentrated outliers in one slice can bias training.",
-         "bias", "half"),
-        ("15_missing_by_slice.png", "Missing Rate by Slice", "Chart 15",
-         "Per-feature missing data rates across bias slices. Non-uniform missingness could introduce systematic bias.",
-         "bias", "half"),
-        ("16_label_feature_comparison.png", "Feature Means: Healthy vs Distressed", "Chart 16",
-         "Compares average feature values between non-distressed (green) and distressed (red) firms. Large differences indicate strong predictive signals or potential leakage.",
-         "bias", "full"),
-        ("17_distress_rate_by_slice.png", "Distress Rate by Slice", "Chart 17",
-         "Bar charts showing distress label rate (%) across company size buckets and sector proxies. Color-coded: red >2%, amber >1%, green <1%. Dashed line = overall rate.",
-         "bias", "full"),
-        ("18_disparate_impact.png", "Disparate Impact Analysis (80% Rule)", "Chart 18",
-         "Disparate Impact Ratio (DIR) per slice. Green bars fall within the fair zone (0.8–1.25). Red bars violate the 80% rule, indicating potential unfair bias against that group.",
-         "bias", "full"),
+        (
+            "01_correlation_heatmap.png",
+            "Correlation Heatmap",
+            "Chart 1",
+            "Full correlation matrix of all engineered features. Blue = negative, Red = positive. Use to identify multicollinearity and feature reduction candidates.",
+            "correlation",
+            "full",
+        ),
+        (
+            "02_top_correlations.png",
+            "Top 20 Most Correlated Feature Pairs",
+            "Chart 2",
+            "The 20 feature pairs with strongest absolute correlation. Green = positive, Red = negative. High |ρ| > 0.9 pairs are candidates for removal.",
+            "correlation",
+            "full",
+        ),
+        (
+            "03_feature_distributions.png",
+            "Feature Distribution Grid (Histogram + KDE)",
+            "Chart 3",
+            "Histogram with kernel density estimate for every engineered feature. Look for skewness, bimodality, and heavy tails that may require transformation.",
+            "distribution",
+            "full",
+        ),
+        (
+            "04_ratio_boxplots.png",
+            "Financial Ratios by Category",
+            "Chart 4",
+            "Box plots grouped by Liquidity, Leverage, Profitability, and Efficiency. Outlier whiskers excluded for clarity.",
+            "distribution",
+            "half",
+        ),
+        (
+            "05_pairplot.png",
+            "Pairplot — Top 6 Features by Variance",
+            "Chart 5",
+            "Scatter matrix of the 6 highest-variance features. Diagonal shows KDE, off-diagonal shows pairwise scatter.",
+            "distribution",
+            "half",
+        ),
+        (
+            "06_missing_heatmap.png",
+            "Missing Data Pattern (Pre-Imputation)",
+            "Chart 6",
+            "Red = missing, Green = present. Reveals structural missingness patterns — e.g., macro columns sharing the same null rows.",
+            "missing",
+            "half",
+        ),
+        (
+            "07_missing_bar.png",
+            "Missing Data by Column",
+            "Chart 7",
+            "Per-column null percentage. Red = >50%, Orange = 10-50%, Blue = <10%. The 65.8% null in macro columns is handled via forward-fill.",
+            "missing",
+            "half",
+        ),
+        (
+            "08_slice_sample_counts.png",
+            "Sample Distribution Across Slices",
+            "Chart 8",
+            "Sample sizes per slice across all 4 bias dimensions. Imbalanced slices can cause biased model performance.",
+            "bias",
+            "full",
+        ),
+        (
+            "09_features_by_size.png",
+            "Features by Company Size (KDE)",
+            "Chart 9",
+            "Overlaid density plots split by company size bucket. Significant separation indicates size-dependent feature behavior.",
+            "bias",
+            "half",
+        ),
+        (
+            "10_features_by_time.png",
+            "Features by Time Period (Violin)",
+            "Chart 10",
+            "Pre-2016 vs Post-2016 comparison. Temporal stability means the model is less likely to suffer from concept drift.",
+            "bias",
+            "half",
+        ),
+        (
+            "11_features_by_sector.png",
+            "Features by Sector Proxy (Box)",
+            "Chart 11",
+            "Box plots per inferred sector. Different sectors have fundamentally different financial profiles.",
+            "bias",
+            "half",
+        ),
+        (
+            "12_macro_regime_comparison.png",
+            "Macro Regime Comparison (KDE)",
+            "Chart 12",
+            "High vs Low federal funds rate regime. Overlapping distributions indicate feature robustness to rate environments.",
+            "bias",
+            "half",
+        ),
+        (
+            "13_psi_heatmap.png",
+            "Population Stability Index (PSI) Heatmap",
+            "Chart 13",
+            "PSI measures distributional shift. PSI < 0.10 = stable, 0.10–0.25 = moderate, > 0.25 = significant shift.",
+            "bias",
+            "full",
+        ),
+        (
+            "14_outlier_concentration.png",
+            "Outlier Concentration by Slice",
+            "Chart 14",
+            "Fraction of each slice's data that are outliers (beyond ±3σ). Concentrated outliers in one slice can bias training.",
+            "bias",
+            "half",
+        ),
+        (
+            "15_missing_by_slice.png",
+            "Missing Rate by Slice",
+            "Chart 15",
+            "Per-feature missing data rates across bias slices. Non-uniform missingness could introduce systematic bias.",
+            "bias",
+            "half",
+        ),
+        (
+            "16_label_feature_comparison.png",
+            "Feature Means: Healthy vs Distressed",
+            "Chart 16",
+            "Compares average feature values between non-distressed (green) and distressed (red) firms. Large differences indicate strong predictive signals or potential leakage.",
+            "bias",
+            "full",
+        ),
+        (
+            "17_distress_rate_by_slice.png",
+            "Distress Rate by Slice",
+            "Chart 17",
+            "Bar charts showing distress label rate (%) across company size buckets and sector proxies. Color-coded: red >2%, amber >1%, green <1%. Dashed line = overall rate.",
+            "bias",
+            "full",
+        ),
+        (
+            "18_disparate_impact.png",
+            "Disparate Impact Analysis (80% Rule)",
+            "Chart 18",
+            "Disparate Impact Ratio (DIR) per slice. Green bars fall within the fair zone (0.8–1.25). Red bars violate the 80% rule, indicating potential unfair bias against that group.",
+            "bias",
+            "full",
+        ),
     ]
 
     # Build chart cards HTML
-    sections = {"correlation": [], "distribution": [], "missing": [], "bias": []}
+    sections: dict[str, list[tuple[str, str]]] = {
+        "correlation": [],
+        "distribution": [],
+        "missing": [],
+        "bias": [],
+    }
     for fname, title, badge, desc, section, layout in charts:
         card_html = f'''<div class="card {"full-width" if layout == "full" else ""}">
           <div class="card-header"><h3>{title}</h3><span class="card-badge">{badge}</span></div>
@@ -899,27 +1050,47 @@ def generate_dashboard_html(
         </div>'''
         sections[section].append((card_html, layout))
 
-    def _render_section(items):
+    def _render_section(items: list[tuple[str, str]]) -> str:
         """Group half-width cards into grid-2 divs, leave full-width cards standalone."""
-        html_parts = []
-        half_buffer = []
+        html_parts: list[str] = []
+        half_buffer: list[str] = []
         for card_html, layout in items:
             if layout == "full":
                 if half_buffer:
-                    html_parts.append('<div class="grid-2">' + "\n".join(half_buffer) + '</div>')
+                    html_parts.append('<div class="grid-2">' + "\n".join(half_buffer) + "</div>")
                     half_buffer = []
                 html_parts.append(card_html)
             else:
                 half_buffer.append(card_html)
         if half_buffer:
-            html_parts.append('<div class="grid-2">' + "\n".join(half_buffer) + '</div>')
+            html_parts.append('<div class="grid-2">' + "\n".join(half_buffer) + "</div>")
         return "\n".join(html_parts)
 
     section_meta = {
-        "correlation": ("📊", "corr", "Feature Correlations", "Identify redundant and highly correlated feature pairs"),
-        "distribution": ("📈", "dist", "Feature Distributions", "Shape, spread, and outliers of each engineered feature"),
-        "missing": ("⚠️", "miss", "Missing Data Analysis", "Pre-imputation null patterns and column-level missingness rates"),
-        "bias": ("🔍", "bias", "Bias Analysis", "Feature distributions across company size, sector, time period, and macro regime"),
+        "correlation": (
+            "📊",
+            "corr",
+            "Feature Correlations",
+            "Identify redundant and highly correlated feature pairs",
+        ),
+        "distribution": (
+            "📈",
+            "dist",
+            "Feature Distributions",
+            "Shape, spread, and outliers of each engineered feature",
+        ),
+        "missing": (
+            "⚠️",
+            "miss",
+            "Missing Data Analysis",
+            "Pre-imputation null patterns and column-level missingness rates",
+        ),
+        "bias": (
+            "🔍",
+            "bias",
+            "Bias Analysis",
+            "Feature distributions across company size, sector, time period, and macro regime",
+        ),
     }
 
     sections_html = ""
@@ -934,7 +1105,7 @@ def generate_dashboard_html(
       {cards_html}
     </div>\n'''
 
-    html = f'''<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -1023,7 +1194,7 @@ def generate_dashboard_html(
     document.addEventListener('keydown',e=>{{if(e.key==='Escape')closeLightbox()}});
   </script>
 </body>
-</html>'''
+</html>"""
 
     path = os.path.join(output_dir, "dashboard.html")
     with open(path, "w", encoding="utf-8") as f:
@@ -1036,6 +1207,7 @@ def generate_dashboard_html(
 # Main Entry Point
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def generate_all_visualizations(
     df_raw: pd.DataFrame,
     df_engineered: pd.DataFrame,
@@ -1047,8 +1219,7 @@ def generate_all_visualizations(
     time_split_year: int = 2016,
     fed_funds_threshold: float = 2.0,
 ) -> list[str]:
-    """
-    Generate all 15 visualizations.
+    """Generate all 15 visualizations.
 
     Parameters:
       df_raw: Original DataFrame BEFORE imputation (for missing data charts)
@@ -1086,13 +1257,9 @@ def generate_all_visualizations(
     )
     saved_paths.append(plot_features_by_sector(df_engineered, key_features, output_dir))
     saved_paths.append(
-        plot_macro_regime_comparison(
-            df_engineered, key_features, fed_funds_threshold, output_dir
-        )
+        plot_macro_regime_comparison(df_engineered, key_features, fed_funds_threshold, output_dir)
     )
-    saved_paths.append(
-        plot_psi_heatmap(analysis_details.get("drift_matrices", {}), output_dir)
-    )
+    saved_paths.append(plot_psi_heatmap(analysis_details.get("drift_matrices", {}), output_dir))
     saved_paths.append(plot_outlier_concentration(bias_report, key_features, output_dir))
     saved_paths.append(plot_missing_by_slice(bias_report, key_features, output_dir))
 

@@ -4,14 +4,18 @@ Stores full time series per series_id.
 """
 
 import os
+
 import pandas as pd
 from google.cloud import storage
+
 from src.data.clients.fred_client import FREDClient
 
 RAW_PREFIX = "raw/fred"
 
 
-def load_existing(storage_client: "storage.Client", bucket_name: str, series_id: str) -> "pd.DataFrame | None":
+def load_existing(
+    storage_client: "storage.Client", bucket_name: str, series_id: str
+) -> "pd.DataFrame | None":
     """Load existing FRED data from cloud storage."""
     blob_path = f"{RAW_PREFIX}/series_id={series_id}.parquet"
     bucket = storage_client.bucket(bucket_name)
@@ -19,19 +23,21 @@ def load_existing(storage_client: "storage.Client", bucket_name: str, series_id:
     if not blob.exists():
         return None
     with blob.open("rb") as f:
-        return pd.read_parquet(f) 
+        return pd.read_parquet(f)
 
 
-def save(storage_client: "storage.Client", bucket_name: str, series_id: str, df: "pd.DataFrame") -> None:
+def save(
+    storage_client: "storage.Client", bucket_name: str, series_id: str, df: "pd.DataFrame"
+) -> None:
     """Save updated FRED data to cloud storage."""
     blob_path = f"{RAW_PREFIX}/series_id={series_id}.parquet"
     bucket = storage_client.bucket(bucket_name)
     with bucket.blob(blob_path).open("wb") as f:
-        df.to_parquet(f, index=False)  
+        df.to_parquet(f, index=False)
     print("Saved", blob_path)
 
 
-def main() -> None: 
+def main() -> None:
     """Execute the main ingestion pipeline for FRED data."""
     bucket_name = os.environ.get("GCS_BUCKET")
     api_key = os.environ.get("FRED_API_KEY")
@@ -54,18 +60,10 @@ def main() -> None:
         new_df["date"] = pd.to_datetime(new_df["date"])
 
         # Convert to quarterly
-        new_df["quarter_end_date"] = (
-            new_df["date"]
-            .dt.to_period("Q")
-            .dt.to_timestamp("Q")
-        )
+        new_df["quarter_end_date"] = new_df["date"].dt.to_period("Q").dt.to_timestamp("Q")
 
         new_df = (
-            new_df
-            .sort_values("date")
-            .groupby("quarter_end_date")["value"]
-            .last()
-            .reset_index()
+            new_df.sort_values("date").groupby("quarter_end_date")["value"].last().reset_index()
         )
 
         new_df = new_df.rename(columns={"quarter_end_date": "date"})
@@ -83,31 +81,20 @@ def main() -> None:
 
         existing_df["date"] = pd.to_datetime(existing_df["date"])
 
-        latest_dates = (
-            existing_df["date"]
-            .drop_duplicates()
-            .sort_values()
-            .tail(REFRESH_LAST_N)
-        )
+        latest_dates = existing_df["date"].drop_duplicates().sort_values().tail(REFRESH_LAST_N)
 
-        existing_df = existing_df[
-            ~existing_df["date"].isin(latest_dates)
-        ]
+        existing_df = existing_df[~existing_df["date"].isin(latest_dates)]
 
         old_dates = set(existing_df["date"].unique())
 
-        incremental_df = new_df[
-            ~new_df["date"].isin(old_dates)
-        ]
+        incremental_df = new_df[~new_df["date"].isin(old_dates)]
 
         updated = pd.concat([existing_df, incremental_df], ignore_index=True)
 
-        updated = updated.drop_duplicates(
-            subset=["date"],
-            keep="last"
-        ).sort_values("date")
+        updated = updated.drop_duplicates(subset=["date"], keep="last").sort_values("date")
 
         save(storage_client, bucket_name, series_id, updated)
+
 
 if __name__ == "__main__":
     main()

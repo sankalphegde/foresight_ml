@@ -1,12 +1,13 @@
 """Application configuration settings loaded from environment variables."""
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class Settings:
     """Container for project-level configuration values."""
+
     project_id: str = os.getenv("GOOGLE_CLOUD_PROJECT", "")
     gcs_bucket: str = os.getenv("GCS_BUCKET", "")
     cleaned_path: str = "cleaned_data/final_v2/"

@@ -1,5 +1,4 @@
-"""
-Unit Tests — Bias Analysis
+"""Unit Tests — Bias Analysis
 ============================
 Tests for:
   - Slice creation
@@ -13,15 +12,15 @@ import pandas as pd
 import pytest
 
 from src.feature_engineering.pipelines.bias_analysis import (
-    compute_psi,
-    compute_js_divergence,
-    create_slices,
     analyze_slice_statistics,
+    compute_js_divergence,
+    compute_psi,
+    create_slices,
     run_bias_analysis,
 )
 
-
 # ── Fixtures ─────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def sample_engineered_df():
@@ -29,36 +28,43 @@ def sample_engineered_df():
     np.random.seed(42)
     n = 100
 
-    df = pd.DataFrame({
-        "firm_id": [f"000000{i}" for i in range(10)] * 10,
-        "fiscal_year": sorted([2014, 2015, 2016, 2017, 2018] * 20),
-        "fiscal_period": (["Q1", "Q2", "Q3", "Q4"] * 25),
-        "Assets": np.random.uniform(1e8, 1e11, n),
-        "current_ratio": np.random.uniform(0.5, 3.0, n),
-        "debt_to_equity": np.random.uniform(0.2, 5.0, n),
-        "net_margin": np.random.uniform(-0.3, 0.4, n),
-        "roa": np.random.uniform(-0.1, 0.2, n),
-        "operating_margin": np.random.uniform(-0.2, 0.4, n),
-        "cash_flow_to_debt": np.random.uniform(-0.1, 0.5, n),
-        "altman_z_approx": np.random.uniform(0.5, 4.0, n),
-        "cash_burn_rate": np.random.uniform(-0.5, 0.5, n),
-        "rd_intensity": np.random.uniform(0, 0.3, n),
-        "sga_intensity": np.random.uniform(0.05, 0.4, n),
-        "leverage_x_margin": np.random.uniform(-1, 2, n),
-        "company_size_bucket": np.random.choice(
-            ["small", "mid", "large", "mega"], n
-        ),
-        "sector_proxy": np.random.choice(
-            ["tech_pharma", "manufacturing_retail", "financial_capital_intensive", "services_other"], n
-        ),
-        "fed_funds": np.random.choice([0.5, 1.25, 2.5, 4.0], n),
-    })
+    df = pd.DataFrame(
+        {
+            "firm_id": [f"000000{i}" for i in range(10)] * 10,
+            "fiscal_year": sorted([2014, 2015, 2016, 2017, 2018] * 20),
+            "fiscal_period": (["Q1", "Q2", "Q3", "Q4"] * 25),
+            "Assets": np.random.uniform(1e8, 1e11, n),
+            "current_ratio": np.random.uniform(0.5, 3.0, n),
+            "debt_to_equity": np.random.uniform(0.2, 5.0, n),
+            "net_margin": np.random.uniform(-0.3, 0.4, n),
+            "roa": np.random.uniform(-0.1, 0.2, n),
+            "operating_margin": np.random.uniform(-0.2, 0.4, n),
+            "cash_flow_to_debt": np.random.uniform(-0.1, 0.5, n),
+            "altman_z_approx": np.random.uniform(0.5, 4.0, n),
+            "cash_burn_rate": np.random.uniform(-0.5, 0.5, n),
+            "rd_intensity": np.random.uniform(0, 0.3, n),
+            "sga_intensity": np.random.uniform(0.05, 0.4, n),
+            "leverage_x_margin": np.random.uniform(-1, 2, n),
+            "company_size_bucket": np.random.choice(["small", "mid", "large", "mega"], n),
+            "sector_proxy": np.random.choice(
+                [
+                    "tech_pharma",
+                    "manufacturing_retail",
+                    "financial_capital_intensive",
+                    "services_other",
+                ],
+                n,
+            ),
+            "fed_funds": np.random.choice([0.5, 1.25, 2.5, 4.0], n),
+        }
+    )
     return df
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PSI Tests
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPSI:
     def test_identical_distributions(self):
@@ -102,6 +108,7 @@ class TestJSDivergence:
 # Slice Tests
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSliceCreation:
     def test_creates_all_dimensions(self, sample_engineered_df):
         slices = create_slices(sample_engineered_df)
@@ -134,11 +141,10 @@ class TestSliceCreation:
 # Statistics Tests
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSliceStatistics:
     def test_statistics_computed(self, sample_engineered_df):
-        stats = analyze_slice_statistics(
-            sample_engineered_df, ["current_ratio", "net_margin"]
-        )
+        stats = analyze_slice_statistics(sample_engineered_df, ["current_ratio", "net_margin"])
         assert "sample_count" in stats
         assert "current_ratio_mean" in stats
         assert "current_ratio_std" in stats
@@ -154,6 +160,7 @@ class TestSliceStatistics:
 # ═══════════════════════════════════════════════════════════════════════════
 # Full Bias Analysis Tests
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRunBiasAnalysis:
     def test_returns_report_and_details(self, sample_engineered_df):

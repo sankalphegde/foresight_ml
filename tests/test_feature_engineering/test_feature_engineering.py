@@ -1,5 +1,4 @@
-"""
-Unit Tests — Feature Engineering & Data Cleaning
+"""Unit Tests — Feature Engineering & Data Cleaning
 ==================================================
 Tests for:
   - NaN imputation/dropping logic
@@ -17,22 +16,20 @@ import pytest
 from src.feature_engineering.pipelines.data_cleaning import (
     clean_data,
     drop_uninformative_columns,
-    impute_macro_columns,
     impute_financial_columns,
+    impute_macro_columns,
 )
 from src.feature_engineering.pipelines.feature_engineering import (
-    safe_divide,
+    clip_outliers,
     compute_financial_ratios,
     compute_growth_rates,
     compute_rolling_stats,
-    compute_zscore_and_interactions,
-    compute_size_bucket,
-    clip_outliers,
     engineer_features,
+    safe_divide,
 )
 
-
 # ── Fixtures ─────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def sample_raw_df():
@@ -40,49 +37,51 @@ def sample_raw_df():
     np.random.seed(42)
     n = 20
 
-    df = pd.DataFrame({
-        "firm_id": ["0000001"] * 10 + ["0000002"] * 10,
-        "ticker": ["TEST1"] * 10 + ["TEST2"] * 10,
-        "fiscal_year": [2020, 2020, 2020, 2020, 2021, 2021, 2021, 2021, 2022, 2022] * 2,
-        "fiscal_period": ["Q1", "Q2", "Q3", "Q4", "Q1", "Q2", "Q3", "Q4", "Q1", "Q2"] * 2,
-        "filed_date": pd.date_range("2020-03-01", periods=10, freq="QS").tolist() * 2,
-        "Assets": np.random.uniform(1e9, 1e11, n),
-        "AssetsCurrent": np.random.uniform(5e8, 5e10, n),
-        "CashAndCashEquivalentsAtCarryingValue": np.random.uniform(1e8, 1e10, n),
-        "InventoryNet": np.random.uniform(1e7, 5e9, n),
-        "AccountsReceivableNetCurrent": np.random.uniform(1e8, 5e9, n),
-        "PropertyPlantAndEquipmentNet": np.random.uniform(1e8, 1e10, n),
-        "Goodwill": np.random.uniform(0, 5e9, n),
-        "IntangibleAssetsNetExcludingGoodwill": np.random.uniform(0, 3e9, n),
-        "Liabilities": np.random.uniform(5e8, 5e10, n),
-        "LiabilitiesCurrent": np.random.uniform(1e8, 1e10, n),
-        "AccountsPayableCurrent": np.random.uniform(1e7, 3e9, n),
-        "LongTermDebt": np.random.uniform(0, 2e10, n),
-        "LongTermDebtCurrent": np.random.uniform(0, 2e9, n),
-        "StockholdersEquity": np.random.uniform(1e8, 5e10, n),
-        "RetainedEarningsAccumulatedDeficit": np.random.uniform(-5e9, 2e10, n),
-        "AdditionalPaidInCapital": np.random.uniform(0, 1e10, n),
-        "CommonStockValue": np.random.uniform(0, 5e9, n),
-        "Revenues": np.random.uniform(1e9, 5e10, n),
-        "CostOfGoodsAndServicesSold": np.random.uniform(5e8, 3e10, n),
-        "GrossProfit": np.random.uniform(1e8, 2e10, n),
-        "OperatingIncomeLoss": np.random.uniform(-5e9, 1e10, n),
-        "NetIncomeLoss": np.random.uniform(-5e9, 8e9, n),
-        "ResearchAndDevelopmentExpense": np.random.uniform(0, 5e9, n),
-        "SellingGeneralAndAdministrativeExpense": np.random.uniform(1e8, 5e9, n),
-        "InterestExpense": np.random.uniform(0, 1e9, n),
-        "IncomeTaxExpenseBenefit": np.random.uniform(-1e9, 3e9, n),
-        "EarningsPerShareBasic": [np.nan] * n,
-        "EarningsPerShareDiluted": [np.nan] * n,
-        "NetCashProvidedByUsedInOperatingActivities": np.random.uniform(-2e9, 1e10, n),
-        "NetCashProvidedByUsedInInvestingActivities": np.random.uniform(-1e10, 2e9, n),
-        "NetCashProvidedByUsedInFinancingActivities": np.random.uniform(-5e9, 5e9, n),
-        "DepreciationDepletionAndAmortization": np.random.uniform(0, 3e9, n),
-        "fed_funds": [1.25] * 5 + [np.nan] * 5 + [2.5] * 5 + [np.nan] * 5,
-        "unemployment": [3.8] * 5 + [np.nan] * 5 + [4.2] * 5 + [np.nan] * 5,
-        "inflation": [258.0] * 5 + [np.nan] * 5 + [270.0] * 5 + [np.nan] * 5,
-        "quality_check_flag": ["Valid"] * n,
-    })
+    df = pd.DataFrame(
+        {
+            "firm_id": ["0000001"] * 10 + ["0000002"] * 10,
+            "ticker": ["TEST1"] * 10 + ["TEST2"] * 10,
+            "fiscal_year": [2020, 2020, 2020, 2020, 2021, 2021, 2021, 2021, 2022, 2022] * 2,
+            "fiscal_period": ["Q1", "Q2", "Q3", "Q4", "Q1", "Q2", "Q3", "Q4", "Q1", "Q2"] * 2,
+            "filed_date": pd.date_range("2020-03-01", periods=10, freq="QS").tolist() * 2,
+            "Assets": np.random.uniform(1e9, 1e11, n),
+            "AssetsCurrent": np.random.uniform(5e8, 5e10, n),
+            "CashAndCashEquivalentsAtCarryingValue": np.random.uniform(1e8, 1e10, n),
+            "InventoryNet": np.random.uniform(1e7, 5e9, n),
+            "AccountsReceivableNetCurrent": np.random.uniform(1e8, 5e9, n),
+            "PropertyPlantAndEquipmentNet": np.random.uniform(1e8, 1e10, n),
+            "Goodwill": np.random.uniform(0, 5e9, n),
+            "IntangibleAssetsNetExcludingGoodwill": np.random.uniform(0, 3e9, n),
+            "Liabilities": np.random.uniform(5e8, 5e10, n),
+            "LiabilitiesCurrent": np.random.uniform(1e8, 1e10, n),
+            "AccountsPayableCurrent": np.random.uniform(1e7, 3e9, n),
+            "LongTermDebt": np.random.uniform(0, 2e10, n),
+            "LongTermDebtCurrent": np.random.uniform(0, 2e9, n),
+            "StockholdersEquity": np.random.uniform(1e8, 5e10, n),
+            "RetainedEarningsAccumulatedDeficit": np.random.uniform(-5e9, 2e10, n),
+            "AdditionalPaidInCapital": np.random.uniform(0, 1e10, n),
+            "CommonStockValue": np.random.uniform(0, 5e9, n),
+            "Revenues": np.random.uniform(1e9, 5e10, n),
+            "CostOfGoodsAndServicesSold": np.random.uniform(5e8, 3e10, n),
+            "GrossProfit": np.random.uniform(1e8, 2e10, n),
+            "OperatingIncomeLoss": np.random.uniform(-5e9, 1e10, n),
+            "NetIncomeLoss": np.random.uniform(-5e9, 8e9, n),
+            "ResearchAndDevelopmentExpense": np.random.uniform(0, 5e9, n),
+            "SellingGeneralAndAdministrativeExpense": np.random.uniform(1e8, 5e9, n),
+            "InterestExpense": np.random.uniform(0, 1e9, n),
+            "IncomeTaxExpenseBenefit": np.random.uniform(-1e9, 3e9, n),
+            "EarningsPerShareBasic": [np.nan] * n,
+            "EarningsPerShareDiluted": [np.nan] * n,
+            "NetCashProvidedByUsedInOperatingActivities": np.random.uniform(-2e9, 1e10, n),
+            "NetCashProvidedByUsedInInvestingActivities": np.random.uniform(-1e10, 2e9, n),
+            "NetCashProvidedByUsedInFinancingActivities": np.random.uniform(-5e9, 5e9, n),
+            "DepreciationDepletionAndAmortization": np.random.uniform(0, 3e9, n),
+            "fed_funds": [1.25] * 5 + [np.nan] * 5 + [2.5] * 5 + [np.nan] * 5,
+            "unemployment": [3.8] * 5 + [np.nan] * 5 + [4.2] * 5 + [np.nan] * 5,
+            "inflation": [258.0] * 5 + [np.nan] * 5 + [270.0] * 5 + [np.nan] * 5,
+            "quality_check_flag": ["Valid"] * n,
+        }
+    )
     return df
 
 
@@ -95,6 +94,7 @@ def sample_clean_df(sample_raw_df):
 # ═══════════════════════════════════════════════════════════════════════════
 # Data Cleaning Tests
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDropColumns:
     def test_drops_eps_columns(self, sample_raw_df):
@@ -157,6 +157,7 @@ class TestCleanData:
 # Feature Engineering Tests
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestSafeDivide:
     def test_normal_division(self):
         num = pd.Series([10.0, 20.0, 30.0])
@@ -182,10 +183,19 @@ class TestFinancialRatios:
     def test_ratios_created(self, sample_clean_df):
         result = compute_financial_ratios(sample_clean_df.copy())
         expected_ratios = [
-            "current_ratio", "quick_ratio", "cash_ratio",
-            "debt_to_equity", "debt_to_assets", "interest_coverage",
-            "gross_margin", "operating_margin", "net_margin",
-            "roa", "roe", "asset_turnover", "cash_flow_to_debt",
+            "current_ratio",
+            "quick_ratio",
+            "cash_ratio",
+            "debt_to_equity",
+            "debt_to_assets",
+            "interest_coverage",
+            "gross_margin",
+            "operating_margin",
+            "net_margin",
+            "roa",
+            "roe",
+            "asset_turnover",
+            "cash_flow_to_debt",
         ]
         for ratio in expected_ratios:
             assert ratio in result.columns, f"Missing ratio: {ratio}"

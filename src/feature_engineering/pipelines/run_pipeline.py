@@ -1,5 +1,4 @@
-"""
-Pipeline Orchestrator
+"""Pipeline Orchestrator
 ======================
 CLI entry point for running the feature engineering and bias analysis pipeline.
 
@@ -17,13 +16,14 @@ import argparse
 import logging
 import os
 import sys
+from typing import Any
 
 import pandas as pd
 import yaml
 
+from pipelines.bias_analysis import KEY_FEATURES, run_bias_analysis
 from pipelines.data_cleaning import clean_data
-from pipelines.feature_engineering import engineer_features, ENGINEERED_FEATURES
-from pipelines.bias_analysis import run_bias_analysis, KEY_FEATURES
+from pipelines.feature_engineering import ENGINEERED_FEATURES, engineer_features
 from pipelines.visualizations import generate_all_visualizations
 
 # ── Logging Setup ────────────────────────────────────────────────────────
@@ -40,9 +40,9 @@ logger = logging.getLogger(__name__)
 # Local Mode
 # ═══════════════════════════════════════════════════════════════════════════
 
-def run_local(input_path: str, output_dir: str, config: dict = None) -> None:
-    """
-    Run the full pipeline locally using Pandas.
+
+def run_local(input_path: str, output_dir: str, config: dict[str, Any] | None = None) -> None:
+    """Run the full pipeline locally using Pandas.
 
     Steps:
       1. Load parquet data
@@ -158,9 +158,9 @@ def run_local(input_path: str, output_dir: str, config: dict = None) -> None:
 # BigQuery Mode
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def handle_missing_engineered_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Handle missing data in the engineered features table pulled from BigQuery.
+    """Handle missing data in the engineered features table pulled from BigQuery.
 
     Root Cause: The BQ SQL uses SAFE_DIVIDE which returns NULL when the
     denominator is 0. Many raw columns (Revenues, GrossProfit, R&D, SGA,
@@ -196,9 +196,16 @@ def handle_missing_engineered_data(df: pd.DataFrame) -> pd.DataFrame:
 
     # Identify feature columns to fill (exclude identity/categorical columns)
     identity_cols = {
-        "firm_id", "cik", "ticker", "fiscal_year", "fiscal_period",
-        "filed_date", "date", "distress_label",
-        "company_size_bucket", "sector_proxy",
+        "firm_id",
+        "cik",
+        "ticker",
+        "fiscal_year",
+        "fiscal_period",
+        "filed_date",
+        "date",
+        "distress_label",
+        "company_size_bucket",
+        "sector_proxy",
     }
 
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -217,8 +224,7 @@ def handle_missing_engineered_data(df: pd.DataFrame) -> pd.DataFrame:
     # Log post-imputation summary
     remaining_nulls = df.isnull().sum().sum()
     logger.info(
-        f"[POST-IMPUTATION] Filled {filled_count} NULL values. "
-        f"Remaining NULLs: {remaining_nulls}."
+        f"[POST-IMPUTATION] Filled {filled_count} NULL values. Remaining NULLs: {remaining_nulls}."
     )
 
     return df
@@ -230,8 +236,7 @@ def generate_bias_report_markdown(
     analysis_details: dict,
     output_path: str,
 ) -> str:
-    """
-    Generate a comprehensive markdown bias report acting as a senior data analyst.
+    """Generate a comprehensive markdown bias report acting as a senior data analyst.
 
     Covers:
       - Executive summary
@@ -241,15 +246,16 @@ def generate_bias_report_markdown(
       - Drift detection results
       - Fairness metrics and recommendations
     """
-    import numpy as np
     from datetime import datetime
+
+    import numpy as np
 
     alerts = analysis_details.get("alerts", [])
     drift_matrices = analysis_details.get("drift_matrices", {})
     feature_columns = analysis_details.get("feature_columns", [])
 
     # ── Compute label statistics ──
-    label_stats = {}
+    label_stats: dict[str, int | float] = {}
     if "distress_label" in df.columns:
         total = len(df)
         distress_n = int((df["distress_label"] == 1).sum())
@@ -258,7 +264,9 @@ def generate_bias_report_markdown(
         label_stats["distress_n"] = distress_n
         label_stats["non_distress_n"] = non_distress_n
         label_stats["distress_rate"] = distress_n / total if total > 0 else 0
-        label_stats["imbalance_ratio"] = non_distress_n / distress_n if distress_n > 0 else float("inf")
+        label_stats["imbalance_ratio"] = (
+            non_distress_n / distress_n if distress_n > 0 else float("inf")
+        )
 
     # ── Compute label rate per slice ──
     slice_label_rates = {}
@@ -275,27 +283,35 @@ def generate_bias_report_markdown(
     lines = []
     lines.append("# Financial Distress Pipeline — Bias Analysis Report")
     lines.append(f"\n*Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
-    lines.append(f"\n---\n")
+    lines.append("\n---\n")
 
     # Executive Summary
     lines.append("## 1. Executive Summary\n")
-    lines.append(f"| Metric | Value |")
-    lines.append(f"|---|---|")
+    lines.append("| Metric | Value |")
+    lines.append("|---|---|")
     lines.append(f"| Total Observations | {len(df):,} |")
-    lines.append(f"| Unique Firms | {df['firm_id'].nunique() if 'firm_id' in df.columns else 'N/A':,} |")
+    lines.append(
+        f"| Unique Firms | {df['firm_id'].nunique() if 'firm_id' in df.columns else 'N/A':,} |"
+    )
     if "fiscal_year" in df.columns:
-        lines.append(f"| Year Range | {int(df['fiscal_year'].min())}–{int(df['fiscal_year'].max())} |")
+        lines.append(
+            f"| Year Range | {int(df['fiscal_year'].min())}–{int(df['fiscal_year'].max())} |"
+        )
     lines.append(f"| Engineered Features | {len(feature_columns)} |")
     lines.append(f"| Bias Dimensions | {len(drift_matrices)} |")
     lines.append(f"| High-Drift Alerts | {len(alerts)} |")
     if label_stats:
-        lines.append(f"| Distress Rate | {label_stats['distress_rate']:.2%} ({label_stats['distress_n']:,} / {label_stats['total']:,}) |")
+        lines.append(
+            f"| Distress Rate | {label_stats['distress_rate']:.2%} ({label_stats['distress_n']:,} / {label_stats['total']:,}) |"
+        )
         lines.append(f"| Class Imbalance Ratio | 1:{label_stats['imbalance_ratio']:.0f} |")
     lines.append("")
 
     if alerts:
         lines.append("> [!WARNING]")
-        lines.append(f"> **{len(alerts)} high-drift alerts detected.** Features exhibiting PSI > 0.25 across slices")
+        lines.append(
+            f"> **{len(alerts)} high-drift alerts detected.** Features exhibiting PSI > 0.25 across slices"
+        )
         lines.append("> need investigation before model training.\n")
 
     # Missing Data Analysis
@@ -305,40 +321,78 @@ def generate_bias_report_markdown(
     lines.append("| Category | Columns | Null Rate | Handling Strategy |")
     lines.append("|---|---|---|---|")
     lines.append("| Identity (firm_id, fiscal_year, etc.) | 4 | 0.0% | No action needed |")
-    lines.append("| Financial statements (Assets, Liabilities, etc.) | 28 | 0.0% | No action needed |")
-    lines.append("| Macroeconomic (FedFundsRate, CPI, etc.) | 6 | <0.01% (20 rows) | Forward-fill by date, then backfill |")
-    lines.append("| Lag columns (total_assets_lag1, etc.) | 4 | 1.8–7.2% | Fill with current-period value (0% change) |")
+    lines.append(
+        "| Financial statements (Assets, Liabilities, etc.) | 28 | 0.0% | No action needed |"
+    )
+    lines.append(
+        "| Macroeconomic (FedFundsRate, CPI, etc.) | 6 | <0.01% (20 rows) | Forward-fill by date, then backfill |"
+    )
+    lines.append(
+        "| Lag columns (total_assets_lag1, etc.) | 4 | 1.8–7.2% | Fill with current-period value (0% change) |"
+    )
     lines.append("| Distress label | 1 | 0.0% | No action needed |")
     lines.append("")
 
     lines.append("### 2.2 Engineered Features Table (Post-SQL)\n")
-    lines.append("The feature engineering SQL produces significant NULLs due to `SAFE_DIVIDE` by zero:\n")
+    lines.append(
+        "The feature engineering SQL produces significant NULLs due to `SAFE_DIVIDE` by zero:\n"
+    )
     lines.append("| Feature Category | Null % | Root Cause | Imputation |")
     lines.append("|---|---|---|---|")
-    lines.append("| Financial ratios | ~71% | SAFE_DIVIDE(x, 0) = NULL | Fill 0.0 — ratio undefined when denom=0 |")
-    lines.append("| Growth rates (YoY) | ~87% | LAG(4) + SAFE_DIVIDE by 0 | Fill 0.0 — no growth signal available |")
-    lines.append("| Rolling std | ~65% | STDDEV over ≤1 non-null value | Fill 0.0 — zero volatility |")
-    lines.append("| Altman Z-score | ~71% | Compound NULL propagation | Fill 0.0 — composite undefined |")
-    lines.append("| Cash burn rate | 100% | All expense columns = 0 | Fill 0.0 — no burn rate signal |")
+    lines.append(
+        "| Financial ratios | ~71% | SAFE_DIVIDE(x, 0) = NULL | Fill 0.0 — ratio undefined when denom=0 |"
+    )
+    lines.append(
+        "| Growth rates (YoY) | ~87% | LAG(4) + SAFE_DIVIDE by 0 | Fill 0.0 — no growth signal available |"
+    )
+    lines.append(
+        "| Rolling std | ~65% | STDDEV over ≤1 non-null value | Fill 0.0 — zero volatility |"
+    )
+    lines.append(
+        "| Altman Z-score | ~71% | Compound NULL propagation | Fill 0.0 — composite undefined |"
+    )
+    lines.append(
+        "| Cash burn rate | 100% | All expense columns = 0 | Fill 0.0 — no burn rate signal |"
+    )
     lines.append("")
 
-    lines.append("**Key Insight**: The NULLs are *not* missing data in the traditional sense. They arise because")
-    lines.append("many SEC EDGAR columns expected by the SQL (Revenues, GrossProfit, R&D, SGA, Inventory, etc.)")
-    lines.append("were not present in the raw BigQuery table and defaulted to 0.0. When the SQL computes ratios")
-    lines.append("like `Revenues / Assets`, the result is a valid 0.0. But when it computes `GrossProfit / Revenues`")
-    lines.append("(0 / 0), SAFE_DIVIDE correctly returns NULL. Filling with 0.0 is appropriate because it")
+    lines.append(
+        "**Key Insight**: The NULLs are *not* missing data in the traditional sense. They arise because"
+    )
+    lines.append(
+        "many SEC EDGAR columns expected by the SQL (Revenues, GrossProfit, R&D, SGA, Inventory, etc.)"
+    )
+    lines.append(
+        "were not present in the raw BigQuery table and defaulted to 0.0. When the SQL computes ratios"
+    )
+    lines.append(
+        "like `Revenues / Assets`, the result is a valid 0.0. But when it computes `GrossProfit / Revenues`"
+    )
+    lines.append(
+        "(0 / 0), SAFE_DIVIDE correctly returns NULL. Filling with 0.0 is appropriate because it"
+    )
     lines.append("represents 'this metric is not applicable for this observation.'\n")
 
     # Label Imbalance
     if label_stats:
         lines.append("## 3. Label Imbalance Analysis\n")
-        lines.append(f"The dataset has a **severe class imbalance** with only {label_stats['distress_rate']:.2%} positive labels ")
-        lines.append(f"({label_stats['distress_n']:,} distressed vs {label_stats['non_distress_n']:,} non-distressed).\n")
+        lines.append(
+            f"The dataset has a **severe class imbalance** with only {label_stats['distress_rate']:.2%} positive labels "
+        )
+        lines.append(
+            f"({label_stats['distress_n']:,} distressed vs {label_stats['non_distress_n']:,} non-distressed).\n"
+        )
 
         lines.append("> [!CAUTION]")
-        lines.append(f"> With a 1:{label_stats['imbalance_ratio']:.0f} imbalance ratio, standard classifiers will be biased")
-        lines.append("> toward predicting the majority class. **Mitigation strategies**: SMOTE oversampling,")
-        lines.append("> class-weighted loss functions, or focal loss. Evaluate with PR-AUC, not accuracy.\n")
+        lines.append(
+            f"> With a 1:{label_stats['imbalance_ratio']:.0f} imbalance ratio, standard classifiers will be biased"
+        )
+        lines.append(
+            "> toward predicting the majority class. **Mitigation strategies**: SMOTE oversampling,"
+        )
+        lines.append(
+            "> class-weighted loss functions, or focal loss. Evaluate with PR-AUC, not accuracy.\n"
+        )
 
         # Label rate per slice
         if slice_label_rates:
@@ -359,6 +413,7 @@ def generate_bias_report_markdown(
         lines.append("indicate data leakage if they are outcomes of distress rather than causes.\n")
 
         from scipy import stats as sp_stats
+
         from pipelines.bias_analysis import compute_psi
 
         df_healthy = df[df["distress_label"] == 0]
@@ -366,7 +421,9 @@ def generate_bias_report_markdown(
 
         # 3.2a — Feature means, Cohen's d, KS test, PSI
         lines.append("#### 3.2a Feature Distribution Comparison\n")
-        lines.append("| Feature | Mean (Healthy) | Mean (Distressed) | Cohen's d | KS Stat | KS p-value | PSI | Signal |")
+        lines.append(
+            "| Feature | Mean (Healthy) | Mean (Distressed) | Cohen's d | KS Stat | KS p-value | PSI | Signal |"
+        )
         lines.append("|---|---|---|---|---|---|---|---|")
 
         separation_results = []
@@ -383,7 +440,7 @@ def generate_bias_report_markdown(
 
             # Cohen's d: standardized effect size
             pooled_std = np.sqrt(
-                ((len(h_vals) - 1) * h_vals.std()**2 + (len(d_vals) - 1) * d_vals.std()**2)
+                ((len(h_vals) - 1) * h_vals.std() ** 2 + (len(d_vals) - 1) * d_vals.std() ** 2)
                 / (len(h_vals) + len(d_vals) - 2)
             )
             cohens_d = (d_mean - h_mean) / pooled_std if pooled_std > 0 else 0.0
@@ -405,11 +462,18 @@ def generate_bias_report_markdown(
             else:
                 signal = "⚪ NEGLIGIBLE"
 
-            separation_results.append({
-                "feature": feat, "h_mean": h_mean, "d_mean": d_mean,
-                "cohens_d": cohens_d, "ks_stat": ks_stat,
-                "ks_pvalue": ks_pvalue, "psi": psi_val, "signal": signal,
-            })
+            separation_results.append(
+                {
+                    "feature": feat,
+                    "h_mean": h_mean,
+                    "d_mean": d_mean,
+                    "cohens_d": cohens_d,
+                    "ks_stat": ks_stat,
+                    "ks_pvalue": ks_pvalue,
+                    "psi": psi_val,
+                    "signal": signal,
+                }
+            )
 
             lines.append(
                 f"| {feat} | {h_mean:.4f} | {d_mean:.4f} | {cohens_d:+.3f} "
@@ -424,10 +488,12 @@ def generate_bias_report_markdown(
         small_ct = sum(1 for r in separation_results if "SMALL" in r["signal"])
         neg_ct = sum(1 for r in separation_results if "NEGLIGIBLE" in r["signal"])
 
-        lines.append(f"> [!NOTE]")
-        lines.append(f"> **Effect size summary**: {large_ct} large / {medium_ct} medium / "
-                     f"{small_ct} small / {neg_ct} negligible out of {len(separation_results)} features.")
-        lines.append(f"> Cohen's d thresholds: |d| ≥ 0.8 large, ≥ 0.5 medium, ≥ 0.2 small.\n")
+        lines.append("> [!NOTE]")
+        lines.append(
+            f"> **Effect size summary**: {large_ct} large / {medium_ct} medium / "
+            f"{small_ct} small / {neg_ct} negligible out of {len(separation_results)} features."
+        )
+        lines.append("> Cohen's d thresholds: |d| ≥ 0.8 large, ≥ 0.5 medium, ≥ 0.2 small.\n")
 
         # Leakage warning for very high separation
         leakage_candidates = [r for r in separation_results if abs(r["cohens_d"]) >= 0.8]
@@ -469,8 +535,12 @@ def generate_bias_report_markdown(
 
         # 3.2c — Disparate Impact Analysis
         lines.append("#### 3.2c Disparate Impact Analysis\n")
-        lines.append("Disparate Impact Ratio (DIR) = distress_rate(group) / distress_rate(reference_group).")
-        lines.append("A DIR < 0.8 or > 1.25 indicates potential unfair treatment per the 80% rule.\n")
+        lines.append(
+            "Disparate Impact Ratio (DIR) = distress_rate(group) / distress_rate(reference_group)."
+        )
+        lines.append(
+            "A DIR < 0.8 or > 1.25 indicates potential unfair treatment per the 80% rule.\n"
+        )
 
         for dim_col, dim_name in [
             ("company_size_bucket", "Company Size"),
@@ -513,8 +583,10 @@ def generate_bias_report_markdown(
         high_count = (drift_df["psi"] > 0.25).sum()
         moderate_count = ((drift_df["psi"] > 0.10) & (drift_df["psi"] <= 0.25)).sum()
         stable_count = (drift_df["psi"] <= 0.10).sum()
-        lines.append(f"**{dim.replace('_', ' ').title()}**: "
-                     f"{high_count} high / {moderate_count} moderate / {stable_count} stable features")
+        lines.append(
+            f"**{dim.replace('_', ' ').title()}**: "
+            f"{high_count} high / {moderate_count} moderate / {stable_count} stable features"
+        )
 
     lines.append("")
 
@@ -533,16 +605,30 @@ def generate_bias_report_markdown(
 
     # Recommendations
     lines.append("## 6. Recommendations\n")
-    lines.append("1. **Address class imbalance** before training: Use SMOTE, class weights, or stratified ")
+    lines.append(
+        "1. **Address class imbalance** before training: Use SMOTE, class weights, or stratified "
+    )
     lines.append("   sampling. Evaluate with PR-AUC and F1, not accuracy.")
-    lines.append("2. **Investigate high-drift features**: Features with PSI > 0.25 across company size ")
-    lines.append("   buckets may cause the model to perform differently for small vs. mega-cap firms.")
-    lines.append("3. **Consider removing zero-filled features**: Features that are 100% NULL (like ")
-    lines.append("   `cash_burn_rate`) have no discriminative power after 0-fill and should be dropped ")
+    lines.append(
+        "2. **Investigate high-drift features**: Features with PSI > 0.25 across company size "
+    )
+    lines.append(
+        "   buckets may cause the model to perform differently for small vs. mega-cap firms."
+    )
+    lines.append(
+        "3. **Consider removing zero-filled features**: Features that are 100% NULL (like "
+    )
+    lines.append(
+        "   `cash_burn_rate`) have no discriminative power after 0-fill and should be dropped "
+    )
     lines.append("   or sourced from alternative data.")
-    lines.append("4. **Stratified evaluation**: Always evaluate model performance per-slice (size, sector, ")
+    lines.append(
+        "4. **Stratified evaluation**: Always evaluate model performance per-slice (size, sector, "
+    )
     lines.append("   time period) to detect hidden bias in predictions.")
-    lines.append("5. **Temporal validation**: Use a walk-forward split (not random) to prevent lookahead bias, ")
+    lines.append(
+        "5. **Temporal validation**: Use a walk-forward split (not random) to prevent lookahead bias, "
+    )
     lines.append("   given the 2009–2026 time span and identified temporal drift.")
     lines.append("")
 
@@ -556,8 +642,7 @@ def generate_bias_report_markdown(
 
 
 def run_bigquery(config: dict) -> None:
-    """
-    Run the pipeline on BigQuery.
+    """Run the pipeline on BigQuery.
 
     Steps:
       1. Read SQL template and substitute config values
@@ -569,10 +654,7 @@ def run_bigquery(config: dict) -> None:
     try:
         from google.cloud import bigquery
     except ImportError:
-        logger.error(
-            "google-cloud-bigquery not installed. "
-            "Run: pip install google-cloud-bigquery"
-        )
+        logger.error("google-cloud-bigquery not installed. Run: pip install google-cloud-bigquery")
         sys.exit(1)
 
     gcp_config = config["gcp"]
@@ -585,21 +667,20 @@ def run_bigquery(config: dict) -> None:
 
     if project_id == "YOUR_GCP_PROJECT_ID":
         logger.error(
-            "Please set your GCP project ID in config/settings.yaml "
-            "before running BigQuery mode."
+            "Please set your GCP project ID in config/settings.yaml before running BigQuery mode."
         )
         sys.exit(1)
 
     # Read and parameterize SQL
     sql_path = os.path.join(os.path.dirname(__file__), "feature_engineering_bq.sql")
-    with open(sql_path, "r") as f:
+    with open(sql_path) as f:
         sql = f.read()
 
     sql = sql.replace("${PROJECT}", project_id)
     sql = sql.replace("${DATASET}", dataset)
     sql = sql.replace("${RAW_TABLE}", raw_table)
 
-    logger.info(f"Executing feature engineering SQL on BigQuery...")
+    logger.info("Executing feature engineering SQL on BigQuery...")
     logger.info(f"  Project: {project_id}")
     logger.info(f"  Dataset: {dataset}")
     logger.info(f"  Raw Table: {raw_table}")
@@ -611,10 +692,8 @@ def run_bigquery(config: dict) -> None:
     logger.info(f"BigQuery job completed: {job.job_id}")
 
     # ── Step 3: Create cleaned_engineered_features table ──
-    clean_sql_path = os.path.join(
-        os.path.dirname(__file__), "clean_engineered_features_bq.sql"
-    )
-    with open(clean_sql_path, "r") as f:
+    clean_sql_path = os.path.join(os.path.dirname(__file__), "clean_engineered_features_bq.sql")
+    with open(clean_sql_path) as f:
         clean_sql = f.read()
 
     clean_sql = clean_sql.replace("${PROJECT}", project_id)
@@ -688,10 +767,9 @@ def run_bigquery(config: dict) -> None:
 # CLI
 # ═══════════════════════════════════════════════════════════════════════════
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Feature Engineering & Bias Analysis Pipeline"
-    )
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Feature Engineering & Bias Analysis Pipeline")
     parser.add_argument(
         "--mode",
         choices=["local", "bigquery"],
@@ -721,7 +799,7 @@ def main():
     # Load config
     config = {}
     if os.path.exists(args.config):
-        with open(args.config, "r") as f:
+        with open(args.config) as f:
             config = yaml.safe_load(f)
         logger.info(f"Loaded config from: {args.config}")
 

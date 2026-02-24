@@ -81,7 +81,7 @@ class SECClient:
                 with open(cache_file) as f:
                     data: dict[Any, Any] = json.load(f)
                     return data
-        except (OSError, IOError) as e:
+        except OSError:
             # Silently ignore cache read errors (e.g., I/O errors on Windows Docker mounts)
             pass
         return None
@@ -92,7 +92,7 @@ class SECClient:
             cache_file = self.cache_dir / self._cache_key(url)
             with open(cache_file, "w") as f:
                 json.dump(data, f)
-        except (OSError, IOError) as e:
+        except OSError:
             # Silently ignore cache write errors (e.g., I/O errors on Windows Docker mounts)
             pass
 

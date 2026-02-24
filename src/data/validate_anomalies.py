@@ -69,7 +69,9 @@ def detect_anomalies_iqr(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]
     return anomalies, anomaly_counts
 
 
-def build_validation_report(df: pd.DataFrame, anomalies: pd.DataFrame, anomaly_counts: dict[str, int]) -> dict[str, Any]:
+def build_validation_report(
+    df: pd.DataFrame, anomalies: pd.DataFrame, anomaly_counts: dict[str, int]
+) -> dict[str, Any]:
     """Build a JSON-serializable validation summary for orchestration."""
     missing_required = [c for c in REQUIRED_COLUMNS if c not in df.columns]
 
