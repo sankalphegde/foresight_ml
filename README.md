@@ -244,12 +244,23 @@ make dvc-setup
 uv run dvc add data/companies.csv
 uv run dvc add data/processed/
 
+# If the final dataset lives in GCS, track it via DVC import
+export FINAL_DATASET_GCS_URI=gs://<bucket>/<path>/final_dataset.parquet
+make dvc-track-final
+
 # Commit .dvc metadata to Git
 git add data/companies.csv.dvc data/processed.dvc .gitignore
 git commit -m "Track data with DVC"
 
 # Push actual data to GCS
 make dvc-push
+```
+
+For imported datasets, commit the generated metadata files:
+
+```bash
+git add data/final/final_dataset.parquet.dvc dvc.lock .gitignore
+git commit -m "Track final dataset from GCS with DVC"
 ```
 
 ### Collaborating with DVC

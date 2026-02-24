@@ -1,4 +1,4 @@
-.PHONY: help setup local-up local-down demo-airflow lint format typecheck terraform-check test check dvc-setup dvc-push dvc-pull
+.PHONY: help setup local-up local-down demo-airflow lint format typecheck terraform-check test check dvc-setup dvc-push dvc-pull dvc-track-final dvc-update-final
 
 help:
 	@echo "Foresight-ML Data Pipeline"
@@ -15,6 +15,8 @@ help:
 	@echo "Data Version Control:"
 	@echo "  make dvc-push        - Push tracked data to GCS"
 	@echo "  make dvc-pull        - Pull tracked data from GCS"
+	@echo "  make dvc-track-final - Track final dataset from GCS URI"
+	@echo "  make dvc-update-final- Refresh tracked final dataset version"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  make lint            - Run ruff linter (check only)"
@@ -98,3 +100,20 @@ dvc-push:
 dvc-pull:
 	@echo "Pulling data from GCS..."
 	uv run dvc pull
+
+dvc-track-final:
+	@if [ -z "$$FINAL_DATASET_GCS_URI" ]; then \
+		echo "Error: FINAL_DATASET_GCS_URI environment variable not set"; \
+		echo "Example: export FINAL_DATASET_GCS_URI=gs://my-bucket/path/final_dataset.parquet"; \
+		exit 1; \
+	fi
+	@OUTPUT_PATH=$${FINAL_DATASET_LOCAL_PATH:-data/final/final_dataset.parquet}; \
+	echo "Tracking $$FINAL_DATASET_GCS_URI as $$OUTPUT_PATH"; \
+	uv run dvc import-url --to-remote --force "$$FINAL_DATASET_GCS_URI" "$$OUTPUT_PATH"; \
+	echo "Created/updated $$OUTPUT_PATH.dvc"
+	@echo "Next: git add data/final/final_dataset.parquet.dvc dvc.lock .gitignore && git commit -m 'Track final dataset with DVC'"
+
+dvc-update-final:
+	@DVC_FILE=$${FINAL_DATASET_DVC_FILE:-data/final/final_dataset.parquet.dvc}; \
+	echo "Updating $$DVC_FILE"; \
+	uv run dvc update "$$DVC_FILE"

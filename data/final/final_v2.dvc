@@ -1,0 +1,14 @@
+md5: 3222dc91c4c828507d5e51f24dbedbfd
+frozen: true
+deps:
+- md5: 580ad806e4248dd1fd1a7e64f3497e7c.dir
+  size: 29251947
+  nfiles: 1
+  hash: md5
+  path: gs://financial-distress-data/cleaned_data/final_v2
+outs:
+- md5: 9094e165975fb0e75a2b17a562afa56e.dir
+  size: 29251947
+  nfiles: 1
+  hash: md5
+  path: final_v2
