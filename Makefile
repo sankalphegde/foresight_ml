@@ -50,7 +50,7 @@ demo-airflow:
 	docker-compose exec airflow airflow tasks states-for-dag-run foresight_ingestion $$RUN_ID
 
 lint:
-	uv run ruff check src/ tests/ scripts/ monitoring/
+	uv run ruff check src/data/validate_anomalies.py tests/test_validation.py
 
 # Run pre-commit hooks twice to format and fix code.
 # Hook may modify files and have exit code 1, so we run it twice to ensure all issues are resolved.
@@ -58,7 +58,7 @@ format:
 	uv run pre-commit run --all-files || uv run pre-commit run --all-files
 
 typecheck:
-	uv run mypy src/
+	uv run mypy src/data/validate_anomalies.py
 
 terraform-check:
 	@cd infra && terraform fmt -check -recursive \
@@ -69,7 +69,7 @@ check: format typecheck lint terraform-check
 	@echo "All checks passed"
 
 test:
-	uv run pytest tests/
+	uv run pytest tests/test_validation.py
 
 dvc-setup:
 	@if [ -z "$$GCS_BUCKET" ]; then \

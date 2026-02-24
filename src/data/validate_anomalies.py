@@ -1,3 +1,5 @@
+"""Validation and anomaly detection pipeline for processed panel data."""
+
 from __future__ import annotations
 
 import json
@@ -17,6 +19,7 @@ REQUIRED_COLUMNS = ("cik", "filing_date", "ticker", "accession_number")
 
 
 def upload_to_gcs(local_path: Path, bucket_name: str, gcs_path: str) -> None:
+    """Upload a local file to a target GCS object path."""
     from google.cloud import storage
 
     client = storage.Client()
@@ -27,6 +30,7 @@ def upload_to_gcs(local_path: Path, bucket_name: str, gcs_path: str) -> None:
 
 
 def detect_anomalies_iqr(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
+    """Detect row-level numeric outliers using the 1.5*IQR rule."""
     numeric_cols = list(df.select_dtypes(include="number").columns)
     if not numeric_cols:
         return df.iloc[0:0].copy(), {}
@@ -65,9 +69,8 @@ def detect_anomalies_iqr(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]
     return anomalies, anomaly_counts
 
 
-def build_validation_report(
-    df: pd.DataFrame, anomalies: pd.DataFrame, anomaly_counts: dict[str, int]
-) -> dict[str, Any]:
+def build_validation_report(df: pd.DataFrame, anomalies: pd.DataFrame, anomaly_counts: dict[str, int]) -> dict[str, Any]:
+    """Build a JSON-serializable validation summary for orchestration."""
     missing_required = [c for c in REQUIRED_COLUMNS if c not in df.columns]
 
     duplicate_count = 0
@@ -108,12 +111,14 @@ def build_validation_report(
 
 
 def validate_and_detect(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Run all validation checks and anomaly detection for a dataframe."""
     anomalies, anomaly_counts = detect_anomalies_iqr(df)
     report = build_validation_report(df, anomalies, anomaly_counts)
     return anomalies, report
 
 
 def main() -> None:
+    """Execute validation pipeline and upload generated artifacts to GCS."""
     in_path = Path(INPUT_PATH)
     if not in_path.exists():
         raise FileNotFoundError(f"Input dataset not found: {in_path}")

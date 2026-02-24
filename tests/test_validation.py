@@ -1,3 +1,5 @@
+"""Unit tests for validation and anomaly detection pipeline."""
+
 import sys
 from pathlib import Path
 
@@ -10,6 +12,7 @@ from src.data.validate_anomalies import validate_and_detect
 
 
 def test_duplicate_detection_and_report_keys() -> None:
+    """Verify duplicate detection and required summary keys in report."""
     df = pd.DataFrame(
         {
             "cik": ["0001", "0001", "0002"],
@@ -31,6 +34,7 @@ def test_duplicate_detection_and_report_keys() -> None:
 
 
 def test_anomaly_rows_generated_for_extreme_values() -> None:
+    """Verify extreme numeric values are flagged as anomalies."""
     df = pd.DataFrame(
         {
             "cik": ["0001"] * 10,
