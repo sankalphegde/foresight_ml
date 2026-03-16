@@ -38,3 +38,27 @@ variable "airflow_authorized_users" {
   type        = list(string)
   default     = []
 }
+
+variable "enable_mlflow" {
+  description = "Enable MLflow tracking infrastructure (Cloud Run + Cloud SQL)"
+  type        = bool
+  default     = true
+}
+
+variable "mlflow_sql_tier" {
+  description = "Cloud SQL machine tier for MLflow metadata backend"
+  type        = string
+  default     = "db-custom-1-3840"
+}
+
+variable "mlflow_db_password" {
+  description = "Password for MLflow PostgreSQL user"
+  type        = string
+  sensitive   = true
+}
+
+variable "mlflow_allow_unauthenticated" {
+  description = "Allow unauthenticated access to MLflow Cloud Run service"
+  type        = bool
+  default     = true
+}

@@ -68,6 +68,22 @@ output "airflow_url" {
   value       = google_cloud_run_v2_service.airflow.uri
 }
 
+output "mlflow_tracking_uri" {
+  description = "MLflow tracking URI hosted on Cloud Run"
+  value       = var.enable_mlflow ? google_cloud_run_v2_service.mlflow[0].uri : ""
+}
+
+output "mlflow_cloudsql_connection_name" {
+  description = "Cloud SQL connection name used by MLflow backend"
+  value       = var.enable_mlflow ? google_sql_database_instance.mlflow[0].connection_name : ""
+}
+
+# Cloud Run outputs (deprecated - keeping for reference)
+# output "airflow_url" {
+#   description = "Airflow web UI URL (Cloud Run - deprecated)"
+#   value       = google_cloud_run_v2_service.airflow.uri
+# }
+
 # Instructions
 output "setup_instructions" {
   description = "Next steps after deployment"
@@ -77,23 +93,15 @@ output "setup_instructions" {
     1. Save service account key:
        terraform output -raw dev_service_account_key | base64 -d > gcp-key.json
 
-    2. Build and push Airflow image:
-       cd deployment
-       gcloud builds submit --config cloudbuild.yaml
+     2. Optional MLflow tracking URI:
+       terraform output -raw mlflow_tracking_uri
 
-    3. Access Airflow UI:
-       ${google_cloud_run_v2_service.airflow.uri}
-       (Login: admin / admin)
-
-    4. The DAG will automatically backfill historical data from 2020-01-01
-       With daily runs, all 6 years of data (~2,190 days) will be collected within ~25 days
-
-    5. Monitor via Airflow UI:
+     3. Monitor via Airflow UI:
        - DAG runs show in the UI
        - Logs available for each task
-       - Both FRED and SEC ingestion run in parallel
+       - Data stored in GCS: gs://${google_storage_bucket.data_lake.name}
 
-    6. Query data:
+    4. Query data:
        Open BigQuery console: https://console.cloud.google.com/bigquery?project=${var.project_id}
   EOT
 }
