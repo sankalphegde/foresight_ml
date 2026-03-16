@@ -20,9 +20,9 @@ REQUIRED_COLUMNS = ("cik", "filing_date", "ticker", "accession_number")
 
 def upload_to_gcs(local_path: Path, bucket_name: str, gcs_path: str) -> None:
     """Upload a local file to a target GCS object path."""
-    from google.cloud import storage
+    from google.cloud.storage import Client
 
-    client = storage.Client()
+    client = Client()
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(gcs_path)
     blob.upload_from_filename(str(local_path))

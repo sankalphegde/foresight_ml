@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 
 import pandas as pd
-from google.cloud import storage
+from google.cloud.storage import Client
 
 from src.data.clients.sec_client import SECClient
 from src.data.clients.sec_xbrl_client import SECXBRLClient
@@ -42,7 +42,7 @@ def main() -> None:
 
     print("Starting SEC XBRL ingestion:", year, quarter)
 
-    storage_client = storage.Client()
+    storage_client = Client()
     bucket = storage_client.bucket(bucket_name)
 
     companies_blob = bucket.blob("reference/companies.csv")

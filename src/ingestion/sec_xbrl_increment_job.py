@@ -9,7 +9,7 @@ Handles:
 import os
 
 import pandas as pd
-from google.cloud import storage
+from google.cloud.storage import Client
 
 from src.data.clients.sec_client import SECClient
 from src.data.clients.sec_xbrl_client import SECXBRLClient
@@ -35,9 +35,7 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def load_existing(
-    storage_client: "storage.Client", bucket_name: str, cik: str
-) -> "pd.DataFrame | None":
+def load_existing(storage_client: Client, bucket_name: str, cik: str) -> "pd.DataFrame | None":
     """Load existing SEC data for a given CIK from cloud storage."""
     blob_path = f"{RAW_PREFIX}/cik={cik}/data.parquet"
     bucket = storage_client.bucket(bucket_name)
@@ -48,7 +46,7 @@ def load_existing(
         return pd.read_parquet(f)
 
 
-def save(storage_client: "storage.Client", bucket_name: str, cik: str, df: "pd.DataFrame") -> None:
+def save(storage_client: Client, bucket_name: str, cik: str, df: "pd.DataFrame") -> None:
     """Save updated SEC data for a given CIK to cloud storage."""
     blob_path = f"{RAW_PREFIX}/cik={cik}/data.parquet"
     bucket = storage_client.bucket(bucket_name)
@@ -67,7 +65,7 @@ def main() -> None:
         raise RuntimeError("Missing required environment variable: SEC_USER_AGENT")
 
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
-    storage_client = storage.Client(project=project_id)
+    storage_client = Client(project=project_id)
     bucket = storage_client.bucket(bucket_name)
 
     companies_df = pd.read_csv(bucket.blob("reference/companies.csv").open("r"))

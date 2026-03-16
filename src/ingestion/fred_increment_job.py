@@ -6,16 +6,14 @@ Stores full time series per series_id.
 import os
 
 import pandas as pd
-from google.cloud import storage
+from google.cloud.storage import Client
 
 from src.data.clients.fred_client import FREDClient
 
 RAW_PREFIX = "raw/fred"
 
 
-def load_existing(
-    storage_client: "storage.Client", bucket_name: str, series_id: str
-) -> "pd.DataFrame | None":
+def load_existing(storage_client: Client, bucket_name: str, series_id: str) -> "pd.DataFrame | None":
     """Load existing FRED data from cloud storage."""
     blob_path = f"{RAW_PREFIX}/series_id={series_id}.parquet"
     bucket = storage_client.bucket(bucket_name)
@@ -26,9 +24,7 @@ def load_existing(
         return pd.read_parquet(f)
 
 
-def save(
-    storage_client: "storage.Client", bucket_name: str, series_id: str, df: "pd.DataFrame"
-) -> None:
+def save(storage_client: Client, bucket_name: str, series_id: str, df: "pd.DataFrame") -> None:
     """Save updated FRED data to cloud storage."""
     blob_path = f"{RAW_PREFIX}/series_id={series_id}.parquet"
     bucket = storage_client.bucket(bucket_name)
@@ -47,7 +43,7 @@ def main() -> None:
         raise RuntimeError("Missing required environment variable: FRED_API_KEY")
 
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
-    storage_client = storage.Client(project=project_id)
+    storage_client = Client(project=project_id)
     fred = FREDClient(api_key=api_key)
 
     for _name, series_id in fred.INDICATORS.items():

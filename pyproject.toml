@@ -15,6 +15,7 @@ dependencies = [
     "ruff>=0.1.15",
     "mypy>=1.8.0",
     "types-requests>=2.31.0.20240125",
+    "types-PyYAML>=6.0.12.20250915",
     "pytest>=9.0.2",
     "pre-commit>=4.5.1",
     "dvc>=3.66.1",
@@ -35,6 +36,7 @@ dev = [
     "ruff>=0.1.15",
     "mypy>=1.8.0",
     "types-requests>=2.31.0.20240125",
+    "types-PyYAML>=6.0.12.20250915",
     "pytest>=9.0.2",
     "numpy>=2.4.2",
     "pandas>=3.0.0",
@@ -102,4 +104,13 @@ follow_imports = "silent"
 
 [[tool.mypy.overrides]]
 module = "airflow.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "google.cloud"
+ignore_missing_imports = true
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "google.cloud.*"
 ignore_missing_imports = true

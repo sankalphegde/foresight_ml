@@ -3,7 +3,7 @@
 import os
 from datetime import datetime
 
-from google.cloud import storage
+from google.cloud.storage import Client
 
 from src.data.clients.fred_client import FREDClient
 
@@ -33,7 +33,7 @@ def main() -> None:
     )
 
     # ---- WRITE TO GCS ----
-    storage_client = storage.Client()
+    storage_client = Client()
     bucket = storage_client.bucket(bucket_name)
 
     output_path = f"raw/fred/year={year}/month={month}/indicators.csv"

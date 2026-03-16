@@ -12,7 +12,8 @@ from typing import Any
 
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
-from google.cloud import bigquery, storage
+from google.cloud import bigquery
+from google.cloud.storage import Client
 
 sys.path.insert(0, "/opt/airflow")
 
@@ -60,7 +61,7 @@ def run_preprocess_demo(**context: Any) -> None:
         raise RuntimeError("Missing required environment variable: GCS_BUCKET")
 
     project_id = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT")
-    client = storage.Client(project=project_id)
+    client = Client(project=project_id)
 
     sec_probe = list(client.list_blobs(bucket_name, prefix="raw/sec_xbrl/", max_results=1))
     fred_probe = list(client.list_blobs(bucket_name, prefix="raw/fred/", max_results=1))
