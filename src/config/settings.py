@@ -14,6 +14,10 @@ class Settings:
     panel_output_path: str = "features/panel_v1/panel.parquet"
     labeled_output_path: str = "features/labeled_v1/labeled_panel.parquet"
     prediction_horizon: int = int(os.getenv("PREDICTION_HORIZON", "1"))
+    mlflow_tracking_uri: str = os.getenv("MLFLOW_TRACKING_URI", "")
+    mlflow_experiment_name: str = os.getenv("MLFLOW_EXPERIMENT_NAME", "foresight-training")
+    mlflow_model_name: str = os.getenv("MLFLOW_MODEL_NAME", "foresight-distress-model")
+    mlflow_model_alias: str = os.getenv("MLFLOW_MODEL_ALIAS", "champion")
 
     # --- Data splitting config ---
     bigquery_features_table: str = os.getenv(

@@ -16,6 +16,7 @@ Goal of this phase:
 
 ## Data sources
 
+<<<<<<< Updated upstream
 The pipeline uses two public sources:
 - **SEC EDGAR (XBRL filings):** firm-level financial statement tags from periodic filings (10-Q/10-K style disclosures), ingested incrementally.
 - **FRED (Federal Reserve Economic Data):** macro indicators (e.g., rates/inflation/labor proxies) ingested and aligned for downstream feature construction.
@@ -24,6 +25,22 @@ Source roles in pipeline:
 - SEC provides company-level fundamentals.
 - FRED provides macro context.
 - Both are combined during cleaning/feature stages for modeling and bias analysis.
+=======
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Data Sources](#data-sources)
+- [Project Structure](#project-structure)
+- [DVC Setup](#dvc-setup)
+- [Development](#development)
+- [CI/CD](#cicd)
+- [Testing](#testing)
+- [MLflow Tracking](#mlflow-tracking)
+- [Common Tasks](#common-tasks)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Tech Stack](#tech-stack)
+>>>>>>> Stashed changes
 
 ---
 
@@ -432,7 +449,61 @@ docker compose exec airflow airflow tasks list foresight_ingestion
 
 ---
 
+<<<<<<< Updated upstream
 ## 14) Notes for graders
+=======
+## MLflow Tracking
+
+This repository currently provides **MLflow infrastructure only** (no active training/evaluation/prediction runtime yet).
+
+Deployment shape:
+- **Tracking server**: Cloud Run service (`foresight-mlflow`)
+- **Metadata backend**: Cloud SQL PostgreSQL
+- **Artifacts**: `gs://$GCS_BUCKET/mlflow/artifacts`
+
+### Deploy MLflow Infra
+
+```bash
+source .env
+cd infra
+terraform apply
+
+# Get tracking URI and export for local runs
+export MLFLOW_TRACKING_URI="$(terraform output -raw mlflow_tracking_uri)"
+```
+
+### What Is Intentionally Stubbed
+
+The following files are placeholders with commented copy/paste templates for future implementation:
+
+- `src/models/train.py`
+- `src/models/evaluate.py`
+- `src/models/predict.py`
+- `src/pipelines/training_pipeline.py`
+- `src/airflow/dags/foresight_ml_training_pipeline.py`
+
+These stubs are intentional and currently raise `NotImplementedError` (or remain fully commented for DAG scaffolding).
+
+### Future Implementation (When Ready)
+
+When you are ready to implement runtime behavior, the typical sequence is:
+
+1. Add model training + metric logging in `src/models/train.py`
+2. Add evaluation logging in `src/models/evaluate.py`
+3. Add model loading/inference in `src/models/predict.py`
+4. Enable the Airflow training DAG scaffold in `src/airflow/dags/foresight_ml_training_pipeline.py`
+
+Optional local smoke check for tracking server connectivity:
+
+```bash
+source .env
+curl -I "$MLFLOW_TRACKING_URI"
+```
+
+---
+
+## Common Tasks
+>>>>>>> Stashed changes
 
 - Use `FEATURE_BIAS_MODE=safe` for reliable full DAG execution on limited local resources.
 - Use `FEATURE_BIAS_MODE=full` if full visualization artifacts are required and resources are sufficient.
@@ -454,8 +525,8 @@ docker compose exec airflow airflow tasks list foresight_ingestion
 
 ## 16) Scalability Considerations
 
-The DAG is structured with independent, modular tasks and parallel ingestion branches, 
-allowing horizontal scaling strategies such as partitioned or entity-level ingestion 
+The DAG is structured with independent, modular tasks and parallel ingestion branches,
+allowing horizontal scaling strategies such as partitioned or entity-level ingestion
 if required in larger production environments.
 
 ---
