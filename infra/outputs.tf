@@ -68,22 +68,6 @@ output "airflow_url" {
   value       = google_cloud_run_v2_service.airflow.uri
 }
 
-# Cloud Composer outputs
-output "composer_airflow_uri" {
-  description = "Cloud Composer Airflow web UI URL"
-  value       = google_composer_environment.foresight_ml.config[0].airflow_uri
-}
-
-output "composer_dag_gcs_prefix" {
-  description = "GCS path where Composer expects DAG files"
-  value       = google_composer_environment.foresight_ml.config[0].dag_gcs_prefix
-}
-
-output "composer_environment_name" {
-  description = "Cloud Composer environment name"
-  value       = google_composer_environment.foresight_ml.name
-}
-
 output "mlflow_tracking_uri" {
   description = "MLflow tracking URI hosted on Cloud Run"
   value       = var.enable_mlflow ? google_cloud_run_v2_service.mlflow[0].uri : ""
@@ -109,24 +93,15 @@ output "setup_instructions" {
     1. Save service account key:
        terraform output -raw dev_service_account_key | base64 -d > gcp-key.json
 
-     2. Deploy DAGs to Cloud Composer:
-       gcloud composer environments storage dags import \
-        --environment=foresight-ml-${var.environment} \
-        --location=${var.region} \
-        --source=src/airflow/dags/
-
-     3. Access Airflow UI:
-       ${google_composer_environment.foresight_ml.config[0].airflow_uri}
-
-     4. Optional MLflow tracking URI:
+     2. Optional MLflow tracking URI:
        terraform output -raw mlflow_tracking_uri
 
-     5. Monitor via Airflow UI:
+     3. Monitor via Airflow UI:
        - DAG runs show in the UI
        - Logs available for each task
        - Data stored in GCS: gs://${google_storage_bucket.data_lake.name}
 
-    6. Query data:
+    4. Query data:
        Open BigQuery console: https://console.cloud.google.com/bigquery?project=${var.project_id}
   EOT
 }

@@ -108,7 +108,7 @@ resource "google_cloud_run_v2_service" "mlflow" {
 
       env {
         name  = "BACKEND_STORE_URI"
-        value = "postgresql+psycopg2://mlflow:${var.mlflow_db_password}@/${google_sql_database.mlflow[0].name}?host=/cloudsql/${google_sql_database_instance.mlflow[0].connection_name}"
+        value = "postgresql+psycopg2://mlflow:${urlencode(var.mlflow_db_password)}@/${google_sql_database.mlflow[0].name}?host=/cloudsql/${google_sql_database_instance.mlflow[0].connection_name}"
       }
 
       env {
