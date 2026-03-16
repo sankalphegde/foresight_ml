@@ -25,6 +25,10 @@ jobs:
         with:
           python-version-file: ".python-version"
 
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
