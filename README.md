@@ -2,57 +2,51 @@
 
 End-to-end data pipeline for corporate financial distress modeling, built for the MLOps course requirements.
 
-## Table of Contents
-
-- [Project Overview](#project-overview)
-- [Architecture](#architecture)
-- [DAG Flow](#3-current-dag-flow)
-- [Project Structure](#4-project-structure-relevant-parts)
-- [Local Setup](#5-local-setup-reproducible)
-- [Run the Pipeline](#6-run-the-full-pipeline)
-- [Outputs](#7-outputs-and-persistence)
-- [Testing](#8-testing)
-- [CI/CD](#cicd)
-- [DVC Versioning](#9-dvc-data-versioning)
-- [Schema / Anomaly Details](#10-schemastatisticsanomaly-details)
-- [Bias Detection](#11-bias-detection-and-mitigation-notes)
-- [Gantt / Optimization](#12-gantt-bottleneck-workflow-optimization)
-- [MLflow Tracking](#mlflow-tracking)
-- [Troubleshooting](#13-logging-and-troubleshooting)
-- [Tech Stack](#15-tech-stack)
-
----
-
-## Project Overview
+## Project overview
 
 This project builds a reproducible MLOps data pipeline that prepares corporate financial distress training data from raw public financial + macroeconomic signals.
 
-Goals of this phase:
-- Orchestrate the full workflow in Airflow DAG form
-- Validate data quality and detect anomalies
-- Generate feature/bias analysis outputs
-- Keep data artifacts reproducible with DVC
+Goal of this phase:
+- orchestrate the full workflow in Airflow DAG form,
+- validate data quality and detect anomalies,
+- generate feature/bias analysis outputs,
+- and keep data artifacts reproducible with DVC.
 
 ---
 
-## Data Sources
+## Data sources
 
+<<<<<<< Updated upstream
 The pipeline uses two public sources:
-
 - **SEC EDGAR (XBRL filings):** firm-level financial statement tags from periodic filings (10-Q/10-K style disclosures), ingested incrementally.
 - **FRED (Federal Reserve Economic Data):** macro indicators (e.g., rates/inflation/labor proxies) ingested and aligned for downstream feature construction.
 
-Source roles:
+Source roles in pipeline:
 - SEC provides company-level fundamentals.
 - FRED provides macro context.
 - Both are combined during cleaning/feature stages for modeling and bias analysis.
+=======
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Data Sources](#data-sources)
+- [Project Structure](#project-structure)
+- [DVC Setup](#dvc-setup)
+- [Development](#development)
+- [CI/CD](#cicd)
+- [Testing](#testing)
+- [MLflow Tracking](#mlflow-tracking)
+- [Common Tasks](#common-tasks)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Tech Stack](#tech-stack)
+>>>>>>> Stashed changes
 
 ---
 
-## 1) What This Submission Includes
+## 1) What this submission includes
 
 This repository contains a production-style DAG pipeline that covers:
-
 - Data acquisition (SEC + FRED ingestion)
 - Preprocessing and cleaning
 - Panel and label generation
@@ -64,9 +58,9 @@ This repository contains a production-style DAG pipeline that covers:
 
 ---
 
-## 2) Rubric Coverage
+## 2) Rubric coverage (quick checklist)
 
-| Requirement | Status | Where Implemented |
+| Requirement | Status | Where implemented |
 |---|---|---|
 | Data acquisition | Completed | `src/ingestion/fred_increment_job.py`, `src/ingestion/sec_xbrl_increment_job.py` |
 | Data preprocessing | Completed | `src/data/cleaned/data_cleaned.sql`, `src/main_panel.py`, `src/main_labeling.py` |
@@ -86,59 +80,58 @@ This repository contains a production-style DAG pipeline that covers:
 ## Architecture
 
 ```text
-+-----------------------------------+
-| Airflow DAG (foresight_ingestion) |
-| daily orchestration               |
-+---------------+-------------------+
-                |
-    +-----------+-----------+
-    |                       |
-    v                       v
-+--------------------+    +--------------------+
-| FRED ingestion     |    | SEC ingestion      |
-| (incremental)      |    | (incremental/demo) |
-+----------+---------+    +----------+---------+
-            \                       /
-             \                     /
-              v                   v
-          +-------------------------------+
-          | GCS raw zone                  |
-          | raw/fred/* , raw/sec_xbrl/*   |
-          +---------------+---------------+
-                          |
-                          v
-          +-------------------------------+
-          | BigQuery cleaning SQL         |
-          | cleaned_foresight.final_v2    |
-          +---------------+---------------+
-                          |
-                          v
-          +-------------------------------+
-          | panel + labeling (GCS)        |
-          | features/panel_v1, labeled_v1 |
-          +---------------+---------------+
-                          |
-                          v
-          +-------------------------------+
-          | feature + bias pipeline       |
-          | engineered_features (BQ)      |
-          +---------------+---------------+
-                          |
-                          v
-          +-------------------------------+
-          | validation + anomaly          |
-          | validation_report + anomalies |
-          +-------------------------------+
+			+-----------------------------------+
+			| Airflow DAG (foresight_ingestion) |
+			| daily orchestration               |
+			+---------------+-------------------+
+							|
+				+-----------+-----------+
+				|                       |
+				v                       v
+	 +--------------------+    +---------------------+
+	 | FRED ingestion      |   | SEC ingestion       |
+	 | (incremental)       |   | (incremental/demo)  |
+	 +----------+----------+   +----------+----------+
+				\                       /
+				 \                     /
+				  v                   v
+			  +-------------------------------+
+			  | GCS raw zone                  |
+			  | raw/fred/* , raw/sec_xbrl/*   |
+			  +---------------+---------------+
+							  |
+							  v
+			  +-------------------------------+
+			  | BigQuery cleaning SQL         |
+			  | cleaned_foresight.final_v2    |
+			  +---------------+---------------+
+							  |
+							  v
+			  +-------------------------------+
+			  | panel + labeling (GCS)        |
+			  | features/panel_v1, labeled_v1 |
+			  +---------------+---------------+
+							  |
+							  v
+			  +-------------------------------+
+			  | feature + bias pipeline       |
+			  | engineered_features (BQ)      |
+			  +---------------+---------------+
+							  |
+							  v
+			  +-------------------------------+
+			  | validation + anomaly          |
+			  | validation_report + anomalies |
+			  +-------------------------------+
 ```
 
 ---
 
-## 3) Current DAG Flow
+## 3) Current DAG flow
 
 DAG ID: `foresight_ingestion`
 
 Task order:
-
 1. `run_fred_ingestion`
 2. `run_sec_ingestion`
 3. `run_preprocess_ingested_data`
@@ -148,10 +141,9 @@ Task order:
 7. `run_feature_bias_pipeline`
 8. `run_validation_anomaly`
 
-### Feature/Bias Runtime Mode
+### Feature/Bias runtime mode
 
 The DAG supports an explicit mode switch:
-
 - `FEATURE_BIAS_MODE=safe` (default): skips heavy visualizations for stable grading/demo runs
 - `FEATURE_BIAS_MODE=full`: runs full visualization workload
 
@@ -159,65 +151,67 @@ Internally this controls `SKIP_HEAVY_VISUALIZATIONS` for the feature pipeline.
 
 ---
 
-## 4) Project Structure (Relevant Parts)
+## 4) Project structure (relevant parts)
 
 ```text
 Foresight-ML/
-├── src/
-│   ├── airflow/dags/foresight_ml_data_pipeline.py
-│   ├── ingestion/
-│   │   ├── fred_increment_job.py
-│   │   └── sec_xbrl_increment_job.py
-│   ├── data/
-│   │   ├── cleaned/data_cleaned.sql
-│   │   └── validate_anomalies.py
-│   ├── feature_engineering/
-│   │   ├── pipelines/run_pipeline.py
-│   │   ├── pipelines/feature_engineering.py
-│   │   ├── pipelines/bias_analysis.py
-│   │   └── config/settings.yaml
-│   ├── main_panel.py
-│   └── main_labeling.py
-├── tests/
-│   ├── test_data_ingestion.py
-│   ├── test_preprocess.py
-│   ├── test_pipeline.py
-│   ├── test_validation.py
-│   └── test_feature_engineering/
-├── infra/
-├── deployment/docker/
-├── docker-compose.yml
-├── Makefile
-├── pyproject.toml
-└── data/final/final_v2.dvc
+├─ src/
+│  ├─ airflow/dags/foresight_ml_data_pipeline.py
+│  ├─ ingestion/
+│  │  ├─ fred_increment_job.py
+│  │  └─ sec_xbrl_increment_job.py
+│  ├─ data/
+│  │  ├─ cleaned/data_cleaned.sql
+│  │  └─ validate_anomalies.py
+│  ├─ feature_engineering/
+│  │  ├─ pipelines/run_pipeline.py
+│  │  ├─ pipelines/feature_engineering.py
+│  │  ├─ pipelines/bias_analysis.py
+│  │  └─ config/settings.yaml
+│  ├─ main_panel.py
+│  └─ main_labeling.py
+├─ tests/
+│  ├─ test_data_ingestion.py
+│  ├─ test_preprocess.py
+│  ├─ test_pipeline.py
+│  ├─ test_validation.py
+│  └─ test_feature_engineering/
+├─ infra/
+├─ deployment/docker/
+├─ docker-compose.yml
+├─ Makefile
+├─ pyproject.toml
+└─ data/final/final_v2.dvc
 ```
-
-### Legacy Modules (Retained, Non-Destructive)
-
-The following ingestion modules are kept for backward compatibility and historical reference:
-
-- `src/ingestion/fred_job.py`
-- `src/ingestion/sec_job.py`
-
-Current Airflow execution uses the incremental modules (`fred_increment_job.py`, `sec_xbrl_increment_job.py`). The active orchestration path is defined in `src/airflow/dags/foresight_ml_data_pipeline.py`.
 
 ---
 
-## 5) Local Setup (Reproducible)
+## Legacy modules retained (non-destructive)
+
+The following ingestion modules are kept in the repository for backward compatibility and historical reference:
+- `src/ingestion/fred_job.py`
+- `src/ingestion/sec_job.py`
+
+Current Airflow execution path uses incremental ingestion modules (`fred_increment_job.py`, `sec_xbrl_increment_job.py`) from the DAG, so these legacy files are not part of the active DAG runtime.
+The active orchestration path is defined in `src/airflow/dags/foresight_ml_data_pipeline.py`.
+
+---
+
+## 5) Local setup (reproducible)
 
 ### Prerequisites
-
 - Python 3.12+
 - Docker Desktop
 - Access to GCP project + service account key for local run
 
 ### Environment
+Start from the template and create your local env file:
 
 ```bash
 cp .env.example .env
 ```
 
-Minimum required keys:
+Then update `.env` with your real values. Minimum keys:
 
 ```bash
 GCP_PROJECT_ID=financial-distress-ew
@@ -226,7 +220,7 @@ FRED_API_KEY=<your-fred-key>
 SEC_USER_AGENT="foresight-ml your-email@example.com"
 GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/.gcp/foresight-data-sa.json
 
-# Optional behavior flags
+# Optional stability/behavior flags
 FEATURE_BIAS_MODE=safe
 VALIDATION_FAIL_ON_STATUS=false
 GCS_VALIDATION_REPORT_OUT=processed/validation_report.json
@@ -234,27 +228,29 @@ GCS_ANOMALIES_OUT=processed/anomalies.parquet
 ```
 
 Secrets handling:
+- Local development: values are read from `.env` (never commit real keys).
+- CI: values are injected from GitHub Actions secrets.
+- CD (ingestion Cloud Run jobs): credentials are injected via `gcloud run deploy --set-secrets`.
+- Terraform-managed Airflow service currently uses Terraform variables for env injection (not direct Secret Manager wiring in this repo).
 
-- **Local development:** values read from `.env` (never commit real keys)
-- **CI:** injected from GitHub Actions secrets
-- **CD (Cloud Run jobs):** credentials injected via `gcloud run deploy --set-secrets`
-- **Terraform-managed Airflow:** env injected via Terraform variables
-
-### Install
+### Install + quality tools
 
 ```bash
 make setup
 ```
 
-### Start Local Airflow
+### Start local Airflow
 
 ```bash
 make local-up
 ```
 
-Airflow UI: `http://localhost:8080` — username: `admin` / password: `admin`
+UI:
+- URL: `http://localhost:8080`
+- Username: `admin`
+- Password: `admin123`
 
-### Stop
+Stop:
 
 ```bash
 make local-down
@@ -262,9 +258,9 @@ make local-down
 
 ---
 
-## 6) Run the Full Pipeline
+## 6) Run the full pipeline
 
-Trigger from the Airflow UI or CLI:
+Trigger from Airflow UI or CLI:
 
 ```bash
 docker compose exec airflow airflow dags unpause foresight_ingestion
@@ -279,22 +275,18 @@ docker compose exec airflow airflow tasks states-for-dag-run foresight_ingestion
 
 ---
 
-## 7) Outputs and Persistence
+## 7) Outputs and persistence
 
 ### GCS
-
-| Path | Description |
-|---|---|
-| `raw/sec_xbrl/cik=<cik>/data.parquet` | Raw SEC filings |
-| `raw/fred/series_id=<id>.parquet` | Raw FRED series |
-| `cleaned_data/final_v2/train_*.parquet` | Cleaned export from SQL |
-| `features/panel_v1/panel.parquet` | Panel output |
-| `features/labeled_v1/labeled_panel.parquet` | Labeled panel |
-| `processed/validation_report.json` | Validation report |
-| `processed/anomalies.parquet` | Anomaly rows |
+- Raw SEC: `raw/sec_xbrl/cik=<cik>/data.parquet`
+- Raw FRED: `raw/fred/series_id=<id>.parquet`
+- Cleaned export (from SQL): `cleaned_data/final_v2/train_*.parquet`
+- Panel: `features/panel_v1/panel.parquet`
+- Labeled: `features/labeled_v1/labeled_panel.parquet`
+- Validation report: `processed/validation_report.json`
+- Anomalies: `processed/anomalies.parquet`
 
 ### BigQuery
-
 - `cleaned_foresight.final_v2`
 - `financial_distress_features.engineered_features`
 - `financial_distress_features.cleaned_engineered_features`
@@ -309,27 +301,43 @@ Run all tests:
 make test
 ```
 
-Run targeted suites:
+Run the full suite directly:
 
 ```bash
-# Ingestion
+uv run pytest tests/ -q
+```
+
+Run ingestion tests:
+
+```bash
 uv run pytest tests/test_data_ingestion.py -q
+```
 
-# Preprocessing / cleaning
+Run preprocessing/cleaning tests:
+
+```bash
 uv run pytest tests/test_preprocess.py tests/test_cleaned.py -q
+```
 
-# Pipeline / model
+Run pipeline/model tests:
+
+```bash
 uv run pytest tests/test_pipeline.py tests/test_model.py tests/test_data.py -q
+```
 
-# Validation
+Run validation tests only:
+
+```bash
 uv run pytest tests/test_validation.py -q
+```
 
-# Feature engineering
+Run feature engineering tests:
+
+```bash
 uv run pytest tests/test_feature_engineering -q
 ```
 
-Key test modules:
-
+Current key test modules include:
 - `tests/test_data_ingestion.py`
 - `tests/test_preprocess.py`
 - `tests/test_cleaned.py`
@@ -344,21 +352,21 @@ Key test modules:
 
 ## CI/CD
 
-GitHub Actions workflows under `.github/workflows/`:
+GitHub Actions workflows are included under `.github/workflows/`:
+- `ci.yml`: quality gates for linting, typing, tests, and validation checks
+- `cd-dev.yml`: deployment pipeline for dev environment updates
 
-- `ci.yml`: linting, typing, tests, and validation checks
-- `cd-dev.yml`: deployment pipeline for dev environment
-
-Typical CI checks:
-
-- Ruff lint/style
+Typical CI checks include:
+- Ruff lint/style checks
 - mypy static type checks
-- pytest execution (including validation module)
-- Terraform format/validate
+- pytest test execution (including validation module tests)
+- Terraform formatting/validation where configured
+
+This ensures code quality and reproducibility before deployment.
 
 ---
 
-## 9) DVC Data Versioning
+## 9) DVC data versioning
 
 Initialize and configure DVC remote:
 
@@ -382,10 +390,9 @@ make dvc-track-final
 
 ---
 
-## 10) Schema/Statistics/Anomaly Details
+## 10) Schema/statistics/anomaly details
 
 `src/data/validate_anomalies.py` generates:
-
 - Required column checks (`cik`, `filing_date`, `ticker`, `accession_number`)
 - Duplicate count on (`cik`, `accession_number`)
 - Null counts and null rates by column
@@ -393,83 +400,44 @@ make dvc-track-final
 - IQR-based anomaly rows + per-column anomaly counts
 
 Alert behavior:
-
-- `VALIDATION_FAIL_ON_STATUS=true`: DAG task fails when validation status is `fail`
-- `VALIDATION_FAIL_ON_STATUS=false`: uploads artifacts and logs status for downstream review
+- If `VALIDATION_FAIL_ON_STATUS=true`, DAG task fails when validation status is `fail`.
+- If false, task uploads artifacts and logs status while allowing downstream review.
 
 ---
 
-## 11) Bias Detection and Mitigation Notes
+## 11) Bias detection and mitigation notes
 
 Bias analysis is implemented in the feature pipeline:
-
 - Data slicing across company size, sector proxy, time split, macro regime, and distress label
 - Drift metrics and high-drift alerts (PSI)
 - Slice-level summaries and fairness diagnostics
 
-Mitigation strategy is documented in the generated bias report (recommendations include class imbalance handling, drift investigation, and stratified evaluation).
+Mitigation strategy documented in generated bias report (recommendations include class imbalance handling, drift investigation, and stratified evaluation).
 
 ---
 
-## 12) Gantt Bottleneck / Workflow Optimization
+## 12) Gantt bottleneck workflow optimization
 
-1. Open Airflow UI → run details → **Gantt** view
-2. Capture screenshot and analyze longest tasks
+For course submission:
+1. Open Airflow UI run details
+2. Go to **Gantt** view
+3. Capture screenshot
+4. Analyze longest tasks
 
-Recent bottleneck identified: `run_feature_bias_pipeline`
+Recent bottleneck identified:
+- `run_feature_bias_pipeline` (historically longest)
 
-Optimization applied: `FEATURE_BIAS_MODE=safe` default reduces heavy plotting risk and improves run reliability.
+Optimization applied:
+- Added `FEATURE_BIAS_MODE=safe` default to reduce heavy plotting risk and improve run reliability.
 
 ![Pipeline Gantt Chart](docs/images/pipeline_gantt.png)
 
 ---
 
-## MLflow Tracking
+## 13) Logging and troubleshooting
 
-MLflow infrastructure is deployed but model training/evaluation runtime is not yet active.
-
-Deployment shape:
-
-- **Tracking server:** Cloud Run service (`foresight-mlflow`)
-- **Metadata backend:** Cloud SQL PostgreSQL
-- **Artifacts:** `gs://$GCS_BUCKET/mlflow/artifacts`
-
-### Deploy MLflow Infra
-
-```bash
-source .env
-cd infra
-terraform apply
-
-export MLFLOW_TRACKING_URI="$(terraform output -raw mlflow_tracking_uri)"
-```
-
-### Intentionally Stubbed Files
-
-The following are scaffolded placeholders for future implementation:
-
-- `src/models/train.py`
-- `src/models/evaluate.py`
-- `src/models/predict.py`
-
-These currently raise `NotImplementedError`. When ready:
-
-1. Add training + metric logging in `src/models/train.py`
-2. Add evaluation logging in `src/models/evaluate.py`
-3. Add model loading/inference in `src/models/predict.py`
-
-Optional connectivity check:
-
-```bash
-source .env
-curl -I "$MLFLOW_TRACKING_URI"
-```
-
----
-
-## 13) Logging and Troubleshooting
-
-Airflow logs are available per task in the UI and container logs. Typical failure guards are included for missing env vars, missing SQL/config files, and validation status failures.
+- Airflow logs are available per task in UI and container logs.
+- Typical failure guards included for missing env vars, missing SQL/config files, and validation status failures.
 
 Useful commands:
 
@@ -481,15 +449,69 @@ docker compose exec airflow airflow tasks list foresight_ingestion
 
 ---
 
-## 14) Notes
+<<<<<<< Updated upstream
+## 14) Notes for graders
+=======
+## MLflow Tracking
 
-- Use `FEATURE_BIAS_MODE=safe` for reliable full DAG execution on limited local resources.
-- Use `FEATURE_BIAS_MODE=full` if full visualization artifacts are required and resources are sufficient.
-- Validation is intentionally placed after the feature+bias stage to match the current design.
+This repository currently provides **MLflow infrastructure only** (no active training/evaluation/prediction runtime yet).
+
+Deployment shape:
+- **Tracking server**: Cloud Run service (`foresight-mlflow`)
+- **Metadata backend**: Cloud SQL PostgreSQL
+- **Artifacts**: `gs://$GCS_BUCKET/mlflow/artifacts`
+
+### Deploy MLflow Infra
+
+```bash
+source .env
+cd infra
+terraform apply
+
+# Get tracking URI and export for local runs
+export MLFLOW_TRACKING_URI="$(terraform output -raw mlflow_tracking_uri)"
+```
+
+### What Is Intentionally Stubbed
+
+The following files are placeholders with commented copy/paste templates for future implementation:
+
+- `src/models/train.py`
+- `src/models/evaluate.py`
+- `src/models/predict.py`
+- `src/pipelines/training_pipeline.py`
+- `src/airflow/dags/foresight_ml_training_pipeline.py`
+
+These stubs are intentional and currently raise `NotImplementedError` (or remain fully commented for DAG scaffolding).
+
+### Future Implementation (When Ready)
+
+When you are ready to implement runtime behavior, the typical sequence is:
+
+1. Add model training + metric logging in `src/models/train.py`
+2. Add evaluation logging in `src/models/evaluate.py`
+3. Add model loading/inference in `src/models/predict.py`
+4. Enable the Airflow training DAG scaffold in `src/airflow/dags/foresight_ml_training_pipeline.py`
+
+Optional local smoke check for tracking server connectivity:
+
+```bash
+source .env
+curl -I "$MLFLOW_TRACKING_URI"
+```
 
 ---
 
-## 15) Tech Stack
+## Common Tasks
+>>>>>>> Stashed changes
+
+- Use `FEATURE_BIAS_MODE=safe` for reliable full DAG execution on limited local resources.
+- Use `FEATURE_BIAS_MODE=full` if full visualization artifacts are required and resources are sufficient.
+- Validation is intentionally placed after feature+bias stage to match current design.
+
+---
+
+## 15) Tech stack
 
 - Python 3.12
 - Apache Airflow (local image: `apache/airflow:slim-3.1.7-python3.12`)
@@ -503,8 +525,10 @@ docker compose exec airflow airflow tasks list foresight_ingestion
 
 ## 16) Scalability Considerations
 
-The DAG is structured with independent, modular tasks and parallel ingestion branches, allowing horizontal scaling strategies such as partitioned or entity-level ingestion if required in larger production environments.
+The DAG is structured with independent, modular tasks and parallel ingestion branches,
+allowing horizontal scaling strategies such as partitioned or entity-level ingestion
+if required in larger production environments.
 
 ---
 
-Last updated: March 2026
+Last updated: February 2026
