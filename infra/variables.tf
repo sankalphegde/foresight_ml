@@ -39,6 +39,18 @@ variable "airflow_authorized_users" {
   default     = []
 }
 
+variable "composer_machine_type" {
+  description = "Machine type for Cloud Composer worker nodes"
+  type        = string
+  default     = "e2-standard-2"
+}
+
+variable "composer_environment_size" {
+  description = "Cloud Composer environment size (ENVIRONMENT_SIZE_SMALL, ENVIRONMENT_SIZE_MEDIUM, ENVIRONMENT_SIZE_LARGE)"
+  type        = string
+  default     = "ENVIRONMENT_SIZE_SMALL"
+}
+
 variable "enable_mlflow" {
   description = "Enable MLflow tracking infrastructure (Cloud Run + Cloud SQL)"
   type        = bool
