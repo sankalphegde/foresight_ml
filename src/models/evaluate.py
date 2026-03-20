@@ -308,7 +308,7 @@ def evaluate_model(
     run_id: str | None = None, model_uri: str | None = None
 ) -> dict[str, str | float]:
     """Run held-out evaluation and log scalar metrics, plots, and per-slice performance to MLflow."""
-    resolved_model_uri = model_uri or os.getenv("MODEL_ARTIFACT_URI", DEFAULT_MODEL_URI)
+    resolved_model_uri = model_uri or os.getenv("MODEL_ARTIFACT_URI") or DEFAULT_MODEL_URI
     val_uri = os.getenv("VAL_URI", DEFAULT_VAL_URI)
     test_uri = os.getenv("TEST_URI", DEFAULT_TEST_URI)
 

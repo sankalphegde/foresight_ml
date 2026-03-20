@@ -312,3 +312,266 @@ def run_bias_analysis(
     }
 
     return bias_report, analysis_details
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Model-Level Fairness Analysis  (Person 4 extension)
+# ═══════════════════════════════════════════════════════════════════════════
+
+BIAS_ALERT_THRESHOLD = 0.10  # 10 percentage-point drop triggers alert
+
+
+def compute_model_fairness(
+    slice_performance: pd.DataFrame,
+    metrics_to_check: list[str] | None = None,
+    alert_threshold: float = BIAS_ALERT_THRESHOLD,
+) -> pd.DataFrame:
+    """Compare per-slice model metrics against the overall metric.
+
+    For each slice, flag if ROC-AUC or Recall@K drops more than
+    ``alert_threshold`` (default 10 pp) below the overall value.
+
+    Args:
+        slice_performance: DataFrame from evaluate.py's
+            ``_build_slice_performance_table`` with columns including
+            ``dimension``, ``slice``, ``roc_auc``, ``recall_at_5pct``.
+        metrics_to_check: Metric columns to evaluate. Defaults to
+            ``["roc_auc", "recall_at_5pct"]``.
+        alert_threshold: Fractional drop (0.10 = 10 pp) that triggers a
+            bias alert.
+
+    Returns:
+        DataFrame with one row per (dimension, slice, metric) combination,
+        including the slice value, overall value, gap, and a boolean
+        ``bias_alert`` flag.
+    """
+    if metrics_to_check is None:
+        metrics_to_check = ["roc_auc", "recall_at_5pct"]
+
+    rows: list[dict] = []
+
+    for metric in metrics_to_check:
+        if metric not in slice_performance.columns:
+            logger.warning("Metric '%s' not found in slice table; skipping.", metric)
+            continue
+
+        # Overall = weighted average across all slices (weighted by sample_count)
+        valid = slice_performance.dropna(subset=[metric])
+        if valid.empty or valid["sample_count"].sum() == 0:
+            continue
+
+        overall_value = float(np.average(valid[metric], weights=valid["sample_count"]))
+
+        for _, row in valid.iterrows():
+            slice_value = float(row[metric])
+            gap = overall_value - slice_value
+            is_alert = gap > alert_threshold
+
+            rows.append(
+                {
+                    "dimension": row["dimension"],
+                    "slice": row["slice"],
+                    "metric": metric,
+                    "slice_value": round(slice_value, 4),
+                    "overall_value": round(overall_value, 4),
+                    "gap": round(gap, 4),
+                    "bias_alert": is_alert,
+                    "sample_count": int(row["sample_count"]),
+                }
+            )
+
+            if is_alert:
+                logger.warning(
+                    "BIAS ALERT: %s for slice %s/%s = %.4f "
+                    "(overall %.4f, gap %.4f > threshold %.2f)",
+                    metric,
+                    row["dimension"],
+                    row["slice"],
+                    slice_value,
+                    overall_value,
+                    gap,
+                    alert_threshold,
+                )
+
+    return pd.DataFrame(rows)
+
+
+def suggest_threshold_adjustments(
+    fairness_df: pd.DataFrame,
+    base_threshold: float = 0.5,
+    adjustment_step: float = 0.05,
+) -> pd.DataFrame:
+    """Suggest per-slice threshold adjustments for slices with bias alerts.
+
+    For slices where recall is too low relative to overall, a lower
+    decision threshold is suggested (increasing sensitivity). This is a
+    simple heuristic — the exact threshold should be validated on
+    held-out data.
+
+    Args:
+        fairness_df: Output of ``compute_model_fairness``.
+        base_threshold: Default decision threshold.
+        adjustment_step: How much to lower the threshold per alert.
+
+    Returns:
+        DataFrame with suggested thresholds for alerted slices only.
+    """
+    alerts = fairness_df[
+        (fairness_df["bias_alert"]) & (fairness_df["metric"] == "recall_at_5pct")
+    ].copy()
+
+    if alerts.empty:
+        return pd.DataFrame(
+            columns=["dimension", "slice", "current_threshold", "suggested_threshold", "reason"]
+        )
+
+    suggestions = []
+    for _, row in alerts.iterrows():
+        # Scale adjustment by the severity of the gap
+        n_steps = max(1, int(row["gap"] / 0.05))
+        suggested = round(base_threshold - (adjustment_step * n_steps), 3)
+        suggested = max(0.1, suggested)  # floor at 0.1
+
+        suggestions.append(
+            {
+                "dimension": row["dimension"],
+                "slice": row["slice"],
+                "current_threshold": base_threshold,
+                "suggested_threshold": suggested,
+                "reason": (
+                    f"recall_at_5pct gap of {row['gap']:.4f} "
+                    f"exceeds {BIAS_ALERT_THRESHOLD:.0%} threshold"
+                ),
+            }
+        )
+
+    return pd.DataFrame(suggestions)
+
+
+def generate_bias_report_md(
+    feature_bias_report: pd.DataFrame,
+    feature_analysis_details: dict,
+    model_fairness_df: pd.DataFrame,
+    threshold_suggestions: pd.DataFrame,
+    output_path: str | None = None,
+) -> str:
+    """Generate a combined bias report in Markdown.
+
+    Merges the existing feature-level PSI/drift analysis with the new
+    model-level fairness metrics into a single ``bias_report.md``.
+
+    Args:
+        feature_bias_report: Output of ``run_bias_analysis`` (feature-level).
+        feature_analysis_details: Details dict from ``run_bias_analysis``.
+        model_fairness_df: Output of ``compute_model_fairness``.
+        threshold_suggestions: Output of ``suggest_threshold_adjustments``.
+        output_path: File path to write the report. If None, only returns
+            the string.
+
+    Returns:
+        The full Markdown report as a string.
+    """
+    lines: list[str] = []
+
+    lines.append("# Bias Report — Foresight-ML")
+    lines.append("")
+    lines.append("## 1. Feature-Level Drift Analysis")
+    lines.append("")
+
+    # Drift alerts
+    alerts = feature_analysis_details.get("alerts", [])
+    if alerts:
+        lines.append(f"**{len(alerts)} high-drift alert(s) detected:**")
+        lines.append("")
+        for alert in alerts:
+            lines.append(f"- {alert}")
+        lines.append("")
+    else:
+        lines.append("No high-drift alerts detected (all PSI < 0.25).")
+        lines.append("")
+
+    # Slice sample counts
+    lines.append("### Slice Sample Counts")
+    lines.append("")
+    if not feature_bias_report.empty:
+        summary = feature_bias_report[["dimension", "slice", "sample_count"]].to_markdown(
+            index=False
+        )
+        lines.append(summary)
+    else:
+        lines.append("_No feature-level slice data available._")
+    lines.append("")
+
+    # ── Model-level fairness ────────────────────────────────────────────
+    lines.append("## 2. Model-Level Fairness Analysis")
+    lines.append("")
+
+    if model_fairness_df.empty:
+        lines.append("_No model-level fairness data available._")
+    else:
+        alert_count = int(model_fairness_df["bias_alert"].sum())
+        lines.append(
+            f"**{alert_count} bias alert(s)** detected across "
+            f"{len(model_fairness_df)} (dimension, slice, metric) checks."
+        )
+        lines.append("")
+
+        lines.append("### Per-Slice Performance vs Overall")
+        lines.append("")
+        display_cols = [
+            "dimension",
+            "slice",
+            "metric",
+            "slice_value",
+            "overall_value",
+            "gap",
+            "bias_alert",
+        ]
+        available_cols = [c for c in display_cols if c in model_fairness_df.columns]
+        lines.append(model_fairness_df[available_cols].to_markdown(index=False))
+        lines.append("")
+
+        # Highlight alerts
+        alerted = model_fairness_df[model_fairness_df["bias_alert"]]
+        if not alerted.empty:
+            lines.append("### Bias Alerts (gap > 10 pp)")
+            lines.append("")
+            for _, row in alerted.iterrows():
+                lines.append(
+                    f"- **{row['dimension']}/{row['slice']}**: "
+                    f"{row['metric']} = {row['slice_value']:.4f} "
+                    f"(overall {row['overall_value']:.4f}, "
+                    f"gap {row['gap']:.4f})"
+                )
+            lines.append("")
+
+    # ── Threshold adjustments ───────────────────────────────────────────
+    lines.append("## 3. Mitigation — Threshold Adjustments")
+    lines.append("")
+
+    if threshold_suggestions.empty:
+        lines.append("No threshold adjustments needed — all slices within tolerance.")
+    else:
+        lines.append(
+            "The following per-slice threshold adjustments are suggested "
+            "to improve recall for underperforming slices:"
+        )
+        lines.append("")
+        lines.append(threshold_suggestions.to_markdown(index=False))
+    lines.append("")
+
+    lines.append("---")
+    lines.append("_Report generated by Foresight-ML bias analysis pipeline._")
+    lines.append("")
+
+    report_text = "\n".join(lines)
+
+    if output_path:
+        out = pd.io.common.stringify_path(output_path)
+        from pathlib import Path as _Path
+
+        _Path(out).parent.mkdir(parents=True, exist_ok=True)
+        _Path(out).write_text(report_text, encoding="utf-8")
+        logger.info("Saved bias report: %s", out)
+
+    return report_text
