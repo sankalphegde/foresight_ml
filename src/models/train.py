@@ -42,7 +42,7 @@ class SplitData:
     test: pd.DataFrame
 
 
-def _gcs_client():
+def _gcs_client() -> Any:
     """Create a Google Cloud Storage client."""
     from google.cloud import storage
 
@@ -198,7 +198,7 @@ def load_search_space(config_path: Path) -> dict[str, list[Any]]:
     return cfg
 
 
-def _get_mlflow():
+def _get_mlflow() -> Any:
     """Import mlflow lazily to avoid test-time dependency errors."""
     import mlflow
 

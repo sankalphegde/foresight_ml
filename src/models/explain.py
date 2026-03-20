@@ -174,12 +174,13 @@ def compute_shap_values(
     if isinstance(shap_values, list):
         shap_values = shap_values[1]  # positive class
 
+    shap_arr: np.ndarray = np.asarray(shap_values)
     log.info(
         "Computed SHAP values: %d samples × %d features",
-        shap_values.shape[0],
-        shap_values.shape[1],
+        shap_arr.shape[0],
+        shap_arr.shape[1],
     )
-    return shap_values
+    return shap_arr
 
 
 # ---------------------------------------------------------------------------
@@ -444,13 +445,15 @@ def run_shap_analysis(
     Returns:
         Dict with paths to generated artifacts and summary stats.
     """
-    resolved_model_uri = model_uri or os.getenv("MODEL_ARTIFACT_URI", DEFAULT_MODEL_URI)
-    resolved_test_uri = test_uri or os.getenv("TEST_URI", DEFAULT_TEST_URI)
-    resolved_val_uri = val_uri or os.getenv("VAL_URI", DEFAULT_VAL_URI)
-    resolved_shap_gcs = shap_parquet_gcs_uri or os.getenv(
-        "SHAP_PARQUET_URI", DEFAULT_SHAP_PARQUET_URI
+    resolved_model_uri = model_uri or os.getenv("MODEL_ARTIFACT_URI") or DEFAULT_MODEL_URI
+    resolved_test_uri = test_uri or os.getenv("TEST_URI") or DEFAULT_TEST_URI
+    resolved_val_uri = val_uri or os.getenv("VAL_URI") or DEFAULT_VAL_URI
+    resolved_shap_gcs = (
+        shap_parquet_gcs_uri or os.getenv("SHAP_PARQUET_URI") or DEFAULT_SHAP_PARQUET_URI
     )
-    artifact_dir = Path(output_dir or os.getenv("SHAP_ARTIFACT_DIR", DEFAULT_SHAP_ARTIFACT_DIR))
+    artifact_dir = Path(
+        output_dir or os.getenv("SHAP_ARTIFACT_DIR") or DEFAULT_SHAP_ARTIFACT_DIR
+    )
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     # ── 1. Load model and data ──────────────────────────────────────────
@@ -474,7 +477,7 @@ def run_shap_analysis(
         val_x = pd.get_dummies(val_df.drop(columns=[LABEL_COL]), dummy_na=True)
         trained_columns = list(val_x.columns)
 
-    eval_x_aligned = _align_feature_frame(eval_x_raw, trained_columns)
+    eval_x_aligned = _align_feature_frame(eval_x_raw, list(trained_columns))
     feature_names = list(eval_x_aligned.columns)
 
     # ── 2. Compute SHAP values ──────────────────────────────────────────

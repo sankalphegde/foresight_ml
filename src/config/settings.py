@@ -61,6 +61,9 @@ class Settings:
         os.getenv("EXCLUDE_YEARS", "2009"),
         (2009,),
     )
+    local_splits_dir: str = os.getenv("LOCAL_SPLITS_DIR", "data/splits")
+    splits_output_path: str = os.getenv("SPLITS_OUTPUT_PATH", "splits/v1/")
+    scaler_output_path: str = os.getenv("SCALER_OUTPUT_PATH", "splits/v1/scaler_pipeline.pkl")
     mlflow_tracking_uri: str = os.getenv("MLFLOW_TRACKING_URI", "")
     mlflow_experiment_name: str = os.getenv("MLFLOW_EXPERIMENT_NAME", "foresight-training")
     mlflow_model_name: str = os.getenv("MLFLOW_MODEL_NAME", "foresight-distress-model")
