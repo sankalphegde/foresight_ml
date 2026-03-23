@@ -14,6 +14,7 @@ on:
       - src/main_train.py
       - configs/model/**
       - deployment/docker/Dockerfile.train
+  workflow_dispatch:
 
 permissions:
   id-token: write
