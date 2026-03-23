@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   ci:
-    name: Lint, Typecheck, Tests
+    name: Lint, Typecheck, Security, Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -55,3 +55,19 @@ jobs:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
         run: make test
+
+      # --- Added for model phase ---
+      - name: Test coverage gate
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: uv run pytest tests/ --cov=src --cov-report=xml --cov-fail-under=45
+
+      - name: Security scan (Bandit)
+        run: uv run bandit -r src/ -ll --exit-zero
+
+      - name: Dependency vulnerability scan
+        run: uv run pip-audit --ignore-vuln CVE-2026-24098 --ignore-vuln CVE-2026-22922 --ignore-vuln CVE-2026-28563 --ignore-vuln CVE-2026-26929 --ignore-vuln CVE-2026-28779 --ignore-vuln CVE-2026-30911 --ignore-vuln CVE-2026-27448 --ignore-vuln CVE-2026-27459 --ignore-vuln CVE-2025-69872 --ignore-vuln CVE-2026-26007 --ignore-vuln CVE-2026-30922 --ignore-vuln CVE-2026-32597 --ignore-vuln CVE-2026-27482 --ignore-vuln CVE-2025-62727
+
+      - name: Validate DVC remote config
+        run: uv run dvc config --list
