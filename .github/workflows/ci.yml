@@ -66,10 +66,14 @@ jobs:
           uv run pytest tests/ --cov=src --cov-report=xml --cov-fail-under=45
 
       - name: Security scan (Bandit)
-        run: uv run bandit -r src/ -ll --exit-zero
+        run: |
+          uv pip install bandit
+          uv run bandit -r src/ -ll --exit-zero
 
       - name: Dependency vulnerability scan
-        run: uv run pip-audit
+        run: |
+          uv pip install pip-audit
+          uv run pip-audit
 
       - name: Validate DVC remote config
         run: uv run dvc config --list
