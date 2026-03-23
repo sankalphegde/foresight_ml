@@ -1,0 +1,77 @@
+name: CD — Model Training Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - src/models/**
+      - src/data/split.py
+      - src/feature_engineering/**
+      - src/main_train.py
+      - configs/model/**
+      - deployment/docker/Dockerfile.train
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  PROJECT_ID: financial-distress-ew
+  PROJECT_NUMBER: 771179250808
+  REGION: us-central1
+  ARTIFACT_REPO: foresight
+  IMAGE_NAME: model-training
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-deployer@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud config set project $PROJECT_ID
+          gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+
+      - name: Build training image
+        run: |
+          IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$ARTIFACT_REPO/$IMAGE_NAME:${{ github.sha }}
+          docker build -f deployment/docker/Dockerfile.train -t $IMAGE_URI .
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
+      - name: Push training image
+        run: docker push $IMAGE_URI
+
+      - name: Deploy training job
+        run: |
+          if gcloud run jobs describe foresight-training --region $REGION 2>/dev/null; then
+            gcloud run jobs update foresight-training \
+              --image=$IMAGE_URI \
+              --region=$REGION \
+              --project=$PROJECT_ID
+          else
+            gcloud run jobs create foresight-training \
+              --image=$IMAGE_URI \
+              --region=$REGION \
+              --memory=4Gi \
+              --cpu=4 \
+              --task-timeout=7200s \
+              --service-account=github-deployer@$PROJECT_ID.iam.gserviceaccount.com \
+              --set-env-vars=GCS_BUCKET=financial-distress-data \
+              --set-env-vars=GCP_PROJECT_ID=$PROJECT_ID \
+              --set-env-vars=MLFLOW_EXPERIMENT_NAME=foresight-training \
+              --set-env-vars=OPTUNA_TRIALS=25 \
+              --set-env-vars=LABEL_COL=distress_label \
+              --set-secrets=MLFLOW_TRACKING_URI=mlflow-tracking-uri:latest \
+              --project=$PROJECT_ID
+          fi

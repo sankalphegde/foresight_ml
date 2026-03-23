@@ -1,0 +1,36 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build-ingestion
+    args:
+      - build
+      - -f
+      - deployment/docker/Dockerfile.ingestion
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/foresight/data-ingestion:$_IMAGE_TAG
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/foresight/data-ingestion:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-train
+    args:
+      - build
+      - -f
+      - deployment/docker/Dockerfile.train
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/foresight/model-training:$_IMAGE_TAG
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/foresight/model-training:latest
+      - .
+
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/foresight/data-ingestion:$_IMAGE_TAG
+  - us-central1-docker.pkg.dev/$PROJECT_ID/foresight/data-ingestion:latest
+  - us-central1-docker.pkg.dev/$PROJECT_ID/foresight/model-training:$_IMAGE_TAG
+  - us-central1-docker.pkg.dev/$PROJECT_ID/foresight/model-training:latest
+
+substitutions:
+  _IMAGE_TAG: latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY

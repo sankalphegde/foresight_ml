@@ -1,0 +1,32 @@
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+WORKDIR /app
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=README.md,target=README.md \
+    uv sync --frozen --no-dev
+
+COPY src/ /app/src/
+COPY configs/ /app/configs/
+COPY pyproject.toml uv.lock README.md ./
+
+ENV GCS_BUCKET=financial-distress-data \
+    TRAIN_URI=gs://financial-distress-data/splits/v1/train.parquet \
+    VAL_URI=gs://financial-distress-data/splits/v1/val.parquet \
+    TEST_URI=gs://financial-distress-data/splits/v1/test.parquet \
+    SCALER_URI=gs://financial-distress-data/splits/v1/scaler_pipeline.pkl \
+    SCALE_POS_WEIGHT_URI=gs://financial-distress-data/splits/v1/scale_pos_weight.json \
+    MODEL_OUT_DIR=artifacts/models \
+    MODEL_ARTIFACT_URI=gs://financial-distress-data/models/xgb_model.pkl \
+    SCALER_OUT_URI=gs://financial-distress-data/models/scaler_pipeline.pkl \
+    MODEL_REPORT_URI=gs://financial-distress-data/models/optuna_results.json \
+    SENS_PLOT_URI=gs://financial-distress-data/models/optuna_sensitivity.png \
+    OPTUNA_TRIALS=25 \
+    LABEL_COL=distress_label \
+    EVAL_TOP_K_FRACTION=0.05 \
+    EVAL_START_YEAR=2022 \
+    EVAL_END_YEAR=2023
+
+CMD ["uv", "run", "python", "-m", "src.main_train"]
