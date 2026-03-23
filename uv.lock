@@ -1441,6 +1441,19 @@ wheels = [
 ]
 
 [[package]]
+name = "dvc-gs"
+version = "3.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dvc" },
+    { name = "gcsfs" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/99/4b/6303f29c76458a3c44da47b76cb5c230de545812fe3d58971b91ba8d02fa/dvc_gs-3.0.2.tar.gz", hash = "sha256:739693c0d8250a39074ba16c7dce752bb5a7ff934442d6081ffcfd7ed9313b9a", size = 13961, upload-time = "2025-06-03T05:05:42.012Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8b/c3/90b4309d74e9e0e3367f7b1835deabfda1473679903500ad083bfd12de02/dvc_gs-3.0.2-py3-none-any.whl", hash = "sha256:b125a2ff1a6b024f427fc64acbae7f6925ab22f6d833ddb132e3f56977adff2b", size = 10910, upload-time = "2025-06-03T05:05:40.282Z" },
+]
+
+[[package]]
 name = "dvc-http"
 version = "2.32.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1723,6 +1736,7 @@ dependencies = [
     { name = "apache-airflow" },
     { name = "apache-airflow-providers-google" },
     { name = "dvc" },
+    { name = "dvc-gs" },
     { name = "gcsfs" },
     { name = "google-cloud-bigquery" },
     { name = "google-cloud-storage" },
@@ -1766,6 +1780,7 @@ requires-dist = [
     { name = "apache-airflow", specifier = ">=2.8.1" },
     { name = "apache-airflow-providers-google", specifier = ">=10.13.0" },
     { name = "dvc", specifier = ">=3.66.1" },
+    { name = "dvc-gs", specifier = ">=3.0.2" },
     { name = "gcsfs", specifier = ">=2024.10.0" },
     { name = "google-cloud-bigquery", specifier = ">=3.14.0" },
     { name = "google-cloud-storage", specifier = ">=2.14.0" },

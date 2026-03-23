@@ -1,0 +1,60 @@
+stages:
+  # ── SPLIT ──────────────────────────────────────────────────────
+  # DVC tracks the outputs so any downstream
+  # stage reruns automatically if the split changes.
+  split:
+    cmd: python -m src.data.split
+    deps:
+      - src/data/split.py
+    outs:
+      - data/splits/train.parquet:
+          cache: true
+      - data/splits/val.parquet:
+          cache: true
+      - data/splits/test.parquet:
+          cache: true
+      - data/splits/scaler_pipeline.pkl:
+          cache: true
+      - data/splits/scale_pos_weight.json:
+          cache: true
+
+  # ── TRAIN ──────────────────────────────────────────────────────
+  # Reruns if train.py, config, or splits change.
+  # Writes model artifact + optuna report to artifacts/models/.
+  train:
+    cmd: python -m src.models.train
+    deps:
+      - src/models/train.py
+      - configs/model/xgboost.yaml
+      - data/splits/train.parquet
+      - data/splits/val.parquet
+      - data/splits/test.parquet
+      - data/splits/scaler_pipeline.pkl
+      - data/splits/scale_pos_weight.json
+    params:
+      - configs/model/xgboost.yaml:
+    outs:
+      - artifacts/models/xgb_model.pkl:
+          cache: true
+      - artifacts/models/scaler_pipeline.pkl:
+          cache: true
+      - artifacts/models/optuna_sensitivity.png:
+          cache: true
+    metrics:
+      - artifacts/models/optuna_results.json:
+          cache: false
+
+  # ── EVALUATE ───────────────────────────────────────────────────
+  # Reruns if evaluate.py or model artifact changes.
+  # Logs test_roc_auc + slice metrics to MLflow.
+  evaluate:
+    cmd: python -m src.models.evaluate
+    deps:
+      - src/models/evaluate.py
+      - artifacts/models/xgb_model.pkl
+      - artifacts/models/scaler_pipeline.pkl
+      - data/splits/val.parquet
+      - data/splits/test.parquet
+    metrics:
+      - artifacts/evaluation/evaluation_summary.json:
+          cache: false
