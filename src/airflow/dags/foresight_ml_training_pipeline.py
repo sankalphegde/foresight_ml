@@ -145,7 +145,7 @@ with DAG(
         task_id="run_model_training",
         python_callable=_run_model_training,
         execution_timeout=None,
-        retries=0,
+    
     )
 
     model_quality_gate = PythonOperator(
