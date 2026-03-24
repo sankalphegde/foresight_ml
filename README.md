@@ -332,9 +332,9 @@ Every Optuna trial is logged to MLflow with its hyperparameters, validation ROC-
 
 **Model selection rationale:** After tuning, the model is retrained on the combined train+val split using the best hyperparameters, then evaluated once on the held-out test set. This prevents test set leakage during hyperparameter selection.
 
-> **Optuna Tuning Summary**
+**Final Best Hyperparameters Found by Optuna**
 
-Final best hyperparameters selected by Optuna after 25 trials:
+After 25 Optuna trials, the best-performing configuration was:
 
 | Hyperparameter | Best Value |
 |---|---:|
@@ -345,15 +345,24 @@ Final best hyperparameters selected by Optuna after 25 trials:
 | `colsample_bytree` | `1.0` |
 | `min_child_weight` | `10` |
 
-**Performance summary**
-- Baseline validation ROC-AUC: `0.975640742671591`
-- Final test ROC-AUC after tuning and retraining: `0.9768994970855862`
+**Performance Summary**
 
-**Sensitivity summary**
-- The tuning process was most sensitive to `learning_rate`, `max_depth`, and `n_estimators`, which together accounted for most of the validation ROC-AUC improvement.
-- Lower `learning_rate` values improved stability and generalization across trials.
+- **Baseline validation ROC-AUC:** `0.975640742671591`
+- **Final test ROC-AUC after tuning and retraining:** `0.9768994970855862`
+
+**Sensitivity Summary**
+
+- The tuning process was most sensitive to `learning_rate`, `max_depth`, and `n_estimators`, which together contributed most to the validation ROC-AUC improvement.
+- Lower `learning_rate` values improved training stability and generalization.
 - Shallower trees (`max_depth = 3`) outperformed deeper alternatives on the validation split.
 - Increasing `n_estimators` improved performance up to `400`, after which gains were limited within the explored search space.
+
+**Convergence Notes**
+
+- Optuna converged toward a stable high-performing region within the 25-trial search budget, without large late-stage jumps.
+- The final configuration favored conservative boosting, shallow trees, and stronger regularization through a higher `min_child_weight`.
+- After hyperparameter selection, the model was retrained on the combined train + validation split and evaluated once on the hold-out test set to avoid test-set leakage during model selection.
+
 
 **Convergence notes**
 - Optuna converged toward a stable high-performing region within the 25-trial search budget rather than showing major late-stage jumps.
