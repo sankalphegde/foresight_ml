@@ -15,8 +15,6 @@ stages:
           cache: true
       - data/splits/scaler_pipeline.pkl:
           cache: true
-      - data/splits/scale_pos_weight.json:
-          cache: true
 
   # ── TRAIN ──────────────────────────────────────────────────────
   # Reruns if train.py, config, or splits change.
@@ -30,15 +28,12 @@ stages:
       - data/splits/val.parquet
       - data/splits/test.parquet
       - data/splits/scaler_pipeline.pkl
-      - data/splits/scale_pos_weight.json
     params:
       - configs/model/xgboost.yaml:
     outs:
       - artifacts/models/xgb_model.pkl:
           cache: true
       - artifacts/models/scaler_pipeline.pkl:
-          cache: true
-      - artifacts/models/optuna_sensitivity.png:
           cache: true
     metrics:
       - artifacts/models/optuna_results.json:

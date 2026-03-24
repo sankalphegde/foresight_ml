@@ -1,0 +1,95 @@
+schema: '2.0'
+stages:
+  train:
+    cmd: python -m src.models.train
+    deps:
+    - path: configs/model/xgboost.yaml
+      hash: md5
+      md5: 085c6532a18830c43a6cf39b0f1d94d2
+      size: 193
+    - path: data/splits/scaler_pipeline.pkl
+      hash: md5
+      md5: 68a5d3a2531b59d6e01d07662940f2d8
+      size: 5937
+    - path: data/splits/test.parquet
+      hash: md5
+      md5: 968909a33b312c480f789d168cfce603
+      size: 6650605
+    - path: data/splits/train.parquet
+      hash: md5
+      md5: 7c8d0b914089d6868c2c581b37662330
+      size: 18677986
+    - path: data/splits/val.parquet
+      hash: md5
+      md5: 90871fd3776f9205609ced2556066f57
+      size: 5742257
+    - path: src/models/train.py
+      hash: md5
+      md5: 3b0336ce86ab820c9d0476423b6fa3c4
+      size: 13397
+    params:
+      configs/model/xgboost.yaml:
+        colsample_bytree:
+        - 0.6
+        - 0.8
+        - 1.0
+        learning_rate:
+        - 0.01
+        - 0.05
+        - 0.1
+        - 0.2
+        max_depth:
+        - 3
+        - 4
+        - 6
+        - 8
+        min_child_weight:
+        - 1
+        - 5
+        - 10
+        n_estimators:
+        - 100
+        - 200
+        - 400
+        - 800
+        subsample:
+        - 0.6
+        - 0.8
+        - 1.0
+    outs:
+    - path: artifacts/models/optuna_results.json
+      hash: md5
+      md5: 57e3195277b5013c0e27da727a71bd2c
+      size: 270
+    - path: artifacts/models/scaler_pipeline.pkl
+      hash: md5
+      md5: 68a5d3a2531b59d6e01d07662940f2d8
+      size: 5937
+    - path: artifacts/models/xgb_model.pkl
+      hash: md5
+      md5: 1dd5f070f7c29d56867c34268a5b1c95
+      size: 311123
+  split:
+    cmd: python -m src.data.split
+    deps:
+    - path: src/data/split.py
+      hash: md5
+      md5: b749501ec4c48e8963cd3bae3479859e
+      size: 14442
+    outs:
+    - path: data/splits/scaler_pipeline.pkl
+      hash: md5
+      md5: 68a5d3a2531b59d6e01d07662940f2d8
+      size: 5937
+    - path: data/splits/test.parquet
+      hash: md5
+      md5: 968909a33b312c480f789d168cfce603
+      size: 6650605
+    - path: data/splits/train.parquet
+      hash: md5
+      md5: 7c8d0b914089d6868c2c581b37662330
+      size: 18677986
+    - path: data/splits/val.parquet
+      hash: md5
+      md5: 90871fd3776f9205609ced2556066f57
+      size: 5742257
