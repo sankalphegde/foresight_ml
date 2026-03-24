@@ -9,9 +9,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def evaluate_and_register_model(run_id: str, test_roc_auc: float, recall_critically_low: bool, model_name: str = "foresight_xgboost", version_str: str = "1.0") -> bool:
-    """
-    Evaluates model metrics, registers to MLflow, and handles promotion.
-    """
+    
+    """Evaluates model metrics, registers to MLflow, and handles promotion."""
+    
     # 1. Acceptance Gate
     if test_roc_auc < 0.80 or recall_critically_low:
         logger.warning(f"Model failed acceptance gate (ROC-AUC: {test_roc_auc}). Registration aborted.")

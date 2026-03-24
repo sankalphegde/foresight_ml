@@ -28,8 +28,10 @@ class TestModelRegistry(unittest.TestCase):
         prod_run.data.metrics = {"test_roc_auc": 0.90}
 
         def get_run_side_effect(run_id):
-            if run_id == "new_run_id": return new_run
-            if run_id == "prod_run_id": return prod_run
+            if run_id == "new_run_id": 
+                return new_run
+            if run_id == "prod_run_id": 
+                return prod_run
             return MagicMock()
         
         mock_client.get_run.side_effect = get_run_side_effect
@@ -73,8 +75,10 @@ class TestModelRegistry(unittest.TestCase):
         prod_run.data.metrics = {"test_roc_auc": 0.85}
 
         def get_run_side_effect(run_id):
-            if run_id == "new_run_id": return new_run
-            if run_id == "prod_run_id": return prod_run
+            if run_id == "new_run_id":
+                return new_run
+            if run_id == "prod_run_id": 
+                return prod_run
             return MagicMock()
         
         mock_client.get_run.side_effect = get_run_side_effect
