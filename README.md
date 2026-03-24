@@ -346,22 +346,20 @@ After 25 Optuna trials, the best-performing configuration was:
 | `min_child_weight` | `10` |
 
 **Performance Summary**
-
 - **Baseline validation ROC-AUC:** `0.975640742671591`
 - **Final test ROC-AUC after tuning and retraining:** `0.9768994970855862`
 
 **Sensitivity Summary**
-
-- The tuning process was most sensitive to `learning_rate`, `max_depth`, and `n_estimators`, which together contributed most to the validation ROC-AUC improvement.
-- Lower `learning_rate` values improved training stability and generalization.
-- Shallower trees (`max_depth = 3`) outperformed deeper alternatives on the validation split.
-- Increasing `n_estimators` improved performance up to `400`, after which gains were limited within the explored search space.
+- The Optuna sensitivity analysis indicated that validation ROC-AUC was most affected by `n_estimators`, `max_depth`, and `subsample`.
+- Performance peaked around `n_estimators = 200–400`, while `800` estimators generally underperformed relative to the best trials.
+- Shallower trees (`max_depth = 3`) consistently produced the strongest validation ROC-AUC, while deeper trees showed more performance drop-off.
+- Lower subsampling (`subsample = 0.6`) aligned with the best-performing trial, whereas higher values produced more mixed results across runs.
 
 **Convergence Notes**
-
 - Optuna converged toward a stable high-performing region within the 25-trial search budget, without large late-stage jumps.
 - The final configuration favored conservative boosting, shallow trees, and stronger regularization through a higher `min_child_weight`.
 - After hyperparameter selection, the model was retrained on the combined train + validation split and evaluated once on the hold-out test set to avoid test-set leakage during model selection.
+
 
 
 ### Evaluation (`src/models/evaluate.py`)
