@@ -369,6 +369,15 @@ After 25 Optuna trials, the best-performing configuration was:
 - **Baseline validation ROC-AUC:** `0.975640742671591`
 - **Final test ROC-AUC after tuning and retraining:** `0.9768994970855862`
 
+
+| Model | Val ROC-AUC | Test ROC-AUC |
+|-------|-------------|--------------|
+| XGBoost baseline (default params) | 0.9756 | — |
+| XGBoost tuned (Optuna 25 trials) | 0.9756 | 0.9769 |
+
+> Validation ROC-AUC was already high at baseline due to strong feature signal (NetIncomeLoss dominates).
+> Optuna tuning confirmed the configuration and improved generalization on the unseen test set (0.9769).
+
 **Sensitivity Summary**
 
 - The Optuna sensitivity analysis indicated that validation ROC-AUC was most affected by `n_estimators`, `max_depth`, and `subsample`.
@@ -581,6 +590,10 @@ Triggers on push to `main` when model files change:
 - Creates or updates `foresight-training` Cloud Run job
 
 **Auth:** GitHub OIDC → GCP Workload Identity Federation. No static service account keys in CI.
+
+### Notifications & Alerts
+
+Email notifications are configured via GitHub Actions (`model_training.yml`). On any pipeline failure, an automated email is sent with the commit SHA, branch, and a direct link to the failed run. Slack notifications are scoped to the deployment phase.
 
 ---
 
