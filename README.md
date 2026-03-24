@@ -117,6 +117,16 @@ The project is structured as a full MLOps system covering:
          └───────┬────────┘
                  ▼
          ┌────────────────┐
+         │ SHAP +         │
+         │ Bias Report    │
+         └───────┬────────┘
+                 ▼
+         ┌────────────────┐
+         │ Batch Inference│
+         │ + SHAP attach  │
+         └───────┬────────┘
+                 ▼
+         ┌────────────────┐
          │ MLflow Model   │
          │ Registry +     │
          │ Rollback Check │
@@ -360,8 +370,6 @@ After 25 Optuna trials, the best-performing configuration was:
 - The final configuration favored conservative boosting, shallow trees, and stronger regularization through a higher `min_child_weight`.
 - After hyperparameter selection, the model was retrained on the combined train + validation split and evaluated once on the hold-out test set to avoid test-set leakage during model selection.
 
-
-
 ### Evaluation (`src/models/evaluate.py`)
 
 `evaluate.py` runs held-out evaluation on 2022–2023 data and logs all outputs to MLflow.
@@ -372,11 +380,16 @@ After 25 Optuna trials, the best-performing configuration was:
 - Tunes threshold on validation set by maximizing F1, then evaluates on held-out test set
 
 **Metrics logged to MLflow:**
-- `test_roc_auc`
-- `test_precision_at_5pct`
-- `test_recall_at_5pct`
-- `test_brier_score`
-- `test_f1_at_tuned_threshold`
+
+| Metric | Value | Description |
+|---|---|---|
+| `test_roc_auc` | **0.98** | Primary metric — ability to rank distressed vs healthy firms |
+| `test_recall_at_5pct` | **0.74** | Of all firms that distressed, how many were in top-risk predictions |
+| `test_precision_at_5pct` | logged in MLflow | Of top-risk predictions, how many actually distressed |
+| `test_brier_score` | logged in MLflow | Calibration of probability estimates |
+| `test_f1_at_tuned_threshold` | logged in MLflow | Threshold tuned by maximizing F1 on validation set |
+
+> **Note on F1:** F1 at tuned threshold appears low due to extreme class imbalance (2–5% distress rate). ROC-AUC and Recall@K are the appropriate primary metrics — they are robust to class imbalance and directly measure the ability to identify at-risk companies.
 
 **Artifacts logged to MLflow:**
 - ROC curve (`evaluation_plots/roc_curve.png`)
@@ -394,12 +407,44 @@ source .env
 python -m src.models.evaluate
 ```
 
+### Full Training Pipeline (`src/main_train.py`)
+
+The training entrypoint orchestrates 6 sequential steps:
+
+| Step | Module | Fatal? | Description |
+|---|---|---|---|
+| 1 | `train.py` | ✅ Yes | XGBoost training + Optuna 25-trial tuning |
+| 2 | `evaluate.py` | ✅ Yes | Held-out test evaluation + per-slice metrics |
+| 3 | Quality Gate | ✅ Yes | Blocks if `test_roc_auc < 0.80` — exits non-zero |
+| 4 | `explain.py` | ⚠️ Non-fatal | SHAP values + bias report generation |
+| 5 | `predict.py` | ⚠️ Non-fatal | Batch scoring + SHAP explanations attached |
+| 6 | `registry.py` | ✅ Yes | MLflow registry + rollback check |
+
+Steps 4 and 5 are non-fatal — failures log a warning but do not block model registration. Steps 1, 2, 3, and 6 are fatal — any failure exits with code 1, causing the Cloud Run job to fail.
+
+**Quality gate:** If `test_roc_auc < 0.80` → exits with code 1 → Cloud Run job fails → Airflow `model_quality_gate` task fails → pipeline stops.
+
 ### SHAP Explainability (`src/models/explain.py`)
 
-- SHAP TreeExplainer values computed on test set
-- Global feature importance bar plot, beeswarm plot, top-20 feature summary logged to MLflow
-- Per-row `top_features_json` (top-3 SHAP contributors) attached to scored output for API explanations
-- SHAP values precomputed and saved as Parquet to GCS to avoid per-request recomputation
+- SHAP TreeExplainer values computed on test set (33,636 samples × 2,804 features)
+- Artifacts generated and logged to MLflow:
+  - Global feature importance bar plot (mean |SHAP|)
+  - Beeswarm plot
+  - Top-20 feature summary table (CSV)
+- SHAP values saved to `gs://financial-distress-data/shap/shap_values.parquet`
+- Per-row `top_features_json` (top-3 SHAP contributors + values) attached to scored output
+- Model-level bias report generated combining feature-level PSI/drift analysis with per-slice model fairness metrics
+
+> **📌 HARSHIT — add here:** Top 5–10 most important features by mean |SHAP| value with brief interpretation. Add beeswarm plot image to `docs/images/shap_beeswarm.png` and reference it here.
+
+### Batch Inference (`src/models/predict.py`)
+
+- Loads Production model from MLflow registry (`models:/foresight_xgboost/Production`)
+- Loads latest features from GCS
+- Generates distress probability scores (0–1) per company per quarter
+- Attaches precomputed SHAP `top_features_json` from `explain.py` output to each scored row
+- Adds confidence intervals: `±0.05` margin clipped to [0, 1]
+- Writes scored output to GCS: `inference/scores_v{version}/scores.parquet`
 
 ### Model Registry (`src/models/registry.py`)
 
@@ -409,15 +454,9 @@ python -m src.models.evaluate
   - If new model is better or within 2% tolerance → promotes to **Production**
   - If new model is significantly worse → stays in Staging, logs warning, Production model unchanged
 - Pushes versioned artifacts to GCS at `models/v{version}/xgb_model.pkl` and `models/v{version}/scaler_pipeline.pkl`
-- Current registered model: `foresight_xgboost` Version 7, Stage: Production
+- Current registered model: `foresight_xgboost` — latest version in Production
 
-> **📌 NANDANA - add here:** GCS versioned path for the current production model. Confirm current Production version number and its test_roc_auc. Add batch inference output path (`inference/scores_v{version}/scores.parquet`) and describe the confidence interval approach used in predict.py.
-
-### Quality Gate (`src/main_train.py`)
-
-The training pipeline entry point enforces a quality gate:
-- If `test_roc_auc < 0.80`: exits with code 1 → Cloud Run job fails → CI/CD blocks merge
-- If passes: proceeds to model registration
+> **📌 NANDANA — add here:** Current Production version number, its test_roc_auc, and GCS versioned path. Confirm batch inference output path.
 
 ---
 
@@ -462,11 +501,13 @@ The training pipeline entry point enforces a quality gate:
 
 | Task | Description |
 |---|---|
-| `check_data_ready` | Gate — confirms labeled panel exists in GCS before triggering expensive training |
-| `run_model_training` | Triggers `foresight-training` Cloud Run job (train → evaluate → quality gate → register) |
+| `check_data_ready` | Gate — confirms labeled panel exists in GCS before triggering training |
+| `run_model_training` | Triggers `foresight-training` Cloud Run job — runs all 6 pipeline steps |
 | `model_quality_gate` | Reads `optuna_results.json` from GCS, fails DAG if `test_roc_auc < 0.80` |
 
 ![Training DAG Success](docs/images/training_dag_success.png)
+
+> **Note on scheduling:** The DAGs are configured with `@daily` (data) and `@weekly` (training) schedules. For production deployment, the Airflow instance would be migrated to Cloud Composer or Cloud Scheduler would trigger Cloud Run jobs directly on the same cadence. For this submission, Airflow runs locally and pipelines are triggered manually.
 
 ---
 
@@ -556,27 +597,10 @@ Each training run logs:
 
 ### What is tracked per MLflow run
 
-In practice, each run records four categories of information:
-
-- **Parameters**
-        - XGBoost hyperparameters (`learning_rate`, `max_depth`, `n_estimators`, `subsample`, `colsample_bytree`, `min_child_weight`)
-        - Runtime settings (`top_k_fraction`, tuned decision threshold, evaluation year window)
-        - Data/model URIs used for the run (`TRAIN_URI`/`VAL_URI`/`TEST_URI`, evaluated model URI)
-
-- **Metrics**
-        - Training/tuning metrics: validation ROC-AUC per Optuna trial, trial training time
-        - Final evaluation metrics: `test_roc_auc`, `test_precision_at_5pct`, `test_recall_at_5pct`, `test_brier_score`, `test_f1_at_tuned_threshold`
-        - Run-level counts: test sample count and positive-class count
-
-- **Artifacts**
-        - Optimization sensitivity plot (`optuna_sensitivity.png`)
-        - Evaluation plots (ROC, PR, confusion matrix)
-        - Slice-performance tables (`slice_performance.csv` / `.json`)
-        - Evaluation summary JSON used by notebook analysis
-
-- **Run metadata**
-        - Experiment name, run name, run ID, start/end time, and status
-        - Source entrypoint (`train.py` or `evaluate.py`), enabling traceability from UI to code path
+- **Parameters:** XGBoost hyperparameters, runtime settings (`top_k_fraction`, tuned threshold, evaluation year window), data/model URIs
+- **Metrics:** Validation ROC-AUC per Optuna trial, training time, all final test metrics
+- **Artifacts:** Sensitivity plot, evaluation plots (ROC, PR, confusion matrix), slice-performance tables, evaluation summary JSON, SHAP plots
+- **Run metadata:** Experiment name, run ID, source entrypoint, start/end time — enabling full traceability from UI to code
 
 ![MLflow Experiments](docs/images/mlflow_experiments.png)
 
@@ -606,14 +630,12 @@ If plots show a **single dot**, the notebook likely loaded a one-row local CSV f
 
 Fix:
 - Ensure `.env` has:
-        - `MLFLOW_TRACKING_URI=https://foresight-mlflow-6ool3rlbea-uc.a.run.app`
-        - `MLFLOW_EXPERIMENT_NAME=foresight-training`
+  - `MLFLOW_TRACKING_URI=https://foresight-mlflow-6ool3rlbea-uc.a.run.app`
+  - `MLFLOW_EXPERIMENT_NAME=foresight-training`
 - Re-run Cell 1 and Cell 2
 - Confirm output says `Loaded <N> runs from MLflow.` where `N > 1`
 
 Optional strict mode for grading/demo:
-- Delete stale local fallback CSV before notebook run:
-
 ```bash
 rm -f artifacts/evaluation/mlflow_run_comparison.csv
 ```
@@ -647,6 +669,7 @@ rm -f artifacts/evaluation/mlflow_run_comparison.csv
 Bias analysis runs at two levels:
 
 ### Feature-level (pre-model)
+
 Implemented in `src/feature_engineering/pipelines/bias_analysis.py`.
 
 Slices evaluated: company size bucket, sector proxy, time split (pre/post 2016), macro regime (Fed Funds threshold), distress label group.
@@ -654,18 +677,19 @@ Slices evaluated: company size bucket, sector proxy, time split (pre/post 2016),
 Drift measured via PSI and JS divergence. Alert triggered when PSI > 0.25 for any feature in any slice.
 
 ### Model-level (post-evaluation)
+
 Implemented in `src/models/explain.py` + extended `bias_analysis.py`.
 
 Per-slice model metrics (ROC-AUC, Recall@K) computed across the same slice definitions. Any slice where performance drops more than 10 percentage points below the overall metric is flagged as a bias alert.
 
 **Mitigation strategies implemented:**
-- Class-weighted loss function in XGBoost (`scale_pos_weight`) to address distress class imbalance (~2–5% positive rate)
-- SMOTE oversampling applied to training data only, after splitting (never before — prevents leakage)
-- Threshold adjustment per sector/size bucket where disparate impact is confirmed
-- Time-based train/val/test splitting to prevent temporal leakage — the most critical form of leakage for financial time-series data
-- Stratified splitting by `company_size_bucket` and `sector_proxy` to ensure all subgroups are represented in every split
+- **Class-weighted loss** (`scale_pos_weight`) to address distress class imbalance (~2–5% positive rate)
+- **SMOTE oversampling** applied to training data only, after splitting — never before (prevents leakage)
+- **Threshold adjustment** per sector/size bucket where disparate impact is confirmed
+- **Time-based splitting** to prevent temporal leakage — the most critical form of leakage for financial time-series data
+- **Stratified splitting** by `company_size_bucket` and `sector_proxy` to ensure all subgroups are represented in every split
 
-> **📌 HARSHIT - add here:** Specific slices where bias alerts were triggered (PSI > 0.25 or model performance drop > 10pp). Describe which mitigation was applied per slice and the resulting performance change. This is the most important section for graders reviewing bias mitigation quality.
+> **📌 HARSHIT — add here:** Specific slices where bias alerts were triggered (PSI > 0.25 or model performance drop > 10pp). Describe which mitigation was applied per slice and the resulting performance change after mitigation.
 
 ---
 
@@ -720,14 +744,14 @@ Foresight-ML/
 │   ├── models/
 │   │   ├── train.py                    # XGBoost + Optuna training
 │   │   ├── evaluate.py                 # Held-out evaluation + slices
-│   │   ├── explain.py                  # SHAP explainability
+│   │   ├── explain.py                  # SHAP explainability + bias report
 │   │   ├── registry.py                 # MLflow registry + rollback
 │   │   └── predict.py                  # Batch inference
 │   ├── panel/builder.py                # Panel construction
 │   ├── labeling/distress.py            # Distress label generation
 │   ├── main_panel.py                   # Panel entrypoint
 │   ├── main_labeling.py                # Labeling entrypoint
-│   └── main_train.py                   # Training pipeline entrypoint
+│   └── main_train.py                   # Training pipeline entrypoint (6 steps)
 ├── tests/                              # Unit + integration tests
 ├── dvc.yaml                            # DVC pipeline stages
 ├── docker-compose.yml                  # Local Airflow stack
@@ -818,20 +842,28 @@ docker compose exec airflow airflow tasks states-for-dag-run foresight_ingestion
 ### Training Pipeline
 
 ```bash
+# Start Airflow
+docker compose up -d
+
 # Unpause and trigger
 docker compose exec airflow airflow dags unpause foresight_training
 docker compose exec airflow airflow dags trigger foresight_training
+
+# Monitor Cloud Run logs
+gcloud logging read "resource.type=cloud_run_job AND resource.labels.job_name=foresight-training" \
+  --limit=10 --format="value(textPayload)" \
+  --project=financial-distress-ew --freshness=5m
 ```
 
 The training DAG requires the data pipeline to have run first (labeled panel must exist in GCS). The `check_data_ready` gate will fail with a clear error if it is missing.
 
-**Expected runtime:** ~30–90 minutes depending on Optuna trial count (`OPTUNA_TRIALS` env var, default 25).
+**Expected runtime:** ~60–90 minutes for the full 6-step pipeline with 25 Optuna trials.
 
 ### Reproduce pipeline with DVC
 
 ```bash
-uv run dvc repro       # reruns only changed stages
-uv run dvc dag         # shows dependency graph
+uv run dvc repro        # reruns only changed stages
+uv run dvc dag          # shows dependency graph
 uv run dvc metrics show # shows tracked metrics
 ```
 
@@ -853,6 +885,7 @@ uv run pytest tests/test_model.py -q
 uv run pytest tests/test_registry.py -q
 uv run pytest tests/test_validation.py -q
 uv run pytest tests/test_feature_engineering/ -q
+uv run pytest tests/test_explain.py -q
 ```
 
 **Key test coverage:**
@@ -860,6 +893,7 @@ uv run pytest tests/test_feature_engineering/ -q
 - `test_data_splits.py` — temporal leakage checks, SMOTE isolation, scaler fitted on train only
 - `test_model.py` — training smoke test on 500-row subsample
 - `test_registry.py` — rollback logic mock tests
+- `test_explain.py` — SHAP computation and output correctness
 - `test_validation.py` — anomaly detection correctness
 - `test_feature_engineering/` — feature pipeline + bias analysis
 
@@ -886,6 +920,8 @@ uv run pytest tests/test_feature_engineering/ -q
 | `models/scaler_pipeline.pkl` | Scaler artifact for inference |
 | `models/optuna_results.json` | Training report with test_roc_auc |
 | `models/v{version}/` | Versioned model artifacts |
+| `shap/shap_values.parquet` | Precomputed SHAP values with top_features_json |
+| `inference/scores_v{version}/scores.parquet` | Batch inference scores with confidence intervals |
 | `processed/validation_report.json` | Data validation summary |
 | `processed/anomalies.parquet` | Flagged anomaly rows |
 | `dvc-storage/` | DVC artifact cache |
@@ -910,10 +946,10 @@ uv run pytest tests/test_feature_engineering/ -q
 | Data lake | Google Cloud Storage |
 | Data warehouse | Google BigQuery |
 | ML framework | XGBoost, scikit-learn |
-| Hyperparameter tuning | Optuna |
+| Hyperparameter tuning | Optuna (25 trials, Bayesian optimization) |
 | Experiment tracking | MLflow 2.17 |
 | Model registry | MLflow Model Registry |
-| Explainability | SHAP |
+| Explainability | SHAP (TreeExplainer) |
 | Data versioning | DVC |
 | Feature store | Feast (definitions) |
 | Infrastructure | Terraform |
