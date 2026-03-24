@@ -9,9 +9,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> None:
-    """
-    Loads Production model, scores data, and attaches SHAP explanations.
-    """
+    
+    """ Loads Production model, scores data, and attaches SHAP explanations."""
+    
     model_name = "foresight_xgboost"
     model_uri = f"models:/{model_name}/Production"
     

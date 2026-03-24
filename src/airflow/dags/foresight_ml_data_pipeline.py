@@ -15,8 +15,6 @@ from airflow.providers.standard.operators.python import PythonOperator
 from google.cloud import bigquery
 from google.cloud.storage import Client
 
-sys.path.insert(0, "/opt/airflow")
-
 from src.ingestion.fred_increment_job import main as fred_main  # noqa: E402
 from src.ingestion.sec_xbrl_increment_job import main as sec_main  # noqa: E402
 from src.main_labeling import main as label_main  # noqa: E402
@@ -25,6 +23,7 @@ from src.config.settings import settings  # noqa: E402
 from src.data.validate_anomalies import validate_and_detect, upload_to_gcs  # noqa: E402
 from src.utils.gcs import read_parquet_from_gcs  # noqa: E402
 
+sys.path.insert(0, "/opt/airflow")
 
 def run_fred_ingestion(**context: Any) -> None:
     """Run FRED data ingestion."""
