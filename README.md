@@ -332,7 +332,8 @@ Every Optuna trial is logged to MLflow with its hyperparameters, validation ROC-
 
 **Model selection rationale:** After tuning, the model is retrained on the combined train+val split using the best hyperparameters, then evaluated once on the held-out test set. This prevents test set leakage during hyperparameter selection.
 
-> **📌 SANKALP - add here:** Final best hyperparameters found by Optuna:
+> **📌 SANKALP 
+Final best hyperparameters found by Optuna:
 - `learning_rate`: `0.01840423513419366`
 - `max_depth`: `3`
 - `n_estimators`: `400`
