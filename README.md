@@ -425,14 +425,14 @@ python -m src.models.evaluate
 
 The training entrypoint orchestrates 6 sequential steps:
 
-| Step | Module        | Fatal?       | Description                                      |
-| ---- | ------------- | ------------ | ------------------------------------------------ |
-| 1    | `train.py`    | ✅ Yes       | XGBoost training + Optuna 25-trial tuning        |
-| 2    | `evaluate.py` | ✅ Yes       | Held-out test evaluation + per-slice metrics     |
-| 3    | Quality Gate  | ✅ Yes       | Blocks if `test_roc_auc < 0.80` — exits non-zero |
-| 4    | `explain.py`  | ⚠️ Non-fatal | SHAP values + bias report generation             |
-| 5    | `predict.py`  | ⚠️ Non-fatal | Batch scoring + SHAP explanations attached       |
-| 6    | `registry.py` | ✅ Yes       | MLflow registry + rollback check                 |
+| Step | Module        | Fatal?     | Description                                      |
+| ---- | ------------- | -----------| ------------------------------------------------ |
+| 1    | `train.py`    |  Yes       | XGBoost training + Optuna 25-trial tuning        |
+| 2    | `evaluate.py` |  Yes       | Held-out test evaluation + per-slice metrics     |
+| 3    | Quality Gate  |  Yes       | Blocks if `test_roc_auc < 0.80` — exits non-zero |
+| 4    | `explain.py`  |  Non-fatal | SHAP values + bias report generation             |
+| 5    | `predict.py`  |  Non-fatal | Batch scoring + SHAP explanations attached       |
+| 6    | `registry.py` |  Yes       | MLflow registry + rollback check                 |
 
 Steps 4 and 5 are non-fatal — failures log a warning but do not block model registration. Steps 1, 2, 3, and 6 are fatal — any failure exits with code 1, causing the Cloud Run job to fail.
 
