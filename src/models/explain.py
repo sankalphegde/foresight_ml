@@ -32,6 +32,12 @@ from pandas.api.types import is_datetime64_any_dtype
 from xgboost import XGBClassifier
 
 from src.config.settings import settings
+from src.feature_engineering.pipelines.bias_analysis import (
+    compute_model_fairness,
+    generate_bias_report_md,
+    run_bias_analysis,
+    suggest_threshold_adjustments,
+)
 from src.models.train import (
     DEFAULT_MODEL_URI,
     DEFAULT_TEST_URI,
@@ -451,9 +457,7 @@ def run_shap_analysis(
     resolved_shap_gcs = (
         shap_parquet_gcs_uri or os.getenv("SHAP_PARQUET_URI") or DEFAULT_SHAP_PARQUET_URI
     )
-    artifact_dir = Path(
-        output_dir or os.getenv("SHAP_ARTIFACT_DIR") or DEFAULT_SHAP_ARTIFACT_DIR
-    )
+    artifact_dir = Path(output_dir or os.getenv("SHAP_ARTIFACT_DIR") or DEFAULT_SHAP_ARTIFACT_DIR)
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     # ── 1. Load model and data ──────────────────────────────────────────
@@ -511,6 +515,35 @@ def run_shap_analysis(
         gcs_uri=resolved_shap_gcs,
     )
 
+    # ── 6b. Generate bias report ────────────────────────────────────────
+    log.info("Generating model-level bias report...")
+    feature_report, feature_details = run_bias_analysis(eval_df)
+
+    slice_csv_path = Path("artifacts/evaluation/slice_performance.csv")
+    slice_csv_env = os.getenv("SLICE_PERFORMANCE_CSV", str(slice_csv_path))
+    try:
+        slice_performance = pd.read_csv(slice_csv_env)
+        fairness_df = compute_model_fairness(slice_performance)
+        threshold_suggestions = suggest_threshold_adjustments(fairness_df)
+    except FileNotFoundError:
+        log.warning(
+            "Slice performance CSV not found at %s; "
+            "generating bias report with feature-level analysis only.",
+            slice_csv_env,
+        )
+        fairness_df = pd.DataFrame()
+        threshold_suggestions = pd.DataFrame()
+
+    bias_report_path = artifact_dir / "bias_report.md"
+    generate_bias_report_md(
+        feature_bias_report=feature_report,
+        feature_analysis_details=feature_details,
+        model_fairness_df=fairness_df,
+        threshold_suggestions=threshold_suggestions,
+        output_path=str(bias_report_path),
+    )
+    log.info("Saved bias report: %s", bias_report_path)
+
     # ── 7. Log to MLflow ────────────────────────────────────────────────
     if log_to_mlflow:
         mlflow = _get_mlflow()
@@ -533,6 +566,7 @@ def run_shap_analysis(
             mlflow.log_artifact(str(beeswarm_path), artifact_path="shap_plots")
             mlflow.log_artifact(str(top_table_path), artifact_path="shap_tables")
             mlflow.log_artifact(str(shap_parquet_path), artifact_path="shap_data")
+            mlflow.log_artifact(str(bias_report_path), artifact_path="bias_report")
 
             log.info("Logged SHAP artifacts to MLflow run %s", run.info.run_id)
             mlflow_run_id = run.info.run_id
@@ -544,6 +578,7 @@ def run_shap_analysis(
         "beeswarm_plot": str(beeswarm_path),
         "top20_table": str(top_table_path),
         "shap_parquet": str(shap_parquet_path),
+        "bias_report": str(bias_report_path),
         "n_samples": len(eval_df),
         "n_features": len(feature_names),
         "top_feature": str(top_table.iloc[0]["feature"]) if len(top_table) > 0 else "",
