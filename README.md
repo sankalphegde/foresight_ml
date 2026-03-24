@@ -36,6 +36,7 @@ End-to-end MLOps pipeline for predicting corporate financial distress 6–12 mon
 Foresight-ML predicts corporate financial distress using machine learning applied to publicly available financial and macroeconomic data. The system generates quarterly risk scores per company, providing 6–12 month early warning signals before distress events occur.
 
 The project is structured as a full MLOps system covering:
+
 - Automated incremental data ingestion from SEC EDGAR and FRED APIs
 - BigQuery-based cleaning and feature engineering
 - Supervised model training (XGBoost + Optuna hyperparameter tuning)
@@ -134,6 +135,7 @@ The project is structured as a full MLOps system covering:
 ```
 
 **CI/CD Responsibility Split:**
+
 - `cd-dev.yml` — builds and deploys ingestion Docker image to Cloud Run on ingestion code changes
 - `model_training.yml` — builds and deploys training Docker image to Cloud Run on model code changes
 - Both DAGs execute the respective Cloud Run jobs on their own schedules
@@ -142,10 +144,10 @@ The project is structured as a full MLOps system covering:
 
 ## Data Sources
 
-| Source | Type | Content | Access |
-|---|---|---|---|
-| SEC EDGAR XBRL API | Quarterly / Annual | Income statements, balance sheets, cash flows (10-Q/10-K) | Public API — requires User-Agent header |
-| FRED (Federal Reserve) | Monthly / Weekly | Federal Funds Rate, CPI, credit spreads, unemployment | Public API — requires free API key |
+| Source                 | Type               | Content                                                   | Access                                  |
+| ---------------------- | ------------------ | --------------------------------------------------------- | --------------------------------------- |
+| SEC EDGAR XBRL API     | Quarterly / Annual | Income statements, balance sheets, cash flows (10-Q/10-K) | Public API — requires User-Agent header |
+| FRED (Federal Reserve) | Monthly / Weekly   | Federal Funds Rate, CPI, credit spreads, unemployment     | Public API — requires free API key      |
 
 All data is corporate-level and public. No PII is collected or stored.
 
@@ -162,6 +164,7 @@ Fetches quarterly XBRL financial statement data for companies in the configured 
 > **Demo mode:** The current pipeline processes `companies_df.head(5)` — the first 5 companies from the reference file. This is an intentional runtime guardrail for submission and development. To process the full company universe, remove the `head(5)` line in `sec_xbrl_increment_job.py`.
 
 **Incremental strategy (amendment-safe):**
+
 1. For each company, fetch the full XBRL extract from SEC EDGAR
 2. Identify the most recent 8 quarters in existing stored data
 3. Drop those 8 quarters from the stored data (to capture any amendments)
@@ -173,6 +176,7 @@ The 8-quarter refresh window covers the typical SEC amendment cycle without requ
 **Storage:** One Parquet file per company at `raw/sec_xbrl/cik=<CIK>/data.parquet`
 
 **Normalization applied:**
+
 - CIK zero-padded to 10 digits for consistent joining
 - Only quarterly periods (Q1–Q4) retained; annual FY tags filtered out
 - `quarter_key` composite field created (e.g., `2023_Q3`) as merge key
@@ -184,6 +188,7 @@ Fetches macroeconomic indicator time series from the FRED API.
 **Indicators fetched:** Federal Funds Rate, CPI, credit spreads, unemployment, and GDP growth proxies.
 
 **Incremental strategy (revision-safe):**
+
 1. Fetch full time series from FRED API at native frequency
 2. Normalize to quarterly by converting to quarter-end date and taking the last value per quarter
 3. Drop the most recent 8 quarters from existing stored data (FRED regularly revises historical values)
@@ -211,6 +216,7 @@ After ingestion, a SQL transform runs in BigQuery to produce the cleaned dataset
 3. **Join SEC + FRED** by `quarter_key` to produce a unified company-quarter dataset
 
 4. **Repair accounting identity**: Uses `COALESCE` to fill missing values using the fundamental relationship `Assets = Liabilities + Equity`:
+
    ```sql
    fixed_Assets = COALESCE(Assets, Liabilities + StockholdersEquity)
    fixed_Liabilities = COALESCE(Liabilities, Assets - StockholdersEquity)
@@ -242,11 +248,11 @@ Converts the cleaned wide-format dataset into a canonical modeling panel.
 
 Strict time-based splits to prevent data leakage:
 
-| Split | Period | Purpose |
-|---|---|---|
-| Training | 2010–2019 | Model training (~60%) |
+| Split      | Period    | Purpose                      |
+| ---------- | --------- | ---------------------------- |
+| Training   | 2010–2019 | Model training (~60%)        |
 | Validation | 2020–2021 | Hyperparameter tuning (~20%) |
-| Test | 2022–2023 | Final evaluation (~20%) |
+| Test       | 2022–2023 | Final evaluation (~20%)      |
 
 - Stratified by `company_size_bucket` and `sector_proxy`
 - SMOTE oversampling applied to training split **only**, after splitting (never before — prevents leakage)
@@ -264,6 +270,7 @@ Strict time-based splits to prevent data leakage:
 Runs in BigQuery mode via the Airflow DAG as a subprocess call.
 
 Features computed:
+
 - Core financial ratios: Current Ratio, Debt-to-Equity, Interest Coverage, Net Margin, ROA, Operating Cash Flow to Total Debt
 - Temporal features: quarter-over-quarter growth rates for revenue and cash flow, rolling 4-quarter slopes
 - Volatility features: rolling standard deviation of net income and cash flow over 4 quarters
@@ -279,6 +286,7 @@ Features computed:
 Evaluates feature distributions across meaningful data slices to detect and document bias **before modeling**.
 
 **Slices analyzed:**
+
 - Company size bucket (small / mid / large)
 - Sector proxy
 - Time period (pre-2016 / post-2016)
@@ -286,6 +294,7 @@ Evaluates feature distributions across meaningful data slices to detect and docu
 - Distress label group
 
 **Metrics used:**
+
 - PSI (Population Stability Index) — drift alert triggered when PSI > 0.25
 - JS divergence
 
@@ -329,14 +338,14 @@ distress_label(t) = two_consecutive_losses(t + horizon)  # shift(-horizon)
 
 **Hyperparameter search space** (`configs/model/xgboost.yaml`):
 
-| Hyperparameter | Search Values | Description |
-|---|---|---|
-| `learning_rate` | 0.01, 0.05, 0.1, 0.2 | Step size shrinkage |
-| `max_depth` | 3, 4, 6, 8 | Maximum tree depth |
-| `n_estimators` | 100, 200, 400, 800 | Number of boosting rounds |
-| `subsample` | 0.6, 0.8, 1.0 | Row subsampling ratio |
-| `colsample_bytree` | 0.6, 0.8, 1.0 | Feature subsampling per tree |
-| `min_child_weight` | 1, 5, 10 | Minimum child node weight |
+| Hyperparameter     | Search Values        | Description                  |
+| ------------------ | -------------------- | ---------------------------- |
+| `learning_rate`    | 0.01, 0.05, 0.1, 0.2 | Step size shrinkage          |
+| `max_depth`        | 3, 4, 6, 8           | Maximum tree depth           |
+| `n_estimators`     | 100, 200, 400, 800   | Number of boosting rounds    |
+| `subsample`        | 0.6, 0.8, 1.0        | Row subsampling ratio        |
+| `colsample_bytree` | 0.6, 0.8, 1.0        | Feature subsampling per tree |
+| `min_child_weight` | 1, 5, 10             | Minimum child node weight    |
 
 Every Optuna trial is logged to MLflow with its hyperparameters, validation ROC-AUC, and training time. The best trial is identified by maximum validation ROC-AUC.
 
@@ -346,26 +355,29 @@ Every Optuna trial is logged to MLflow with its hyperparameters, validation ROC-
 
 After 25 Optuna trials, the best-performing configuration was:
 
-| Hyperparameter | Best Value |
-|---|---:|
-| `learning_rate` | `0.01840423513419366` |
-| `max_depth` | `3` |
-| `n_estimators` | `400` |
-| `subsample` | `0.6` |
-| `colsample_bytree` | `1.0` |
-| `min_child_weight` | `10` |
+| Hyperparameter     |            Best Value |
+| ------------------ | --------------------: |
+| `learning_rate`    | `0.01840423513419366` |
+| `max_depth`        |                   `3` |
+| `n_estimators`     |                 `400` |
+| `subsample`        |                 `0.6` |
+| `colsample_bytree` |                 `1.0` |
+| `min_child_weight` |                  `10` |
 
 **Performance Summary**
+
 - **Baseline validation ROC-AUC:** `0.975640742671591`
 - **Final test ROC-AUC after tuning and retraining:** `0.9768994970855862`
 
 **Sensitivity Summary**
+
 - The Optuna sensitivity analysis indicated that validation ROC-AUC was most affected by `n_estimators`, `max_depth`, and `subsample`.
 - Performance peaked around `n_estimators = 200–400`, while `800` estimators generally underperformed relative to the best trials.
 - Shallower trees (`max_depth = 3`) consistently produced the strongest validation ROC-AUC, while deeper trees showed more performance drop-off.
 - Lower subsampling (`subsample = 0.6`) aligned with the best-performing trial, whereas higher values produced more mixed results across runs.
 
 **Convergence Notes**
+
 - Optuna converged toward a stable high-performing region within the 25-trial search budget, without large late-stage jumps.
 - The final configuration favored conservative boosting, shallow trees, and stronger regularization through a higher `min_child_weight`.
 - After hyperparameter selection, the model was retrained on the combined train + validation split and evaluated once on the hold-out test set to avoid test-set leakage during model selection.
@@ -375,23 +387,25 @@ After 25 Optuna trials, the best-performing configuration was:
 `evaluate.py` runs held-out evaluation on 2022–2023 data and logs all outputs to MLflow.
 
 **How it resolves artifacts:**
+
 - Loads model artifact from `MODEL_ARTIFACT_URI` (or passed `model_uri`) and supports GCS (`gs://...`) and local paths
 - Loads validation/test splits from `VAL_URI` and `TEST_URI`
 - Tunes threshold on validation set by maximizing F1, then evaluates on held-out test set
 
 **Metrics logged to MLflow:**
 
-| Metric | Value | Description |
-|---|---|---|
-| `test_roc_auc` | **0.98** | Primary metric — ability to rank distressed vs healthy firms |
-| `test_recall_at_5pct` | **0.74** | Of all firms that distressed, how many were in top-risk predictions |
-| `test_precision_at_5pct` | logged in MLflow | Of top-risk predictions, how many actually distressed |
-| `test_brier_score` | logged in MLflow | Calibration of probability estimates |
-| `test_f1_at_tuned_threshold` | logged in MLflow | Threshold tuned by maximizing F1 on validation set |
+| Metric                       | Value            | Description                                                         |
+| ---------------------------- | ---------------- | ------------------------------------------------------------------- |
+| `test_roc_auc`               | **0.98**         | Primary metric — ability to rank distressed vs healthy firms        |
+| `test_recall_at_5pct`        | **0.74**         | Of all firms that distressed, how many were in top-risk predictions |
+| `test_precision_at_5pct`     | logged in MLflow | Of top-risk predictions, how many actually distressed               |
+| `test_brier_score`           | logged in MLflow | Calibration of probability estimates                                |
+| `test_f1_at_tuned_threshold` | logged in MLflow | Threshold tuned by maximizing F1 on validation set                  |
 
 > **Note on F1:** F1 at tuned threshold appears low due to extreme class imbalance (2–5% distress rate). ROC-AUC and Recall@K are the appropriate primary metrics — they are robust to class imbalance and directly measure the ability to identify at-risk companies.
 
 **Artifacts logged to MLflow:**
+
 - ROC curve (`evaluation_plots/roc_curve.png`)
 - Precision-Recall curve (`evaluation_plots/precision_recall_curve.png`)
 - Confusion matrix (`evaluation_plots/confusion_matrix.png`)
@@ -411,14 +425,14 @@ python -m src.models.evaluate
 
 The training entrypoint orchestrates 6 sequential steps:
 
-| Step | Module | Fatal? | Description |
-|---|---|---|---|
-| 1 | `train.py` | ✅ Yes | XGBoost training + Optuna 25-trial tuning |
-| 2 | `evaluate.py` | ✅ Yes | Held-out test evaluation + per-slice metrics |
-| 3 | Quality Gate | ✅ Yes | Blocks if `test_roc_auc < 0.80` — exits non-zero |
-| 4 | `explain.py` | ⚠️ Non-fatal | SHAP values + bias report generation |
-| 5 | `predict.py` | ⚠️ Non-fatal | Batch scoring + SHAP explanations attached |
-| 6 | `registry.py` | ✅ Yes | MLflow registry + rollback check |
+| Step | Module        | Fatal?       | Description                                      |
+| ---- | ------------- | ------------ | ------------------------------------------------ |
+| 1    | `train.py`    | ✅ Yes       | XGBoost training + Optuna 25-trial tuning        |
+| 2    | `evaluate.py` | ✅ Yes       | Held-out test evaluation + per-slice metrics     |
+| 3    | Quality Gate  | ✅ Yes       | Blocks if `test_roc_auc < 0.80` — exits non-zero |
+| 4    | `explain.py`  | ⚠️ Non-fatal | SHAP values + bias report generation             |
+| 5    | `predict.py`  | ⚠️ Non-fatal | Batch scoring + SHAP explanations attached       |
+| 6    | `registry.py` | ✅ Yes       | MLflow registry + rollback check                 |
 
 Steps 4 and 5 are non-fatal — failures log a warning but do not block model registration. Steps 1, 2, 3, and 6 are fatal — any failure exits with code 1, causing the Cloud Run job to fail.
 
@@ -435,7 +449,26 @@ Steps 4 and 5 are non-fatal — failures log a warning but do not block model re
 - Per-row `top_features_json` (top-3 SHAP contributors + values) attached to scored output
 - Model-level bias report generated combining feature-level PSI/drift analysis with per-slice model fairness metrics
 
-> **📌 HARSHIT — add here:** Top 5–10 most important features by mean |SHAP| value with brief interpretation. Add beeswarm plot image to `docs/images/shap_beeswarm.png` and reference it here.
+**Top 10 Features by Mean |SHAP| Value** (from real pipeline run on 33,636 test samples):
+
+| Rank | Feature                            | Mean  | SHAP           |                                                                              | Direction | Interpretation |
+| ---- | ---------------------------------- | ----- | -------------- | ---------------------------------------------------------------------------- | --------- | -------------- |
+| 1    | NetIncomeLoss                      | 6.582 | Protective     | Dominant driver — higher net income strongly reduces predicted distress risk |
+| 2    | inflation                          | 0.534 | Increases risk | Rising inflation raises distress probability across firms                    |
+| 3    | fiscal_period_Q3                   | 0.516 | Protective     | Seasonal effect — Q3 filings associated with lower predicted risk            |
+| 4    | filed_date                         | 0.324 | Protective     | More recent filings tend toward lower risk (survivorship)                    |
+| 5    | unemployment                       | 0.159 | Protective     | Counter-intuitive — likely captures government stimulus periods              |
+| 6    | roa_rolling_8q_mean                | 0.141 | Protective     | Sustained profitability over 8 quarters reduces distress risk                |
+| 7    | RetainedEarningsAccumulatedDeficit | 0.090 | Protective     | Higher retained earnings signal financial resilience                         |
+| 8    | roa_rolling_4q_mean                | 0.082 | Increases risk | Short-term ROA volatility can signal emerging trouble                        |
+| 9    | roa_rolling_8q_std                 | 0.073 | Protective     | Stable long-term ROA reduces risk                                            |
+| 10   | fed_funds                          | 0.069 | Protective     | Lower interest rates associated with reduced distress                        |
+
+NetIncomeLoss dominates with a mean |SHAP| of 6.58 — roughly 12× larger than the next feature — confirming that profitability is by far the strongest predictor of financial distress. Macroeconomic features (inflation, unemployment, fed_funds) collectively rank in the top 10, validating the inclusion of FRED data alongside SEC filings.
+
+![SHAP Feature Importance](docs/images/shap_feature_importance.png)
+
+![SHAP Beeswarm Plot](docs/images/shap_beeswarm.png)
 
 ### Batch Inference (`src/models/predict.py`)
 
@@ -468,20 +501,21 @@ Steps 4 and 5 are non-fatal — failures log a warning but do not block model re
 **Schedule:** `@daily`
 **Max active runs:** 3
 
-| Task | Description |
-|---|---|
-| `run_fred_ingestion` | Incremental FRED macro data fetch |
-| `run_sec_ingestion` | Incremental SEC XBRL filing fetch (5 companies in demo mode) |
-| `run_preprocess_ingested_data` | Sanity gate — confirms raw data exists in GCS |
-| `run_bigquery_cleaning` | Runs `data_cleaned.sql` in BigQuery |
-| `run_panel_build` | Constructs canonical panel dataset |
-| `run_labeling` | Applies distress label with forward horizon |
-| `run_feature_bias_pipeline` | Feature engineering + bias analysis in BQ mode |
-| `run_validation_anomaly` | Schema checks, null rates, IQR anomaly detection |
+| Task                           | Description                                                  |
+| ------------------------------ | ------------------------------------------------------------ |
+| `run_fred_ingestion`           | Incremental FRED macro data fetch                            |
+| `run_sec_ingestion`            | Incremental SEC XBRL filing fetch (5 companies in demo mode) |
+| `run_preprocess_ingested_data` | Sanity gate — confirms raw data exists in GCS                |
+| `run_bigquery_cleaning`        | Runs `data_cleaned.sql` in BigQuery                          |
+| `run_panel_build`              | Constructs canonical panel dataset                           |
+| `run_labeling`                 | Applies distress label with forward horizon                  |
+| `run_feature_bias_pipeline`    | Feature engineering + bias analysis in BQ mode               |
+| `run_validation_anomaly`       | Schema checks, null rates, IQR anomaly detection             |
 
 `fred_task` and `sec_task` run in **parallel** — they are independent data sources.
 
 **Feature/Bias runtime mode:**
+
 - `FEATURE_BIAS_MODE=safe` (default): skips heavy visualizations — recommended for demos
 - `FEATURE_BIAS_MODE=full`: full visualization workload
 
@@ -499,10 +533,10 @@ Steps 4 and 5 are non-fatal — failures log a warning but do not block model re
 **Schedule:** `@weekly`
 **Max active runs:** 1
 
-| Task | Description |
-|---|---|
-| `check_data_ready` | Gate — confirms labeled panel exists in GCS before triggering training |
-| `run_model_training` | Triggers `foresight-training` Cloud Run job — runs all 6 pipeline steps |
+| Task                 | Description                                                              |
+| -------------------- | ------------------------------------------------------------------------ |
+| `check_data_ready`   | Gate — confirms labeled panel exists in GCS before triggering training   |
+| `run_model_training` | Triggers `foresight-training` Cloud Run job — runs all 6 pipeline steps  |
 | `model_quality_gate` | Reads `optuna_results.json` from GCS, fails DAG if `test_roc_auc < 0.80` |
 
 ![Training DAG Success](docs/images/training_dag_success.png)
@@ -589,6 +623,7 @@ make dvc-pull
 **Tracking URI:** `https://foresight-mlflow-6ool3rlbea-uc.a.run.app`
 
 Each training run logs:
+
 - All Optuna trial hyperparameters and validation ROC-AUC
 - Final test metrics (ROC-AUC, Precision@K, Recall@K, Brier Score, F1)
 - Per-slice performance table
@@ -607,6 +642,7 @@ Each training run logs:
 ![MLflow Evaluation Metrics](docs/images/mlflow_eval_metrics.png)
 
 **Access:**
+
 ```bash
 source .env
 curl -I "$MLFLOW_TRACKING_URI"
@@ -620,6 +656,7 @@ curl -I "$MLFLOW_TRACKING_URI"
 Notebook: `notebooks/model_experiments.ipynb`
 
 Purpose:
+
 - compare historical training/evaluation runs,
 - visualize optimization history,
 - present final model selection rationale.
@@ -629,6 +666,7 @@ Purpose:
 If plots show a **single dot**, the notebook likely loaded a one-row local CSV fallback (`artifacts/evaluation/mlflow_run_comparison.csv`) instead of full MLflow history.
 
 Fix:
+
 - Ensure `.env` has:
   - `MLFLOW_TRACKING_URI=https://foresight-mlflow-6ool3rlbea-uc.a.run.app`
   - `MLFLOW_EXPERIMENT_NAME=foresight-training`
@@ -636,6 +674,7 @@ Fix:
 - Confirm output says `Loaded <N> runs from MLflow.` where `N > 1`
 
 Optional strict mode for grading/demo:
+
 ```bash
 rm -f artifacts/evaluation/mlflow_run_comparison.csv
 ```
@@ -647,6 +686,7 @@ rm -f artifacts/evaluation/mlflow_run_comparison.csv
 `src/data/validate_anomalies.py` runs after feature engineering on the labeled panel.
 
 **Checks performed:**
+
 - Required columns: `(cik, filing_date, ticker, accession_number)`
 - Duplicate detection on `(cik, accession_number)`
 - Null counts and null rates per column
@@ -655,10 +695,12 @@ rm -f artifacts/evaluation/mlflow_run_comparison.csv
 - Per-row `anomaly_count` and `anomaly_columns` fields
 
 **Outputs:**
+
 - `processed/validation_report.json` — summary report
 - `processed/anomalies.parquet` — flagged rows for inspection
 
 **DAG behavior:**
+
 - `VALIDATION_FAIL_ON_STATUS=false` (default): uploads artifacts, logs status, allows downstream to proceed
 - `VALIDATION_FAIL_ON_STATUS=true`: fails the DAG task if validation status is `fail`, blocking downstream
 
@@ -683,6 +725,7 @@ Implemented in `src/models/explain.py` + extended `bias_analysis.py`.
 Per-slice model metrics (ROC-AUC, Recall@K) computed across the same slice definitions. Any slice where performance drops more than 10 percentage points below the overall metric is flagged as a bias alert.
 
 **Mitigation strategies implemented:**
+
 - **Class-weighted loss** (`scale_pos_weight`) to address distress class imbalance (~2–5% positive rate)
 - **SMOTE oversampling** applied to training data only, after splitting — never before (prevents leakage)
 - **Threshold adjustment** per sector/size bucket where disparate impact is confirmed
@@ -697,16 +740,16 @@ Per-slice model metrics (ROC-AUC, Recall@K) computed across the same slice defin
 
 All infrastructure is managed via Terraform (`infra/`).
 
-| Component | Service | Purpose |
-|---|---|---|
-| Data lake | Google Cloud Storage | Raw ingestion zone, processed artifacts, model artifacts, DVC cache |
-| Data warehouse | BigQuery | SQL-based cleaning, feature engineering, curated tables |
-| Orchestration | Apache Airflow (Docker Compose) | Local DAG execution |
-| Job execution | Cloud Run Jobs | Containerized ingestion + training pipeline execution |
-| Image registry | Artifact Registry (`foresight` repo) | Docker images for all pipeline components |
-| Experiment tracking | MLflow on Cloud Run | Tracking server with Cloud SQL backend |
-| Secrets | GCP Secret Manager | FRED API key, SEC user agent |
-| CI/CD auth | Workload Identity Federation | OIDC-based auth — no static keys in GitHub |
+| Component           | Service                              | Purpose                                                             |
+| ------------------- | ------------------------------------ | ------------------------------------------------------------------- |
+| Data lake           | Google Cloud Storage                 | Raw ingestion zone, processed artifacts, model artifacts, DVC cache |
+| Data warehouse      | BigQuery                             | SQL-based cleaning, feature engineering, curated tables             |
+| Orchestration       | Apache Airflow (Docker Compose)      | Local DAG execution                                                 |
+| Job execution       | Cloud Run Jobs                       | Containerized ingestion + training pipeline execution               |
+| Image registry      | Artifact Registry (`foresight` repo) | Docker images for all pipeline components                           |
+| Experiment tracking | MLflow on Cloud Run                  | Tracking server with Cloud SQL backend                              |
+| Secrets             | GCP Secret Manager                   | FRED API key, SEC user agent                                        |
+| CI/CD auth          | Workload Identity Federation         | OIDC-based auth — no static keys in GitHub                          |
 
 ---
 
@@ -889,6 +932,7 @@ uv run pytest tests/test_explain.py -q
 ```
 
 **Key test coverage:**
+
 - `test_data_ingestion.py` — ingestion job correctness
 - `test_data_splits.py` — temporal leakage checks, SMOTE isolation, scaler fitted on train only
 - `test_model.py` — training smoke test on 500-row subsample
@@ -905,61 +949,61 @@ uv run pytest tests/test_explain.py -q
 
 ![GCS Model Artifacts](docs/images/gcs_model_artifacts.png)
 
-| Path | Description |
-|---|---|
-| `raw/fred/series_id=<id>.parquet` | Raw FRED time series per indicator |
-| `raw/sec_xbrl/cik=<cik>/data.parquet` | Raw XBRL filings per company |
-| `cleaned_data/final_v2/train_*.parquet` | Cleaned + joined SEC+FRED dataset |
-| `features/panel_v1/panel.parquet` | Canonical modeling panel |
-| `features/labeled_v1/labeled_panel.parquet` | Panel with distress labels |
-| `splits/v1/train.parquet` | Training split (2010–2019) |
-| `splits/v1/val.parquet` | Validation split (2020–2021) |
-| `splits/v1/test.parquet` | Test split (2022–2023) |
-| `splits/v1/scaler_pipeline.pkl` | Fitted scaler for inference |
-| `models/xgb_model.pkl` | Latest trained XGBoost model |
-| `models/scaler_pipeline.pkl` | Scaler artifact for inference |
-| `models/optuna_results.json` | Training report with test_roc_auc |
-| `models/v{version}/` | Versioned model artifacts |
-| `shap/shap_values.parquet` | Precomputed SHAP values with top_features_json |
+| Path                                         | Description                                      |
+| -------------------------------------------- | ------------------------------------------------ |
+| `raw/fred/series_id=<id>.parquet`            | Raw FRED time series per indicator               |
+| `raw/sec_xbrl/cik=<cik>/data.parquet`        | Raw XBRL filings per company                     |
+| `cleaned_data/final_v2/train_*.parquet`      | Cleaned + joined SEC+FRED dataset                |
+| `features/panel_v1/panel.parquet`            | Canonical modeling panel                         |
+| `features/labeled_v1/labeled_panel.parquet`  | Panel with distress labels                       |
+| `splits/v1/train.parquet`                    | Training split (2010–2019)                       |
+| `splits/v1/val.parquet`                      | Validation split (2020–2021)                     |
+| `splits/v1/test.parquet`                     | Test split (2022–2023)                           |
+| `splits/v1/scaler_pipeline.pkl`              | Fitted scaler for inference                      |
+| `models/xgb_model.pkl`                       | Latest trained XGBoost model                     |
+| `models/scaler_pipeline.pkl`                 | Scaler artifact for inference                    |
+| `models/optuna_results.json`                 | Training report with test_roc_auc                |
+| `models/v{version}/`                         | Versioned model artifacts                        |
+| `shap/shap_values.parquet`                   | Precomputed SHAP values with top_features_json   |
 | `inference/scores_v{version}/scores.parquet` | Batch inference scores with confidence intervals |
-| `processed/validation_report.json` | Data validation summary |
-| `processed/anomalies.parquet` | Flagged anomaly rows |
-| `dvc-storage/` | DVC artifact cache |
+| `processed/validation_report.json`           | Data validation summary                          |
+| `processed/anomalies.parquet`                | Flagged anomaly rows                             |
+| `dvc-storage/`                               | DVC artifact cache                               |
 
 ### BigQuery
 
-| Table | Description |
-|---|---|
-| `cleaned_foresight.final_v2` | Cleaned SEC + FRED joined dataset |
-| `financial_distress_features.engineered_features` | Full feature set |
-| `financial_distress_features.cleaned_engineered_features` | Final modeling-ready features |
+| Table                                                     | Description                       |
+| --------------------------------------------------------- | --------------------------------- |
+| `cleaned_foresight.final_v2`                              | Cleaned SEC + FRED joined dataset |
+| `financial_distress_features.engineered_features`         | Full feature set                  |
+| `financial_distress_features.cleaned_engineered_features` | Final modeling-ready features     |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Language | Python 3.12 |
-| Orchestration | Apache Airflow 3.x (Docker Compose local) |
-| Cloud execution | Google Cloud Run Jobs |
-| Data lake | Google Cloud Storage |
-| Data warehouse | Google BigQuery |
-| ML framework | XGBoost, scikit-learn |
+| Layer                 | Technology                                |
+| --------------------- | ----------------------------------------- |
+| Language              | Python 3.12                               |
+| Orchestration         | Apache Airflow 3.x (Docker Compose local) |
+| Cloud execution       | Google Cloud Run Jobs                     |
+| Data lake             | Google Cloud Storage                      |
+| Data warehouse        | Google BigQuery                           |
+| ML framework          | XGBoost, scikit-learn                     |
 | Hyperparameter tuning | Optuna (25 trials, Bayesian optimization) |
-| Experiment tracking | MLflow 2.17 |
-| Model registry | MLflow Model Registry |
-| Explainability | SHAP (TreeExplainer) |
-| Data versioning | DVC |
-| Feature store | Feast (definitions) |
-| Infrastructure | Terraform |
-| CI/CD | GitHub Actions + Cloud Build |
-| Container registry | GCP Artifact Registry |
-| Auth | GCP Workload Identity Federation (OIDC) |
-| Package manager | uv |
-| Linting | Ruff, mypy |
-| Testing | pytest, pytest-cov |
-| Security scanning | Bandit, pip-audit |
+| Experiment tracking   | MLflow 2.17                               |
+| Model registry        | MLflow Model Registry                     |
+| Explainability        | SHAP (TreeExplainer)                      |
+| Data versioning       | DVC                                       |
+| Feature store         | Feast (definitions)                       |
+| Infrastructure        | Terraform                                 |
+| CI/CD                 | GitHub Actions + Cloud Build              |
+| Container registry    | GCP Artifact Registry                     |
+| Auth                  | GCP Workload Identity Federation (OIDC)   |
+| Package manager       | uv                                        |
+| Linting               | Ruff, mypy                                |
+| Testing               | pytest, pytest-cov                        |
+| Security scanning     | Bandit, pip-audit                         |
 
 ---
 
