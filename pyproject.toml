@@ -5,7 +5,9 @@ description = "Corporate Financial Distress Early Warning System"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "requests>=2.31.0",
+    "requests>=2.33.0",
+    "cryptography>=46.0.6",
+    "pygments>=2.20.0",
     "pandas>=2.1.4",
     "pydantic>=2.5.3",
     "apache-airflow>=2.8.1",
