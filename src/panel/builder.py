@@ -16,7 +16,13 @@ class PanelBuilder:
         "end_date": "date",
         "Assets": "total_assets",
         "Liabilities": "total_liabilities",
+        "StockholdersEquity": "total_equity",
+        "LongTermDebt": "total_debt",
         "NetIncomeLoss": "net_income",
+        "NetCashProvidedByUsedInOperatingActivities": "operating_cash_flow",
+        "InterestExpense": "interest_expense",
+        "OperatingIncomeLoss": "operating_income",
+        "RetainedEarningsAccumulatedDeficit": "retained_earnings",
     }
 
     REQUIRED_COLUMNS = [
@@ -25,6 +31,12 @@ class PanelBuilder:
         "total_assets",
         "total_liabilities",
         "net_income",
+        "operating_cash_flow",
+        "total_debt",
+        "total_equity",
+        "interest_expense",
+        "operating_income",
+        "retained_earnings",
     ]
 
     def __init__(self, df: pd.DataFrame):
@@ -68,6 +80,13 @@ class PanelBuilder:
             "total_assets",
             "total_liabilities",
             "net_income",
+            # new distress-signal columns
+            "operating_cash_flow",
+            "total_debt",
+            "total_equity",
+            "interest_expense",
+            "operating_income",
+            "retained_earnings",
         ]
 
         for col in lag_columns:
