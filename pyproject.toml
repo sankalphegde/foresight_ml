@@ -117,3 +117,8 @@ follow_imports = "silent"
 [[tool.mypy.overrides]]
 module = "airflow.*"
 ignore_missing_imports = true
+
+[tool.uv]
+constraint-dependencies = [
+    "aiohttp>=3.13.4",  # Fix CVE-2026-34513 through CVE-2026-34525
+]
