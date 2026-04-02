@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
+import pandas as pd
 from pydantic import BaseModel, Field
 
 # Identity columns — required for downstream joins, NOT features.
@@ -111,8 +112,6 @@ def validate_inference_input(df: "pd.DataFrame") -> List[str]:  # noqa: F821
     Returns:
         List of human-readable error strings.
     """
-    import pandas as pd
-
     errors: List[str] = []
 
     # Identity columns must exist
