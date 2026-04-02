@@ -154,7 +154,7 @@ def render() -> None:
         fig.update_xaxes(title_text="")
         fig.update_layout(height=250, showlegend=False)
         apply_chart_theme(fig)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("Distress label not available for trend chart.")
 
@@ -165,7 +165,7 @@ def render() -> None:
     with col_shap:
         st.markdown(f"#### Top risk drivers — {quarter_label(latest_year, latest_period)}")
 
-        company_shap = get_shap_for_company(shap_df, selected_firm, latest_year)
+        company_shap = get_shap_for_company(shap_df, selected_firm)
 
         if not company_shap.empty and "top_features_json" in company_shap.columns:
             # Use the most recent row's top_features_json
