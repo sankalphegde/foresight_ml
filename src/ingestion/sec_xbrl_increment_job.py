@@ -7,6 +7,7 @@ Handles:
 """
 
 import os
+from datetime import datetime, timedelta
 
 import pandas as pd
 from google.cloud.storage import Client
@@ -55,6 +56,36 @@ def save(storage_client: Client, bucket_name: str, cik: str, df: "pd.DataFrame")
     print(f"Saved -> {blob_path}")
 
 
+def filter_active_companies(companies_df: pd.DataFrame, sec: "SECClient") -> pd.DataFrame:
+    """Keep only companies that have filed within the last 18 months.
+
+    If the SEC API call fails for a CIK the company is kept (fail-safe).
+    """
+    cutoff = datetime.utcnow() - timedelta(days=18 * 30)
+    active_mask = pd.Series(True, index=companies_df.index)
+
+    for idx, row in companies_df.iterrows():
+        cik = str(row["cik"]).zfill(10)
+        try:
+            submissions = sec.get_company_filings(cik)
+            filing_dates = submissions.filings.get("recent", {}).get("filingDate", [])
+            if not filing_dates:
+                # No filings at all — treat as inactive
+                active_mask.at[idx] = False
+                continue
+            latest_date = datetime.strptime(max(filing_dates), "%Y-%m-%d")
+            if latest_date < cutoff:
+                active_mask.at[idx] = False
+        except Exception as e:
+            # Fail-safe: keep the company if the API check fails
+            print(f"SEC API check failed for CIK {cik} (keeping company): {e}")
+
+    n_filtered = int((~active_mask).sum())
+    print(f"filter_active_companies: removed {n_filtered} inactive companies, "
+          f"{int(active_mask.sum())} remaining")
+    return companies_df[active_mask].reset_index(drop=True)
+
+
 def main() -> None:
     """Execute the main ingestion pipeline for SEC XBRL data."""
     bucket_name = os.environ.get("GCS_BUCKET")
@@ -68,11 +99,25 @@ def main() -> None:
     storage_client = Client(project=project_id)
     bucket = storage_client.bucket(bucket_name)
 
+    shard_index = int(os.environ.get("SHARD_INDEX", "0"))
+    shard_total = int(os.environ.get("SHARD_TOTAL", "1"))
+
     companies_df = pd.read_csv(bucket.blob("reference/companies.csv").open("r"))
-    companies_df = companies_df.head(5)
+
+    company_limit = os.environ.get("COMPANY_LIMIT")
+    if company_limit and company_limit.strip().isdigit():
+        companies_df = companies_df.head(int(company_limit))
+        print(f"COMPANY_LIMIT set: processing {len(companies_df)} companies")
+    else:
+        print(f"COMPANY_LIMIT not set: processing all {len(companies_df)} companies")
 
     sec = SECClient(user_agent=user_agent)
     xbrl = SECXBRLClient(sec)
+
+    companies_df = filter_active_companies(companies_df, sec)
+
+    companies_df = companies_df.iloc[shard_index::shard_total].reset_index(drop=True)
+    print(f"Shard {shard_index + 1}/{shard_total}: processing {len(companies_df)} companies")
 
     total_companies = len(companies_df)
     print(f"Processing {total_companies} companies...")
