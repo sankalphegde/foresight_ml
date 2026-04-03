@@ -1,7 +1,7 @@
 """Page 2 — High-Risk Watchlist.
 
 Filterable table of companies ranked by predicted distress probability,
-with sector/size filters, trend indicators, and CSV export.
+with company names, sector/size filters, trend indicators, and CSV export.
 """
 
 from __future__ import annotations
@@ -9,28 +9,24 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from src.dashboard.data.gcs_loader import load_labeled_panel, load_predictions
-from src.dashboard.utils import (
-    risk_emoji,
+from src.dashboard.data.gcs_loader import (
+    load_company_map,
+    load_labeled_panel,
+    load_predictions,
 )
+from src.dashboard.utils import risk_emoji
 
 
 def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFrame:
-    """Build a watchlist table with one row per company.
-
-    Merges predicted probabilities with financial signals from the panel.
-    """
+    """Build a watchlist table with one row per company."""
     if predictions.empty:
         return pd.DataFrame()
 
-    # Sort and get latest prediction per firm
     predictions = predictions.sort_values(["firm_id", "fiscal_year", "fiscal_period"])
     latest_preds = predictions.groupby("firm_id").last().reset_index()
 
-    # Get second-to-last prediction for trend
+    # Get previous prediction for trend
     second_preds = predictions.groupby("firm_id").nth(-2).reset_index()
-
-    # Merge trend
     if not second_preds.empty and "distress_probability" in second_preds.columns:
         prev = second_preds[["firm_id", "distress_probability"]].rename(
             columns={"distress_probability": "prev_prob"}
@@ -39,7 +35,7 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
     else:
         latest_preds["prev_prob"] = None
 
-    # Merge panel info (sector, size, financials) for the latest quarter
+    # Merge panel info
     if not panel.empty:
         panel_sorted = panel.sort_values(["firm_id", "fiscal_year", "fiscal_period"])
         panel_latest = panel_sorted.groupby("firm_id").last().reset_index()
@@ -60,12 +56,12 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
 
         latest_preds = latest_preds.merge(panel_latest[merge_cols], on="firm_id", how="left")
 
-    # Build display rows
+    # Build rows
     rows = []
     for _, r in latest_preds.iterrows():
         prob = float(r.get("distress_probability", 0))
 
-        # Detect active distress signals
+        # Detect signals
         signals = []
         if pd.notna(r.get("net_income")) and r["net_income"] < 0:
             signals.append("Neg. income")
@@ -87,7 +83,6 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
         ):
             signals.append("High leverage")
 
-        # Trend
         prev = r.get("prev_prob")
         change = prob - float(prev) if pd.notna(prev) else 0.0
 
@@ -109,10 +104,12 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
 def render() -> None:
     """Render the High-Risk Watchlist page."""
     st.header("🔴 High-Risk Watchlist")
+    st.caption("Companies most likely to experience financial distress within the next 6 months")
 
     # ── Load data ────────────────────────────────────────────────────
     predictions = load_predictions()
     panel = load_labeled_panel()
+    company_map = load_company_map()
 
     if predictions.empty:
         st.warning("No model predictions available. Run batch inference first.")
@@ -167,7 +164,9 @@ def render() -> None:
     # ── Summary metrics ──────────────────────────────────────────────
     total = len(filtered)
     high_risk = len(filtered[filtered["risk_score"] >= 0.70])
-    medium_risk = len(filtered[(filtered["risk_score"] >= 0.30) & (filtered["risk_score"] < 0.70)])
+    medium_risk = len(
+        filtered[(filtered["risk_score"] >= 0.30) & (filtered["risk_score"] < 0.70)]
+    )
 
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Companies shown", f"{total:,}")
@@ -175,23 +174,38 @@ def render() -> None:
     m3.metric("🟡 Medium (0.30–0.70)", medium_risk)
     m4.metric("Total scored", f"{len(watchlist):,}")
 
+    # ── Add company names and tickers ────────────────────────────────
+    if not company_map.empty:
+        name_lookup = dict(zip(company_map["firm_id"], company_map["name"]))
+        ticker_lookup = dict(zip(company_map["firm_id"], company_map["ticker"]))
+        filtered["company"] = filtered["firm_id"].map(name_lookup).fillna("—")
+        filtered["ticker"] = filtered["firm_id"].map(ticker_lookup).fillna("—")
+    else:
+        filtered["company"] = "—"
+        filtered["ticker"] = "—"
+
     # ── Watchlist table ──────────────────────────────────────────────
     if filtered.empty:
         st.info(f"No companies found with risk score ≥ {threshold:.0%}")
         return
 
     st.markdown(
-        f"**Showing {len(filtered):,} companies** · Sorted by predicted distress probability"
+        f"**Showing {len(filtered):,} companies** · "
+        f"Sorted by predicted distress probability"
     )
 
     display = filtered.copy()
     display["risk"] = display["risk_score"].apply(lambda s: f"{risk_emoji(s)} {s:.2%}")
     display["trend"] = display["change"].apply(
-        lambda c: f"🔴 +{c:.2%} ↑" if c > 0.01 else (f"🟢 {c:.2%} ↓" if c < -0.01 else "— 0.00")
+        lambda c: f"🔴 +{c:.2%} ↑"
+        if c > 0.01
+        else (f"🟢 {c:.2%} ↓" if c < -0.01 else "— 0.00")
     )
 
     show_cols = {
-        "firm_id": "Company (CIK)",
+        "company": "Company",
+        "ticker": "Ticker",
+        "firm_id": "CIK",
         "sector": "Sector",
         "size": "Size",
         "risk": "Risk Score",

@@ -1,7 +1,7 @@
 """Page 1 — Company Risk Explorer.
 
-Search by firm_id, view predicted distress probability trend, SHAP risk drivers,
-and financial snapshot for any company in the dataset.
+Search by company name/ticker, view predicted distress probability trend,
+SHAP risk drivers, and financial snapshot.
 """
 
 from __future__ import annotations
@@ -12,12 +12,12 @@ import streamlit as st
 from src.dashboard.data.gcs_loader import (
     get_company_history,
     get_shap_for_company,
+    load_company_map,
     load_labeled_panel,
     load_predictions,
     load_shap_values,
 )
 from src.dashboard.utils import (
-    COLORS,
     apply_chart_theme,
     fmt_large_number,
     parse_top_features_json,
@@ -26,44 +26,68 @@ from src.dashboard.utils import (
     risk_badge_html,
     risk_color,
     shap_color,
+    COLORS,
 )
 
 
 def render() -> None:
     """Render the Company Risk Explorer page."""
     st.header("🔍 Company Risk Explorer")
+    st.caption("Probability of financial distress within the next 6 months (2 quarters)")
 
     # ── Load data ────────────────────────────────────────────────────
     predictions = load_predictions()
     panel = load_labeled_panel()
     shap_df = load_shap_values()
+    company_map = load_company_map()
 
     if predictions.empty and panel.empty:
         st.error("No data available. Check GCS connection.")
         return
 
-    # Use predictions for firm list if available, else fall back to panel
+    # Use predictions for firm list if available
     if not predictions.empty:
         firm_ids = sorted(predictions["firm_id"].unique())
         data_source = "predictions"
         st.success(
-            f"Loaded {len(predictions):,} predictions for {len(firm_ids):,} companies", icon="✅"
+            f"Loaded {len(predictions):,} predictions for {len(firm_ids):,} companies",
+            icon="✅",
         )
     else:
         firm_ids = sorted(panel["firm_id"].unique())
         data_source = "panel"
         st.warning("No model predictions available. Showing distress labels only.", icon="⚠️")
 
+    # Build display labels: "Apple Inc. (AAPL) — 0000320193"
+    id_to_info = {}
+    if not company_map.empty:
+        for _, row in company_map.iterrows():
+            id_to_info[row["firm_id"]] = {"ticker": row["ticker"], "name": row["name"]}
+
+    display_options = []
+    for fid in firm_ids:
+        info = id_to_info.get(fid)
+        if info:
+            display_options.append(f"{info['name']} ({info['ticker']}) — {fid}")
+        else:
+            display_options.append(fid)
+
     # ── Company search ───────────────────────────────────────────────
     col_search, col_quarter = st.columns([3, 1])
 
     with col_search:
-        selected_firm = st.selectbox(
-            "Search company (firm_id / CIK)",
-            options=firm_ids,
+        selected_display = st.selectbox(
+            "Search company",
+            options=display_options,
             index=0,
-            help="Select a company by its CIK / firm_id",
+            help="Type a company name, ticker, or CIK to search",
         )
+
+    # Extract firm_id from selection
+    if " — " in selected_display:
+        selected_firm = selected_display.split(" — ")[-1].strip()
+    else:
+        selected_firm = selected_display
 
     if not selected_firm:
         st.info("Select a company to view risk analysis.")
@@ -103,7 +127,9 @@ def render() -> None:
     with col_quarter:
         if firm_preds is not None and len(firm_preds) > 1:
             quarters = firm_preds.apply(
-                lambda r: quarter_label(int(r["fiscal_year"]), str(r.get("fiscal_period", ""))),
+                lambda r: quarter_label(
+                    int(r["fiscal_year"]), str(r.get("fiscal_period", ""))
+                ),
                 axis=1,
             ).tolist()
             st.selectbox("Quarter", options=quarters, index=len(quarters) - 1)
@@ -113,8 +139,16 @@ def render() -> None:
     hdr_left, hdr_right = st.columns([3, 1])
 
     with hdr_left:
-        st.markdown(f"### {selected_firm}")
-        meta_parts = [f"CIK {selected_firm}"]
+        info = id_to_info.get(selected_firm, {})
+        company_name = info.get("name", selected_firm)
+        ticker = info.get("ticker", "")
+        display_title = f"{company_name} ({ticker})" if ticker else selected_firm
+        st.markdown(f"### {display_title}")
+
+        meta_parts = []
+        if ticker:
+            meta_parts.append(ticker)
+        meta_parts.append(f"CIK {selected_firm}")
         if not history.empty:
             lh = history.iloc[-1]
             if "sector_proxy" in lh.index and lh.get("sector_proxy"):
@@ -127,17 +161,19 @@ def render() -> None:
     with hdr_right:
         st.markdown(risk_badge_html(latest_score), unsafe_allow_html=True)
         if data_source == "predictions":
-            st.caption("🤖 Model prediction (XGBoost)")
+            st.caption("🤖 6-month distress prediction (XGBoost)")
         else:
             st.caption("📋 Distress label (no model predictions)")
 
     # ── Distress probability trend chart ─────────────────────────────
     if firm_preds is not None and len(firm_preds) > 1:
-        st.markdown("#### Predicted distress probability — trend")
+        st.markdown("#### Predicted distress probability — 6-month outlook")
 
         display_preds = firm_preds.copy()
         display_preds["quarter"] = display_preds.apply(
-            lambda r: quarter_label(int(r["fiscal_year"]), str(r.get("fiscal_period", ""))),
+            lambda r: quarter_label(
+                int(r["fiscal_year"]), str(r.get("fiscal_period", ""))
+            ),
             axis=1,
         )
 
@@ -169,7 +205,11 @@ def render() -> None:
             annotation_text="Medium (0.30)",
             annotation_position="top left",
         )
-        fig.update_yaxes(title_text="Distress probability", range=[-0.05, 1.05], tickformat=".0%")
+        fig.update_yaxes(
+            title_text="Distress probability",
+            range=[-0.05, 1.05],
+            tickformat=".0%",
+        )
         fig.update_xaxes(title_text="")
         fig.update_layout(height=280, showlegend=False)
         apply_chart_theme(fig)
@@ -185,15 +225,21 @@ def render() -> None:
     elif not history.empty and "distress_label" in history.columns:
         st.markdown("#### Distress label — last 8 quarters")
         st.caption(
-            "⚠️ Binary labels shown. Probability predictions available for test set companies (2022–2023)."
+            "⚠️ Binary labels shown. Probability predictions available "
+            "for test set companies (2022–2023)."
         )
 
         recent = history.tail(8).copy()
         recent["quarter"] = recent.apply(
-            lambda r: quarter_label(int(r["fiscal_year"]), str(r.get("fiscal_period", ""))), axis=1
+            lambda r: quarter_label(
+                int(r["fiscal_year"]), str(r.get("fiscal_period", ""))
+            ),
+            axis=1,
         )
         recent["sort_key"] = recent.apply(
-            lambda r: quarter_sort_key(int(r["fiscal_year"]), str(r.get("fiscal_period", ""))),
+            lambda r: quarter_sort_key(
+                int(r["fiscal_year"]), str(r.get("fiscal_period", ""))
+            ),
             axis=1,
         )
         recent = recent.sort_values("sort_key")
@@ -208,7 +254,11 @@ def render() -> None:
                 marker={"size": 7},
             )
         )
-        fig.update_yaxes(range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["Healthy", "Distressed"])
+        fig.update_yaxes(
+            range=[-0.1, 1.1],
+            tickvals=[0, 1],
+            ticktext=["Healthy", "Distressed"],
+        )
         fig.update_layout(height=250, showlegend=False)
         apply_chart_theme(fig)
         st.plotly_chart(fig, width="stretch")
@@ -236,15 +286,18 @@ def render() -> None:
                     direction = "↑ risk" if val > 0 else "↓ safe"
 
                     st.markdown(
-                        f"""<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px">
-                            <div style="width:160px;color:#73726c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-                                 title="{feat["feature"]}">{feat["feature"]}</div>
-                            <div style="flex:1;height:8px;background:#f0efea;border-radius:4px;overflow:hidden">
-                                <div style="height:100%;width:{pct:.0f}%;background:{color};border-radius:4px"></div>
+                        f"""<div style="display:flex;align-items:center;gap:8px;
+                        margin-bottom:6px;font-size:13px">
+                            <div style="width:160px;color:#73726c;overflow:hidden;
+                            text-overflow:ellipsis;white-space:nowrap"
+                            title="{feat['feature']}">{feat['feature']}</div>
+                            <div style="flex:1;height:8px;background:#f0efea;
+                            border-radius:4px;overflow:hidden">
+                                <div style="height:100%;width:{pct:.0f}%;
+                                background:{color};border-radius:4px"></div>
                             </div>
-                            <div style="width:70px;text-align:right;color:{color};font-size:12px">
-                                {sign}{val:.3f} {direction}
-                            </div>
+                            <div style="width:70px;text-align:right;color:{color};
+                            font-size:12px">{sign}{val:.3f} {direction}</div>
                         </div>""",
                         unsafe_allow_html=True,
                     )
@@ -272,13 +325,21 @@ def render() -> None:
                 ("Total assets", "total_assets", fmt_large_number),
                 ("Total liabilities", "total_liabilities", fmt_large_number),
                 ("Stockholders equity", "StockholdersEquity", fmt_large_number),
-                ("Cash & equivalents", "CashAndCashEquivalentsAtCarryingValue", fmt_large_number),
+                (
+                    "Cash & equivalents",
+                    "CashAndCashEquivalentsAtCarryingValue",
+                    fmt_large_number,
+                ),
                 (
                     "Operating cash flow",
                     "NetCashProvidedByUsedInOperatingActivities",
                     fmt_large_number,
                 ),
-                ("Retained earnings", "RetainedEarningsAccumulatedDeficit", fmt_large_number),
+                (
+                    "Retained earnings",
+                    "RetainedEarningsAccumulatedDeficit",
+                    fmt_large_number,
+                ),
             ]
 
             for label, col, formatter in snapshot_fields:
@@ -286,8 +347,9 @@ def render() -> None:
                     val = lh[col]
                     formatted = formatter(val) if val != 0 else "—"
                     st.markdown(
-                        f"""<div style="display:flex;justify-content:space-between;padding:5px 0;
-                        border-bottom:0.5px solid rgba(0,0,0,0.07);font-size:13px">
+                        f"""<div style="display:flex;justify-content:space-between;
+                        padding:5px 0;border-bottom:0.5px solid rgba(0,0,0,0.07);
+                        font-size:13px">
                             <span style="color:#73726c">{label}</span>
                             <span style="font-weight:500">{formatted}</span>
                         </div>""",
@@ -298,8 +360,9 @@ def render() -> None:
                 ci_low = max(0, latest_score - 0.05)
                 ci_high = min(1, latest_score + 0.05)
                 st.markdown(
-                    f"""<div style="display:flex;justify-content:space-between;padding:5px 0;
-                    border-bottom:0.5px solid rgba(0,0,0,0.07);font-size:13px">
+                    f"""<div style="display:flex;justify-content:space-between;
+                    padding:5px 0;border-bottom:0.5px solid rgba(0,0,0,0.07);
+                    font-size:13px">
                         <span style="color:#73726c">Confidence interval</span>
                         <span style="color:#9c9a92">[{ci_low:.2f}, {ci_high:.2f}]</span>
                     </div>""",
@@ -307,7 +370,8 @@ def render() -> None:
                 )
 
             st.markdown(
-                """<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px">
+                """<div style="display:flex;justify-content:space-between;
+                padding:5px 0;font-size:13px">
                     <span style="color:#73726c">Model version</span>
                     <span style="color:#9c9a92">v1</span>
                 </div>""",
