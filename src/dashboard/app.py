@@ -68,7 +68,7 @@ st.markdown(
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 📊 Foresight-ML")
-    st.caption("Financial distress radar")
+    st.caption("Predicting corporate distress 6 months ahead")
     st.divider()
 
     page = st.radio(

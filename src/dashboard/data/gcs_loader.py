@@ -295,7 +295,64 @@ def load_predictions() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Derived data helpers
 # ---------------------------------------------------------------------------
+@st.cache_data(ttl=3600, show_spinner="Loading company names...")
+def load_company_map() -> dict[str, str]:
+    """Load ticker → firm_id mapping from reference/companies.csv.
 
+    Returns dict like {"AAPL": "0000320193", "MSFT": "0000789019"}.
+    """
+    try:
+        from pathlib import Path
+
+        local = Path("artifacts/reference/companies.csv")
+        if local.exists():
+            df = pd.read_csv(local)
+        else:
+            df = pd.read_csv(f"gs://{GCS_BUCKET}/reference/companies.csv")
+
+        # Zero-pad CIK to 10 digits to match panel's firm_id format
+        df["firm_id"] = df["cik"].astype(str).str.zfill(10)
+        mapping = dict(zip(df["ticker"], df["firm_id"]))
+        log.info("Loaded %d ticker mappings", len(mapping))
+        return mapping
+    except Exception as e:
+        log.warning("Company map not available: %s", e)
+        return {}
+
+
+def reverse_company_map(company_map: dict[str, str]) -> dict[str, str]:
+    """Reverse the ticker→firm_id map to firm_id→ticker."""
+    return {v: k for k, v in company_map.items()}
+
+@st.cache_data(ttl=3600, show_spinner="Loading company names...")
+def load_company_map() -> pd.DataFrame:
+    """Load company name/ticker/CIK mapping.
+
+    Tries local SEC company names file first, falls back to reference CSV.
+    Returns DataFrame with columns: firm_id, ticker, name.
+    """
+    from pathlib import Path
+
+    try:
+        local = Path("artifacts/reference/company_names.csv")
+        if local.exists():
+            df = pd.read_csv(local, dtype={"cik": str})
+        else:
+            # Fall back to reference/companies.csv (ticker + cik only)
+            ref = Path("artifacts/reference/companies.csv")
+            if ref.exists():
+                df = pd.read_csv(ref)
+                df["cik"] = df["cik"].astype(str)
+                df["name"] = df["ticker"]  # use ticker as name fallback
+            else:
+                return pd.DataFrame(columns=["firm_id", "ticker", "name"])
+
+        df["firm_id"] = df["cik"].str.zfill(10)
+        log.info("Loaded %d company mappings", len(df))
+        return df[["firm_id", "ticker", "name"]]
+    except Exception as e:
+        log.warning("Company map not available: %s", e)
+        return pd.DataFrame(columns=["firm_id", "ticker", "name"])
 
 def get_company_list(panel: pd.DataFrame) -> pd.DataFrame:
     """Get unique company list with latest data for search/filter."""
