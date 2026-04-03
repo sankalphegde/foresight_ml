@@ -1,12 +1,14 @@
-name: CD-DEV
+name: CD-API
 
 on:
   push:
     branches:
       - main
     paths:
-      - deployment/docker/Dockerfile.ingestion
-      - src/ingestion/**
+      - deployment/docker/Dockerfile.api
+      - src/api/**
+      - src/models/predict.py
+      - src/models/explain.py
       - pyproject.toml
       - uv.lock
 
@@ -19,7 +21,8 @@ env:
   PROJECT_NUMBER: 771179250808
   REGION: us-central1
   ARTIFACT_REPO: foresight
-  IMAGE_NAME: data-ingestion
+  IMAGE_NAME: foresight-api
+  SERVICE_NAME: foresight-api
 
 jobs:
   deploy:
@@ -44,7 +47,7 @@ jobs:
       - name: Build Docker image
         run: |
           IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$ARTIFACT_REPO/$IMAGE_NAME:${{ github.sha }}
-          docker build -f deployment/docker/Dockerfile.ingestion -t $IMAGE_URI .
+          docker build -f deployment/docker/Dockerfile.api -t $IMAGE_URI .
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
       - name: Scan image for vulnerabilities (Trivy)
@@ -59,35 +62,28 @@ jobs:
       - name: Push Docker image
         run: docker push $IMAGE_URI
 
-      - name: Deploy FRED ingestion job
+      - name: Deploy API service to Cloud Run
         run: |
-          gcloud run jobs deploy fred-ingestion \
+          gcloud run deploy $SERVICE_NAME \
             --image=$IMAGE_URI \
             --region=$REGION \
-            --service-account=fred-job-sa@$PROJECT_ID.iam.gserviceaccount.com \
-            --command="uv" \
-            --args="run,python,-m,src.ingestion.fred_increment_job" \
-            --set-env-vars="GCS_BUCKET=financial-distress-data" \
-            --set-secrets="FRED_API_KEY=fred-api-key:latest" \
-            --project=$PROJECT_ID
-
-      - name: Deploy SEC ingestion job
-        run: |
-          gcloud run jobs deploy sec-ingestion \
-            --image=$IMAGE_URI \
-            --region=$REGION \
-            --service-account=sec-job-sa@$PROJECT_ID.iam.gserviceaccount.com \
-            --command="uv" \
-            --args="run,python,-m,src.ingestion.sec_xbrl_increment_job" \
-            --set-env-vars="GCS_BUCKET=financial-distress-data" \
-            --set-secrets="SEC_USER_AGENT=sec-user-agent:latest" \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=8080 \
+            --min-instances=1 \
+            --max-instances=3 \
+            --memory=2Gi \
+            --cpu=2 \
+            --service-account=github-deployer@$PROJECT_ID.iam.gserviceaccount.com \
+            --set-env-vars="GCS_BUCKET=financial-distress-data,MLFLOW_TRACKING_URI=https://foresight-mlflow-6ool3rlbea-uc.a.run.app" \
+            --set-secrets="FORESIGHT_API_KEY=foresight-api-keys:latest" \
             --project=$PROJECT_ID
 
       - name: Notify Slack on success
         if: success()
         uses: slackapi/slack-github-action@v1.26.0
         with:
-          payload: '{"text":"✅ CD-DEV succeeded — ingestion jobs deployed at ${{ github.sha }}"}'
+          payload: '{"text":"✅ CD-API succeeded — foresight-api deployed at ${{ github.sha }}"}'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
@@ -95,6 +91,6 @@ jobs:
         if: failure()
         uses: slackapi/slack-github-action@v1.26.0
         with:
-          payload: '{"text":"❌ CD-DEV failed on branch ${{ github.ref }} — ${{ github.sha }}"}'
+          payload: '{"text":"❌ CD-API failed on branch ${{ github.ref }} — ${{ github.sha }}"}'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

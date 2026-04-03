@@ -32,15 +32,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Authenticate to GCP
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
           service_account: github-deployer@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
 
-      - uses: google-github-actions/setup-gcloud@v3
+      - uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for Artifact Registry
         run: |
@@ -53,10 +53,18 @@ jobs:
           docker build -f deployment/docker/Dockerfile.train -t $IMAGE_URI .
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_URI }}
+          format: table
+          exit-code: 0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
       - name: Push training image
         run: docker push $IMAGE_URI
 
-      # Create job on first run, update image on subsequent runs
       - name: Deploy training job
         run: |
           if gcloud run jobs describe foresight-training --region $REGION 2>/dev/null; then
@@ -81,6 +89,22 @@ jobs:
               --project=$PROJECT_ID
           fi
 
+      - name: Notify Slack on success
+        if: success()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: '{"text":"✅ CD-Training succeeded — foresight-training job deployed at ${{ github.sha }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: '{"text":"❌ CD-Training failed on branch ${{ github.ref }} — ${{ github.sha }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
   notify-failure:
     name: Notify on failure
     runs-on: ubuntu-latest
@@ -99,7 +123,7 @@ jobs:
           subject: "Model training pipeline failed - ${{ github.sha }}"
           body: |
             The model training pipeline failed.
-            
+
             Commit: ${{ github.sha }}
             Branch: ${{ github.ref_name }}
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
