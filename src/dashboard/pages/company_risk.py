@@ -32,7 +32,7 @@ from src.dashboard.utils import (
 
 def render() -> None:
     """Render the Company Risk Explorer page."""
-    st.header("🔍 Company Risk Explorer")
+    st.header("Company Risk Explorer")
     st.caption("Probability of financial distress within the next 6 months (2 quarters)")
 
     # ── Load data ────────────────────────────────────────────────────
@@ -51,7 +51,6 @@ def render() -> None:
         data_source = "predictions"
         st.success(
             f"Loaded {len(predictions):,} predictions for {len(firm_ids):,} companies",
-            icon="✅",
         )
     else:
         firm_ids = sorted(panel["firm_id"].unique())
@@ -93,6 +92,21 @@ def render() -> None:
         st.info("Select a company to view risk analysis.")
         return
 
+    # ── Loading spinner ──────────────────────────────────────────────
+    loading = st.empty()
+    loading.markdown(
+        """<div style="display:flex;align-items:center;justify-content:center;
+        padding:40px;gap:10px">
+            <div style="width:20px;height:20px;border:2.5px solid #f0efea;
+            border-top:2.5px solid #3b7dd8;border-radius:50%;
+            animation:spin 0.8s linear infinite"></div>
+            <span style="font-size:14px;color:#9c9a92">Analyzing company...</span>
+        </div>
+        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     # ── Get prediction data for this company ─────────────────────────
     firm_preds = None
     if not predictions.empty:
@@ -121,6 +135,7 @@ def render() -> None:
         latest_year = int(latest_row["fiscal_year"])
         latest_period = str(latest_row.get("fiscal_period", "Q4"))
     else:
+        loading.empty()
         st.warning(f"No data found for {selected_firm}")
         return
 
@@ -133,6 +148,9 @@ def render() -> None:
                 axis=1,
             ).tolist()
             st.selectbox("Quarter", options=quarters, index=len(quarters) - 1)
+
+    # ── Clear spinner ────────────────────────────────────────────────
+    loading.empty()
 
     # ── Company header with risk badge ───────────────────────────────
     st.markdown("---")

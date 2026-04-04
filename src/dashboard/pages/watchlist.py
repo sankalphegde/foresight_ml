@@ -103,7 +103,7 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
 
 def render() -> None:
     """Render the High-Risk Watchlist page."""
-    st.header("🔴 High-Risk Watchlist")
+    st.header("High-Risk Watchlist")
     st.caption("Companies most likely to experience financial distress within the next 6 months")
 
     # ── Load data ────────────────────────────────────────────────────
