@@ -87,7 +87,11 @@ def render() -> None:
         selected_firm = selected_display.split(" — ")[-1].strip()
     else:
         selected_firm = selected_display
-
+    st.caption(
+        f"📋 {len(display_options):,} companies available · "
+        "Can't find a company? Only US public companies with SEC filings "
+        "in the 2022–2023 test period are scored."
+    )
     if not selected_firm:
         st.info("Select a company to view risk analysis.")
         return
