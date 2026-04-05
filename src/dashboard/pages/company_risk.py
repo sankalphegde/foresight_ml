@@ -132,7 +132,7 @@ def _render_shap_bars(features: list[dict], latest_score: float, has_preds: bool
 
 def render() -> None:
     """Render the Company Risk Explorer page."""
-    st.header("🔍 Company Risk Explorer")
+    st.header("Company Risk Explorer")
     st.caption("Probability of financial distress within the next 6 months (2 quarters)")
 
     with st.expander("ℹ️ How to use this page", expanded=False):

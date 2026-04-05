@@ -58,7 +58,7 @@ def _pipeline_row(name: str, duration: str, status: str, detail: str = "") -> st
 
 def render() -> None:
     """Render the Pipeline Status page."""
-    st.header("⚙️ Pipeline Status")
+    st.header("Pipeline Status")
     st.caption("Data ingestion and model training pipeline execution status")
 
     with st.expander("ℹ️ How to use this page", expanded=False):

@@ -21,7 +21,7 @@ from src.dashboard.utils import apply_chart_theme, COLORS
 
 def render() -> None:
     """Render the Model Health page."""
-    st.header("🩺 Model Health")
+    st.header("Model Health")
     st.caption("Production model status, drift monitoring, and prediction quality")
 
     with st.expander("ℹ️ How to use this page", expanded=False):
