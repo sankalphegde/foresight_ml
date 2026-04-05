@@ -95,6 +95,23 @@ def render() -> None:
     """Render the High-Risk Watchlist page."""
     st.header("🔴 High-Risk Watchlist")
     st.caption("Companies most likely to experience financial distress within the next 6 months")
+    with st.expander("ℹ️ How to use this page", expanded=False):
+        st.markdown(
+            """
+            **High-Risk Watchlist** ranks all scored companies by predicted
+            distress probability. Use it to identify which companies need attention.
+
+            **How to read the table:**
+            - **Risk Score** — Predicted probability of distress in next 6 months
+            - **vs Last Qtr** — 🔴 risk increased, 🟢 risk decreased since last quarter
+            - **Active Distress Signals** — Financial warning signs from latest filing
+
+            **Tips:**
+            - Use the threshold slider to focus on high-risk companies only
+            - Export to CSV for offline analysis or sharing with your team
+            - Sector/size filters help narrow down specific segments
+            """
+        )
 
     predictions = load_predictions()
     panel = load_labeled_panel()
@@ -194,6 +211,11 @@ def render() -> None:
     # ── Watchlist table ──────────────────────────────────────────────
     if filtered.empty:
         st.info(f"No companies found with risk score ≥ {threshold:.0%}")
+        if threshold > 0.9:
+            st.info(
+                "💡 Try lowering the threshold. Most companies have low distress probability, "
+                "which is expected — only ~2-5% of companies experience financial distress."
+            )
         return
 
     st.markdown(f"**Showing {len(filtered):,} companies** · Sorted by predicted distress probability")

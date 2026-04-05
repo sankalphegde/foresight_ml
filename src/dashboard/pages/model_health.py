@@ -22,6 +22,23 @@ from src.dashboard.utils import apply_chart_theme, COLORS
 def render() -> None:
     """Render the Model Health page."""
     st.header("🩺 Model Health")
+    st.caption("Production model status, drift monitoring, and prediction quality")
+
+    with st.expander("ℹ️ How to use this page", expanded=False):
+        st.markdown(
+            """
+            **Model Health** monitors the production model's quality and data freshness.
+
+            **Key metrics:**
+            - **ROC-AUC** — Model's ability to rank distressed vs healthy firms (target ≥ 0.80)
+            - **Drift status** — Whether input data distribution has shifted since training
+            - **Prediction distribution** — How scores are spread across all companies
+
+            **Alerts:**
+            - ⚠️ Drift detected → model may need retraining
+            - 🔴 ROC-AUC below 0.80 → model quality degraded
+            """
+        )
 
     manifest = load_manifest()
     optuna = load_optuna_results()
@@ -150,10 +167,14 @@ def render() -> None:
         probs = predictions["distress_probability"]
 
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total scored", f"{len(predictions):,}")
-        m2.metric("Mean probability", f"{probs.mean():.2%}")
-        m3.metric("High risk (≥0.70)", f"{(probs >= 0.70).sum():,}")
-        m4.metric("Median probability", f"{probs.median():.4f}")
+        m1.metric("Total scored", f"{len(predictions):,}",
+                  help="Number of company-quarters scored by the model")
+        m2.metric("Mean probability", f"{probs.mean():.2%}",
+                  help="Average predicted distress probability across all companies")
+        m3.metric("High risk (≥0.70)", f"{(probs >= 0.70).sum():,}",
+                  help="Companies with >70% predicted chance of distress in 6 months")
+        m4.metric("Median probability", f"{probs.median():.4f}",
+                  help="Middle value — 50% of companies are above, 50% below")
 
         fig = go.Figure()
         fig.add_trace(

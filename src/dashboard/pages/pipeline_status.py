@@ -59,6 +59,26 @@ def _pipeline_row(name: str, duration: str, status: str, detail: str = "") -> st
 def render() -> None:
     """Render the Pipeline Status page."""
     st.header("⚙️ Pipeline Status")
+    st.caption("Data ingestion and model training pipeline execution status")
+
+    with st.expander("ℹ️ How to use this page", expanded=False):
+        st.markdown(
+            """
+            **Pipeline Status** shows the health of both automated pipelines.
+
+            **Data pipeline** (@daily) — Ingests new SEC filings and FRED economic data,
+            cleans, engineers features, and runs validation.
+
+            **Training pipeline** (@weekly) — Retrains the model, evaluates on held-out data,
+            and promotes to production only if quality gate passes (ROC-AUC ≥ 0.80).
+
+            **Status indicators:**
+            - 🟢 Success — Task completed normally
+            - 🟡 Warning — Completed with issues (e.g. drift detected)
+            - 🔴 Failed — Task failed, check logs
+            - 🔵 Running — Task currently executing
+            """
+        )
 
     manifest = load_manifest()
     optuna = load_optuna_results()
@@ -188,20 +208,23 @@ def render() -> None:
     m1.metric(
         "Last scored",
         scored_at if scored_at != "pending" else "—",
+        help="Timestamp of most recent batch inference run",
     )
 
     m2.metric(
         "Companies scored",
         f"{len(predictions):,}" if has_predictions else "—",
+        help="Total company-quarters in the latest scoring batch",
     )
 
     high_risk = 0
     if has_predictions and "distress_probability" in predictions.columns:
         high_risk = int((predictions["distress_probability"] >= 0.70).sum())
-    m3.metric("High-risk companies (≥0.70)", high_risk)
+    m3.metric("High-risk companies (≥0.70)", high_risk,
+              help="Companies above the high-risk threshold")
 
-    m4.metric("Model ROC-AUC", f"{roc_auc:.4f}" if roc_auc > 0 else "—")
-
+    m4.metric("Model ROC-AUC", f"{roc_auc:.4f}" if roc_auc > 0 else "—",
+              help="Model's ability to distinguish distressed from healthy firms. Target ≥ 0.80")
     # ── Artifact status ──────────────────────────────────────────────
     st.markdown("---")
     st.markdown("#### Artifact status")
