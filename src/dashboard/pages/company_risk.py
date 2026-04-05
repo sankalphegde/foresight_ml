@@ -226,15 +226,18 @@ def render() -> None:
         selected_display = st.selectbox(
             "Search company",
             options=display_options,
-            index=0,
+            index=None,
+            placeholder="Type a company name, ticker, or CIK...",
             help="Type a company name, ticker symbol, or CIK number to search",
         )
 
-    selected_firm = (
-        selected_display.split(" — ")[-1].strip()
-        if " — " in selected_display
-        else selected_display
-    )
+    selected_firm = None
+    if selected_display:
+        selected_firm = (
+            selected_display.split(" — ")[-1].strip()
+            if " — " in selected_display
+            else selected_display
+        )
 
     st.caption(
         f"📋 {len(display_options):,} companies available · "
