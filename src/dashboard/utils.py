@@ -1,7 +1,7 @@
 """Shared utilities for the Foresight-ML Streamlit dashboard.
 
-Provides risk badges, color helpers, chart theming, and formatting
-functions used across all dashboard pages.
+Provides risk classification, SHAP helpers, number formatting,
+quarter utilities, and Plotly chart theming.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import json
 import pandas as pd
 
 # ---------------------------------------------------------------------------
-# Risk thresholds and colors
+# Risk thresholds and color palette
 # ---------------------------------------------------------------------------
 
 HIGH_RISK_THRESHOLD = 0.70
@@ -29,18 +29,18 @@ COLORS = {
     "muted": "#9c9a92",
     "text": "#1a1a18",
     "border": "rgba(0,0,0,0.12)",
-    "shap_positive": "#b91c1c",  # increases risk (red)
-    "shap_negative": "#16a34a",  # protective (green)
+    "shap_positive": "#b91c1c",
+    "shap_negative": "#16a34a",
 }
 
 
 # ---------------------------------------------------------------------------
-# Risk badge
+# Risk classification
 # ---------------------------------------------------------------------------
 
 
 def risk_level(score: float) -> str:
-    """Return risk level string from a distress probability score."""
+    """Classify a distress probability into High / Medium / Low."""
     if score >= HIGH_RISK_THRESHOLD:
         return "High"
     if score >= MEDIUM_RISK_THRESHOLD:
@@ -58,7 +58,7 @@ def risk_emoji(score: float) -> str:
 
 
 def risk_color(score: float) -> str:
-    """Return hex color string for a risk score."""
+    """Return hex color for a risk score."""
     if score >= HIGH_RISK_THRESHOLD:
         return COLORS["high"]
     if score >= MEDIUM_RISK_THRESHOLD:
@@ -67,15 +67,10 @@ def risk_color(score: float) -> str:
 
 
 def risk_badge_html(score: float) -> str:
-    """Return an HTML badge for inline display of risk level."""
+    """Return an HTML badge for inline risk display."""
     level = risk_level(score)
-    if level == "High":
-        bg, color = COLORS["high_bg"], COLORS["high"]
-    elif level == "Medium":
-        bg, color = COLORS["medium_bg"], COLORS["medium"]
-    else:
-        bg, color = COLORS["low_bg"], COLORS["low"]
-
+    bg = COLORS[f"{level.lower()}_bg"]
+    color = COLORS[level.lower()]
     return (
         f'<span style="background:{bg};color:{color};padding:3px 10px;'
         f'border-radius:20px;font-size:12px;font-weight:500">'
@@ -89,11 +84,7 @@ def risk_badge_html(score: float) -> str:
 
 
 def parse_top_features_json(json_str: str) -> list[dict]:
-    """Parse a top_features_json string into a list of dicts.
-
-    Each dict has keys: feature, shap_value, rank.
-    Returns empty list on parse failure.
-    """
+    """Parse top_features_json into a list of dicts. Empty list on failure."""
     if pd.isna(json_str) or not json_str:
         return []
     try:
@@ -102,29 +93,18 @@ def parse_top_features_json(json_str: str) -> list[dict]:
         return []
 
 
-def shap_direction_label(shap_value: float) -> str:
-    """Return human-readable direction for a SHAP value."""
-    if shap_value > 0:
-        return "↑ increases risk"
-    if shap_value < 0:
-        return "↓ reduces risk"
-    return "— no effect"
-
-
 def shap_color(shap_value: float) -> str:
-    """Return color for a SHAP value (red = risk, green = protective)."""
-    if shap_value > 0:
-        return COLORS["shap_positive"]
-    return COLORS["shap_negative"]
+    """Return color for SHAP value: red = increases risk, green = protective."""
+    return COLORS["shap_positive"] if shap_value > 0 else COLORS["shap_negative"]
 
 
 # ---------------------------------------------------------------------------
-# Formatting helpers
+# Number formatting
 # ---------------------------------------------------------------------------
 
 
 def fmt_large_number(value: float) -> str:
-    """Format large numbers with B/M/K suffixes."""
+    """Format large numbers: $24.2B, $3.1M, $500K."""
     if pd.isna(value):
         return "N/A"
     abs_val = abs(value)
@@ -138,32 +118,18 @@ def fmt_large_number(value: float) -> str:
     return f"{sign}${abs_val:.0f}"
 
 
-def fmt_ratio(value: float, decimals: int = 2) -> str:
-    """Format a ratio or percentage value."""
-    if pd.isna(value):
-        return "N/A"
-    return f"{value:.{decimals}f}"
-
-
-def fmt_pct(value: float) -> str:
-    """Format a value as percentage."""
-    if pd.isna(value):
-        return "N/A"
-    return f"{value:.1%}"
-
-
 # ---------------------------------------------------------------------------
 # Quarter helpers
 # ---------------------------------------------------------------------------
 
 
 def quarter_label(year: int, period: str) -> str:
-    """Create a human-readable quarter label like 'Q3 2025'."""
+    """Human-readable quarter label: 'Q3 2025'."""
     return f"{period} {year}"
 
 
 def quarter_sort_key(year: int, period: str) -> int:
-    """Create a numeric sort key for year-quarter ordering."""
+    """Numeric sort key for year-quarter ordering."""
     q_map = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}
     return year * 10 + q_map.get(period, 0)
 
@@ -188,12 +154,6 @@ def apply_chart_theme(fig: object) -> object:
             "borderwidth": 1,
         },
     )
-    fig.update_xaxes(
-        gridcolor="rgba(0,0,0,0.06)",
-        linecolor=COLORS["border"],
-    )
-    fig.update_yaxes(
-        gridcolor="rgba(0,0,0,0.06)",
-        linecolor=COLORS["border"],
-    )
+    fig.update_xaxes(gridcolor="rgba(0,0,0,0.06)", linecolor=COLORS["border"])
+    fig.update_yaxes(gridcolor="rgba(0,0,0,0.06)", linecolor=COLORS["border"])
     return fig
