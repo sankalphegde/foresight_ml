@@ -1,11 +1,12 @@
 """Page 1 — Company Risk Explorer.
 
 Search by company name/ticker, view predicted distress probability trend,
-SHAP risk drivers, and financial snapshot.
+SHAP risk drivers, key signal chips, and financial snapshot.
 """
 
 from __future__ import annotations
 
+import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -32,7 +33,7 @@ from src.dashboard.utils import (
 
 def render() -> None:
     """Render the Company Risk Explorer page."""
-    st.header("Company Risk Explorer")
+    st.header("🔍 Company Risk Explorer")
     st.caption("Probability of financial distress within the next 6 months (2 quarters)")
 
     # ── Load data ────────────────────────────────────────────────────
@@ -45,19 +46,19 @@ def render() -> None:
         st.error("No data available. Check GCS connection.")
         return
 
-    # Use predictions for firm list if available
     if not predictions.empty:
         firm_ids = sorted(predictions["firm_id"].unique())
         data_source = "predictions"
         st.success(
             f"Loaded {len(predictions):,} predictions for {len(firm_ids):,} companies",
+            icon="✅",
         )
     else:
         firm_ids = sorted(panel["firm_id"].unique())
         data_source = "panel"
         st.warning("No model predictions available. Showing distress labels only.", icon="⚠️")
 
-    # Build display labels: "Apple Inc. (AAPL) — 0000320193"
+    # Build display labels
     id_to_info = {}
     if not company_map.empty:
         for _, row in company_map.iterrows():
@@ -82,16 +83,17 @@ def render() -> None:
             help="Type a company name, ticker, or CIK to search",
         )
 
-    # Extract firm_id from selection
     if " — " in selected_display:
         selected_firm = selected_display.split(" — ")[-1].strip()
     else:
         selected_firm = selected_display
+
     st.caption(
         f"📋 {len(display_options):,} companies available · "
         "Can't find a company? Only US public companies with SEC filings "
         "in the 2022–2023 test period are scored."
     )
+
     if not selected_firm:
         st.info("Select a company to view risk analysis.")
         return
@@ -111,7 +113,7 @@ def render() -> None:
         unsafe_allow_html=True,
     )
 
-    # ── Get prediction data for this company ─────────────────────────
+    # ── Get prediction data ──────────────────────────────────────────
     firm_preds = None
     if not predictions.empty:
         fp = predictions[predictions["firm_id"] == selected_firm].copy()
@@ -124,10 +126,9 @@ def render() -> None:
             )
             firm_preds = fp.sort_values("sort_key")
 
-    # ── Get financial data from panel ────────────────────────────────
+    # ── Get financial data ───────────────────────────────────────────
     history = get_company_history(panel, selected_firm)
 
-    # Determine latest score and info
     if firm_preds is not None and not firm_preds.empty:
         latest_pred = firm_preds.iloc[-1]
         latest_score = float(latest_pred["distress_probability"])
@@ -180,6 +181,61 @@ def render() -> None:
         meta_parts.append(quarter_label(latest_year, latest_period))
         st.caption(" · ".join(meta_parts))
 
+        # ── Key signal chips ─────────────────────────────────────────
+        if not history.empty:
+            lh = history.iloc[-1]
+            signals_html = []
+
+            ni = lh.get("net_income", 0)
+            if ni < 0:
+                signals_html.append(
+                    '<span style="background:#fee2e2;color:#b91c1c;padding:3px 10px;'
+                    'border-radius:20px;font-size:11px;margin-right:4px">🔴 Negative net income</span>'
+                )
+            else:
+                signals_html.append(
+                    '<span style="background:#dcfce7;color:#166534;padding:3px 10px;'
+                    'border-radius:20px;font-size:11px;margin-right:4px">🟢 Profitable</span>'
+                )
+
+            ocf = lh.get("NetCashProvidedByUsedInOperatingActivities", 0)
+            if ocf < 0:
+                signals_html.append(
+                    '<span style="background:#fee2e2;color:#b91c1c;padding:3px 10px;'
+                    'border-radius:20px;font-size:11px;margin-right:4px">🔴 Negative cash flow</span>'
+                )
+            elif ocf > 0:
+                signals_html.append(
+                    '<span style="background:#dcfce7;color:#166534;padding:3px 10px;'
+                    'border-radius:20px;font-size:11px;margin-right:4px">🟢 Positive cash flow</span>'
+                )
+
+            re = lh.get("RetainedEarningsAccumulatedDeficit", 0)
+            if re < 0:
+                signals_html.append(
+                    '<span style="background:#fee2e2;color:#b91c1c;padding:3px 10px;'
+                    'border-radius:20px;font-size:11px;margin-right:4px">🔴 Accumulated deficit</span>'
+                )
+
+            ta = lh.get("total_assets", 0)
+            tl = lh.get("total_liabilities", 0)
+            if ta > 0 and tl / ta > 0.8:
+                signals_html.append(
+                    '<span style="background:#fee2e2;color:#b91c1c;padding:3px 10px;'
+                    'border-radius:20px;font-size:11px;margin-right:4px">🔴 High leverage</span>'
+                )
+            elif ta > 0:
+                signals_html.append(
+                    '<span style="background:#dcfce7;color:#166534;padding:3px 10px;'
+                    'border-radius:20px;font-size:11px;margin-right:4px">🟢 Healthy leverage</span>'
+                )
+
+            if signals_html:
+                st.markdown(
+                    f'<div style="margin-top:8px">{"".join(signals_html)}</div>',
+                    unsafe_allow_html=True,
+                )
+
     with hdr_right:
         st.markdown(risk_badge_html(latest_score), unsafe_allow_html=True)
         if data_source == "predictions":
@@ -212,26 +268,14 @@ def render() -> None:
             )
         )
         fig.add_hline(
-            y=0.70,
-            line_dash="dash",
-            line_color=COLORS["high"],
-            opacity=0.4,
-            annotation_text="High risk (0.70)",
-            annotation_position="top left",
+            y=0.70, line_dash="dash", line_color=COLORS["high"], opacity=0.4,
+            annotation_text="High risk (0.70)", annotation_position="top left",
         )
         fig.add_hline(
-            y=0.30,
-            line_dash="dash",
-            line_color=COLORS["medium"],
-            opacity=0.3,
-            annotation_text="Medium (0.30)",
-            annotation_position="top left",
+            y=0.30, line_dash="dash", line_color=COLORS["medium"], opacity=0.3,
+            annotation_text="Medium (0.30)", annotation_position="top left",
         )
-        fig.update_yaxes(
-            title_text="Distress probability",
-            range=[-0.05, 1.05],
-            tickformat=".0%",
-        )
+        fig.update_yaxes(title_text="Distress probability", range=[-0.05, 1.05], tickformat=".0%")
         fig.update_xaxes(title_text="")
         fig.update_layout(height=280, showlegend=False)
         apply_chart_theme(fig)
@@ -246,22 +290,15 @@ def render() -> None:
 
     elif not history.empty and "distress_label" in history.columns:
         st.markdown("#### Distress label — last 8 quarters")
-        st.caption(
-            "⚠️ Binary labels shown. Probability predictions available "
-            "for test set companies (2022–2023)."
-        )
+        st.caption("⚠️ Binary labels shown. Probability predictions available for test set (2022–2023).")
 
         recent = history.tail(8).copy()
         recent["quarter"] = recent.apply(
-            lambda r: quarter_label(
-                int(r["fiscal_year"]), str(r.get("fiscal_period", ""))
-            ),
+            lambda r: quarter_label(int(r["fiscal_year"]), str(r.get("fiscal_period", ""))),
             axis=1,
         )
         recent["sort_key"] = recent.apply(
-            lambda r: quarter_sort_key(
-                int(r["fiscal_year"]), str(r.get("fiscal_period", ""))
-            ),
+            lambda r: quarter_sort_key(int(r["fiscal_year"]), str(r.get("fiscal_period", ""))),
             axis=1,
         )
         recent = recent.sort_values("sort_key")
@@ -269,18 +306,13 @@ def render() -> None:
         fig = go.Figure()
         fig.add_trace(
             go.Scatter(
-                x=recent["quarter"],
-                y=recent["distress_label"],
+                x=recent["quarter"], y=recent["distress_label"],
                 mode="lines+markers",
                 line={"color": risk_color(latest_score), "width": 2},
                 marker={"size": 7},
             )
         )
-        fig.update_yaxes(
-            range=[-0.1, 1.1],
-            tickvals=[0, 1],
-            ticktext=["Healthy", "Distressed"],
-        )
+        fig.update_yaxes(range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["Healthy", "Distressed"])
         fig.update_layout(height=250, showlegend=False)
         apply_chart_theme(fig)
         st.plotly_chart(fig, width="stretch")
@@ -296,6 +328,17 @@ def render() -> None:
         if not company_shap.empty and "top_features_json" in company_shap.columns:
             shap_row = company_shap.iloc[-1]
             features = parse_top_features_json(shap_row["top_features_json"])
+
+            # Extend to top 5 from raw SHAP columns
+            shap_cols = [c for c in company_shap.columns if c.startswith("shap_")]
+            if shap_cols:
+                row_data = company_shap.iloc[-1]
+                vals = {c.replace("shap_", ""): float(row_data[c]) for c in shap_cols}
+                sorted_feats = sorted(vals.items(), key=lambda x: abs(x[1]), reverse=True)[:5]
+                features = [
+                    {"feature": f, "shap_value": v, "rank": i + 1}
+                    for i, (f, v) in enumerate(sorted_feats)
+                ]
 
             if features:
                 max_abs = max(abs(f["shap_value"]) for f in features) or 1.0
@@ -347,21 +390,9 @@ def render() -> None:
                 ("Total assets", "total_assets", fmt_large_number),
                 ("Total liabilities", "total_liabilities", fmt_large_number),
                 ("Stockholders equity", "StockholdersEquity", fmt_large_number),
-                (
-                    "Cash & equivalents",
-                    "CashAndCashEquivalentsAtCarryingValue",
-                    fmt_large_number,
-                ),
-                (
-                    "Operating cash flow",
-                    "NetCashProvidedByUsedInOperatingActivities",
-                    fmt_large_number,
-                ),
-                (
-                    "Retained earnings",
-                    "RetainedEarningsAccumulatedDeficit",
-                    fmt_large_number,
-                ),
+                ("Cash & equivalents", "CashAndCashEquivalentsAtCarryingValue", fmt_large_number),
+                ("Operating cash flow", "NetCashProvidedByUsedInOperatingActivities", fmt_large_number),
+                ("Retained earnings", "RetainedEarningsAccumulatedDeficit", fmt_large_number),
             ]
 
             for label, col, formatter in snapshot_fields:

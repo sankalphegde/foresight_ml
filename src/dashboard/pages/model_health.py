@@ -1,10 +1,12 @@
 """Page 3 — Model Health.
 
-Current production model card, drift status, and per-slice performance table.
+Current production model card, drift status, prediction distribution
+histogram, and per-slice performance table.
 """
 
 from __future__ import annotations
 
+import plotly.graph_objects as go
 import streamlit as st
 
 from src.dashboard.data.gcs_loader import (
@@ -14,7 +16,7 @@ from src.dashboard.data.gcs_loader import (
     load_predictions,
     load_slice_performance,
 )
-from src.dashboard.utils import COLORS
+from src.dashboard.utils import apply_chart_theme, COLORS
 
 
 def render() -> None:
@@ -43,7 +45,6 @@ def render() -> None:
     # ── Two columns: model card + drift status ───────────────────────
     col_model, col_drift = st.columns(2)
 
-    # ── Production model card ────────────────────────────────────────
     with col_model:
         st.markdown("#### Current production model")
         st.markdown("---")
@@ -69,7 +70,6 @@ def render() -> None:
                 unsafe_allow_html=True,
             )
 
-        # Best hyperparameters
         best_params = optuna.get("best_params", {})
         if best_params:
             st.markdown("##### Best hyperparameters")
@@ -83,12 +83,8 @@ def render() -> None:
                     unsafe_allow_html=True,
                 )
 
-        # MLflow link
-        st.markdown(
-            "[Open MLflow ↗](https://foresight-mlflow-6ool3rlbea-uc.a.run.app)",
-        )
+        st.markdown("[Open MLflow ↗](https://foresight-mlflow-6ool3rlbea-uc.a.run.app)")
 
-    # ── Drift status ─────────────────────────────────────────────────
     with col_drift:
         st.markdown("#### Drift monitor")
         st.markdown("---")
@@ -100,10 +96,10 @@ def render() -> None:
             f"""<div style="display:flex;justify-content:space-between;padding:6px 0;
             border-bottom:0.5px solid rgba(0,0,0,0.07);font-size:13px">
                 <span style="color:#73726c">Dataset drift</span>
-                <span style="background:{"#fee2e2" if drift_detected else "#dcfce7"};
-                color:{"#b91c1c" if drift_detected else "#166534"};
+                <span style="background:{'#fee2e2' if drift_detected else '#dcfce7'};
+                color:{'#b91c1c' if drift_detected else '#166534'};
                 padding:2px 10px;border-radius:20px;font-size:11px;font-weight:500">
-                {"Detected" if drift_detected else "None"}</span>
+                {'Detected' if drift_detected else 'None'}</span>
             </div>""",
             unsafe_allow_html=True,
         )
@@ -117,7 +113,6 @@ def render() -> None:
             unsafe_allow_html=True,
         )
 
-        # Drifted features
         drifted = drift.get("drifted_features", [])
         if drifted:
             st.markdown("##### Top drifted features (PSI)")
@@ -125,11 +120,7 @@ def render() -> None:
                 if isinstance(feat, dict):
                     name = feat.get("feature", str(feat))
                     psi = feat.get("psi", 0)
-                    color = (
-                        COLORS["high"]
-                        if psi > 0.25
-                        else (COLORS["medium"] if psi > 0.10 else COLORS["low"])
-                    )
+                    color = COLORS["high"] if psi > 0.25 else (COLORS["medium"] if psi > 0.10 else COLORS["low"])
                     st.markdown(
                         f"""<div style="display:flex;justify-content:space-between;padding:4px 0;
                         border-bottom:0.5px solid rgba(0,0,0,0.05);font-size:12px">
@@ -146,22 +137,50 @@ def render() -> None:
         st.markdown(
             f"""<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px">
                 <span style="color:#73726c">Features checked</span>
-                <span>{drift.get("total_features_checked", "—")}</span>
+                <span>{drift.get('total_features_checked', '—')}</span>
             </div>""",
             unsafe_allow_html=True,
         )
 
-    # ── Prediction summary ───────────────────────────────────────────
+    # ── Prediction distribution ──────────────────────────────────────
     if not predictions.empty and "distress_probability" in predictions.columns:
         st.markdown("---")
         st.markdown("#### Prediction distribution")
 
-        m1, m2, m3, m4 = st.columns(4)
         probs = predictions["distress_probability"]
+
+        m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total scored", f"{len(predictions):,}")
         m2.metric("Mean probability", f"{probs.mean():.2%}")
         m3.metric("High risk (≥0.70)", f"{(probs >= 0.70).sum():,}")
         m4.metric("Median probability", f"{probs.median():.4f}")
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Histogram(
+                x=probs,
+                nbinsx=50,
+                marker={"color": "#3b7dd8", "line": {"color": "white", "width": 0.5}},
+                hovertemplate="Probability: %{x:.2f}<br>Count: %{y}<extra></extra>",
+            )
+        )
+        fig.add_vline(
+            x=0.70, line_dash="dash", line_color=COLORS["high"], opacity=0.6,
+            annotation_text="High risk", annotation_position="top right",
+        )
+        fig.add_vline(
+            x=0.30, line_dash="dash", line_color=COLORS["medium"], opacity=0.4,
+            annotation_text="Medium", annotation_position="top right",
+        )
+        fig.update_xaxes(title_text="Distress probability", range=[0, 1])
+        fig.update_yaxes(title_text="Number of companies")
+        fig.update_layout(height=280, showlegend=False)
+        apply_chart_theme(fig)
+        st.plotly_chart(fig, width="stretch")
+        st.caption(
+            "Most companies cluster near 0 (healthy). The tail toward 1.0 represents "
+            "firms the model identifies as high distress risk."
+        )
 
     # ── Slice performance table ──────────────────────────────────────
     st.markdown("---")
@@ -169,15 +188,9 @@ def render() -> None:
 
     if not slice_perf.empty:
         display_cols = [
-            c
-            for c in [
-                "dimension",
-                "slice",
-                "sample_count",
-                "roc_auc",
-                "recall_at_5pct",
-                "precision_at_5pct",
-                "brier_score",
+            c for c in [
+                "dimension", "slice", "sample_count", "roc_auc",
+                "recall_at_5pct", "precision_at_5pct", "brier_score",
             ]
             if c in slice_perf.columns
         ]

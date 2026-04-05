@@ -1,12 +1,13 @@
 """Page 2 — High-Risk Watchlist.
 
 Filterable table of companies ranked by predicted distress probability,
-with company names, sector/size filters, trend indicators, and CSV export.
+with company names, sector breakdown chart, filters, and CSV export.
 """
 
 from __future__ import annotations
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from src.dashboard.data.gcs_loader import (
@@ -14,7 +15,7 @@ from src.dashboard.data.gcs_loader import (
     load_labeled_panel,
     load_predictions,
 )
-from src.dashboard.utils import risk_emoji
+from src.dashboard.utils import apply_chart_theme, risk_emoji, COLORS
 
 
 def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFrame:
@@ -25,7 +26,6 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
     predictions = predictions.sort_values(["firm_id", "fiscal_year", "fiscal_period"])
     latest_preds = predictions.groupby("firm_id").last().reset_index()
 
-    # Get previous prediction for trend
     second_preds = predictions.groupby("firm_id").nth(-2).reset_index()
     if not second_preds.empty and "distress_probability" in second_preds.columns:
         prev = second_preds[["firm_id", "distress_probability"]].rename(
@@ -35,20 +35,15 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
     else:
         latest_preds["prev_prob"] = None
 
-    # Merge panel info
     if not panel.empty:
         panel_sorted = panel.sort_values(["firm_id", "fiscal_year", "fiscal_period"])
         panel_latest = panel_sorted.groupby("firm_id").last().reset_index()
 
         merge_cols = ["firm_id"]
         optional = [
-            "sector_proxy",
-            "company_size_bucket",
-            "net_income",
+            "sector_proxy", "company_size_bucket", "net_income",
             "NetCashProvidedByUsedInOperatingActivities",
-            "RetainedEarningsAccumulatedDeficit",
-            "total_liabilities",
-            "total_assets",
+            "RetainedEarningsAccumulatedDeficit", "total_liabilities", "total_assets",
         ]
         for c in optional:
             if c in panel_latest.columns:
@@ -56,12 +51,10 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
 
         latest_preds = latest_preds.merge(panel_latest[merge_cols], on="firm_id", how="left")
 
-    # Build rows
     rows = []
     for _, r in latest_preds.iterrows():
         prob = float(r.get("distress_probability", 0))
 
-        # Detect signals
         signals = []
         if pd.notna(r.get("net_income")) and r["net_income"] < 0:
             signals.append("Neg. income")
@@ -76,8 +69,7 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
         ):
             signals.append("Retained earnings ↓")
         if (
-            pd.notna(r.get("total_assets"))
-            and r.get("total_assets", 0) > 0
+            pd.notna(r.get("total_assets")) and r.get("total_assets", 0) > 0
             and pd.notna(r.get("total_liabilities"))
             and r["total_liabilities"] / r["total_assets"] > 0.8
         ):
@@ -86,27 +78,24 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
         prev = r.get("prev_prob")
         change = prob - float(prev) if pd.notna(prev) else 0.0
 
-        rows.append(
-            {
-                "firm_id": r["firm_id"],
-                "sector": r.get("sector_proxy", "—"),
-                "size": r.get("company_size_bucket", "—"),
-                "risk_score": prob,
-                "change": change,
-                "signals": " · ".join(signals) if signals else "—",
-                "quarter": f"{r.get('fiscal_period', '')} {int(r.get('fiscal_year', 0))}",
-            }
-        )
+        rows.append({
+            "firm_id": r["firm_id"],
+            "sector": r.get("sector_proxy", "—"),
+            "size": r.get("company_size_bucket", "—"),
+            "risk_score": prob,
+            "change": change,
+            "signals": " · ".join(signals) if signals else "—",
+            "quarter": f"{r.get('fiscal_period', '')} {int(r.get('fiscal_year', 0))}",
+        })
 
     return pd.DataFrame(rows)
 
 
 def render() -> None:
     """Render the High-Risk Watchlist page."""
-    st.header("High-Risk Watchlist")
+    st.header("🔴 High-Risk Watchlist")
     st.caption("Companies most likely to experience financial distress within the next 6 months")
 
-    # ── Load data ────────────────────────────────────────────────────
     predictions = load_predictions()
     panel = load_labeled_panel()
     company_map = load_company_map()
@@ -126,11 +115,8 @@ def render() -> None:
 
     with col_thresh:
         threshold = st.slider(
-            "Minimum risk score",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.5,
-            step=0.05,
+            "Minimum risk score", min_value=0.0, max_value=1.0,
+            value=0.5, step=0.05,
             help="Show companies with predicted distress probability ≥ this value",
         )
 
@@ -142,7 +128,6 @@ def render() -> None:
         sizes = ["All sizes"] + sorted(watchlist["size"].dropna().unique().tolist())
         selected_size = st.selectbox("Size", options=sizes)
 
-    # Apply filters
     filtered = watchlist[watchlist["risk_score"] >= threshold].copy()
     if selected_sector != "All sectors":
         filtered = filtered[filtered["sector"] == selected_sector]
@@ -155,24 +140,51 @@ def render() -> None:
         st.markdown("<br>", unsafe_allow_html=True)
         csv = filtered.to_csv(index=False)
         st.download_button(
-            label="📥 Export CSV",
-            data=csv,
-            file_name="watchlist_export.csv",
-            mime="text/csv",
+            label="📥 Export CSV", data=csv,
+            file_name="watchlist_export.csv", mime="text/csv",
         )
 
     # ── Summary metrics ──────────────────────────────────────────────
     total = len(filtered)
     high_risk = len(filtered[filtered["risk_score"] >= 0.70])
-    medium_risk = len(
-        filtered[(filtered["risk_score"] >= 0.30) & (filtered["risk_score"] < 0.70)]
-    )
+    medium_risk = len(filtered[(filtered["risk_score"] >= 0.30) & (filtered["risk_score"] < 0.70)])
 
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Companies shown", f"{total:,}")
     m2.metric("🔴 High risk (≥0.70)", high_risk)
     m3.metric("🟡 Medium (0.30–0.70)", medium_risk)
     m4.metric("Total scored", f"{len(watchlist):,}")
+
+    # ── Sector breakdown chart ───────────────────────────────────────
+    if not filtered.empty and "sector" in filtered.columns:
+        sector_counts = filtered["sector"].value_counts()
+        sector_counts = sector_counts[sector_counts.index != "—"]
+        if len(sector_counts) >= 1:
+            col_chart, col_space = st.columns([1, 2])
+            with col_chart:
+                st.markdown("#### Risk by sector")
+                chart_colors = ["#b91c1c", "#d97706", "#3b7dd8", "#16a34a", "#9333ea", "#0891b2", "#be185d", "#4f46e5"]
+                fig = go.Figure(
+                    data=[
+                        go.Pie(
+                            labels=sector_counts.index.tolist(),
+                            values=sector_counts.values.tolist(),
+                            hole=0.5,
+                            marker={"colors": chart_colors[: len(sector_counts)]},
+                            textinfo="label+value",
+                            textfont={"size": 11},
+                            hovertemplate="%{label}: %{value} companies<extra></extra>",
+                        )
+                    ]
+                )
+                fig.update_layout(
+                    height=220,
+                    margin={"l": 0, "r": 0, "t": 10, "b": 10},
+                    showlegend=False,
+                    paper_bgcolor="white",
+                    plot_bgcolor="white",
+                )
+                st.plotly_chart(fig, width="stretch")
 
     # ── Add company names and tickers ────────────────────────────────
     if not company_map.empty:
@@ -189,16 +201,12 @@ def render() -> None:
         st.info(f"No companies found with risk score ≥ {threshold:.0%}")
         return
 
-    st.markdown(
-        f"**Showing {len(filtered):,} companies** · "
-        f"Sorted by predicted distress probability"
-    )
+    st.markdown(f"**Showing {len(filtered):,} companies** · Sorted by predicted distress probability")
 
     display = filtered.copy()
     display["risk"] = display["risk_score"].apply(lambda s: f"{risk_emoji(s)} {s:.2%}")
     display["trend"] = display["change"].apply(
-        lambda c: f"🔴 +{c:.2%} ↑"
-        if c > 0.01
+        lambda c: f"🔴 +{c:.2%} ↑" if c > 0.01
         else (f"🟢 {c:.2%} ↓" if c < -0.01 else "— 0.00")
     )
 
