@@ -114,8 +114,8 @@ output "setup_instructions" {
        terraform output -raw dev_service_account_key | base64 -d > gcp-key.json
 
     2. Configure notification channels:
-       - Update alert_email in terraform.tfvars
-       - Add Slack webhook URL to GCP Console Monitoring for the Slack channel
+       - Update alert_emails (or alert_email) in terraform.tfvars
+       - Optionally set TF_VAR_slack_webhook_url for Slack alerts
 
     3. Verify Cloud Run services deployed:
        - API: $(terraform output -raw api_url)
@@ -134,7 +134,7 @@ output "setup_instructions" {
     6. Query data:
        Open BigQuery console: https://console.cloud.google.com/bigquery?project=${var.project_id}
 
-    7. View monitoring alerts:
+    7. View monitoring alerts, uptime checks, and log metrics:
        https://console.cloud.google.com/monitoring/alerting/policies?project=${var.project_id}
 
   EOT

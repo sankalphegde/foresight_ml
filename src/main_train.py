@@ -105,6 +105,9 @@ def main() -> None:
         logger.error(f"Could not load training report from GCS: {e}")
         sys.exit(1)
 
+    if test_roc_auc < 0.85:
+        logger.warning(f"TEST_ROC_AUC_LOW test_roc_auc={test_roc_auc:.4f} threshold=0.85")
+
     if test_roc_auc < QUALITY_GATE_ROC_AUC:
         logger.error(
             f"Quality gate FAILED: test_roc_auc={test_roc_auc:.4f} < {QUALITY_GATE_ROC_AUC}. "

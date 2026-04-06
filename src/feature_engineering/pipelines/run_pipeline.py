@@ -142,6 +142,7 @@ def run_local(input_path: str, output_dir: str, config: dict[str, Any] | None = 
         logger.info("=" * 60)
         logger.info("BIAS ALERTS")
         logger.info("=" * 60)
+        logger.warning(f"DRIFT_DETECTED count={len(alerts)}")
         for alert in alerts:
             logger.warning(alert)
 

@@ -1,5 +1,11 @@
 locals {
-  alert_email_recipients = distinct(compact(concat(var.alert_emails, var.alert_email != "" ? [var.alert_email] : [])))
+  alert_email_recipients      = distinct(compact(concat(var.alert_emails, var.alert_email != "" ? [var.alert_email] : [])))
+  slack_notifications_enabled = var.slack_webhook_url != ""
+  alert_notification_channel_ids = concat(
+    [for ch in google_monitoring_notification_channel.email : ch.id],
+    local.slack_notifications_enabled ? [google_monitoring_notification_channel.slack[0].id] : []
+  )
+  api_uptime_host = trimprefix(trimsuffix(google_cloud_run_v2_service.api.uri, "/"), "https://")
 }
 
 resource "google_monitoring_metric_descriptor" "model_roc_auc" {
@@ -28,6 +34,39 @@ resource "google_monitoring_metric_descriptor" "data_drift_score" {
   }
 }
 
+# Log-based metric for Cloud Run job failures.
+resource "google_logging_metric" "cloud_run_job_failures" {
+  name        = "cloud_run_job_failures"
+  description = "Count of Cloud Run job error logs"
+
+  filter = <<-EOT
+    resource.type="cloud_run_job"
+    severity>=ERROR
+  EOT
+}
+
+# Log-based metric for low ROC-AUC runs in the training job.
+resource "google_logging_metric" "test_roc_auc_low" {
+  name        = "test_roc_auc_low"
+  description = "Count of training logs with ROC-AUC below the 0.85 alert threshold"
+
+  filter = <<-EOT
+    resource.type="cloud_run_job"
+    textPayload=~"TEST_ROC_AUC_LOW"
+  EOT
+}
+
+# Log-based metric for drift alerts emitted by the feature engineering pipeline.
+resource "google_logging_metric" "drift_detected" {
+  name        = "drift_detected"
+  description = "Count of drift alert logs emitted by the feature engineering pipeline"
+
+  filter = <<-EOT
+    resource.type="cloud_run_job"
+    textPayload=~"DRIFT_DETECTED"
+  EOT
+}
+
 # Notification channels for email alerts
 resource "google_monitoring_notification_channel" "email" {
   for_each     = toset(local.alert_email_recipients)
@@ -40,97 +79,73 @@ resource "google_monitoring_notification_channel" "email" {
   }
 }
 
-# Alert Policy 1: Cloud Run API Service Failure
-# Alert when API service experiences failures (error rate > 0.05)
-resource "google_monitoring_alert_policy" "api_error_rate" {
-  display_name = "Foresight API Error Rate High (${var.environment})"
-  combiner     = "OR"
+# Optional Slack notification channel via Incoming Webhook URL
+resource "google_monitoring_notification_channel" "slack" {
+  count        = local.slack_notifications_enabled ? 1 : 0
+  display_name = "Foresight Slack Webhook Notifications (${var.environment})"
+  type         = "webhook_basicauth"
+  enabled      = true
 
-  conditions {
-    display_name = "Error rate > 5%"
-
-    condition_threshold {
-      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"run.googleapis.com/request_count\" AND resource.labels.service_name=\"foresight-api\" AND metric.labels.response_code_class=\"500\""
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 0.05
-
-      aggregations {
-        alignment_period   = "60s"
-        per_series_aligner = "ALIGN_RATE"
-      }
-    }
+  labels = {
+    url      = var.slack_webhook_url
+    username = "foresight"
+    password = "unused"
   }
-
-  notification_channels = [for ch in google_monitoring_notification_channel.email : ch.id]
-
-  alert_strategy {
-    auto_close = "1800s"
-  }
-
-  documentation {
-    content   = "The Foresight API service error rate has exceeded 5%. Check Cloud Run logs at https://console.cloud.google.com/run/detail/${var.region}/foresight-api/logs"
-    mime_type = "text/markdown"
-  }
-
-  depends_on = [google_monitoring_notification_channel.email]
 }
 
-# Alert Policy 2: Cloud Run Dashboard Service Failure
-resource "google_monitoring_alert_policy" "dashboard_error_rate" {
-  display_name = "Foresight Dashboard Error Rate High (${var.environment})"
-  combiner     = "OR"
-
-  conditions {
-    display_name = "Error rate > 5%"
-
-    condition_threshold {
-      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"run.googleapis.com/request_count\" AND resource.labels.service_name=\"foresight-dashboard\" AND metric.labels.response_code_class=\"500\""
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 0.05
-
-      aggregations {
-        alignment_period   = "60s"
-        per_series_aligner = "ALIGN_RATE"
-      }
-    }
-  }
-
-  notification_channels = [for ch in google_monitoring_notification_channel.email : ch.id]
-
-  alert_strategy {
-    auto_close = "1800s"
-  }
-
-  documentation {
-    content   = "The Foresight Dashboard service error rate has exceeded 5%. Check Cloud Run logs at https://console.cloud.google.com/run/detail/${var.region}/foresight-dashboard/logs"
-    mime_type = "text/markdown"
-  }
-
-  depends_on = [google_monitoring_notification_channel.email]
-}
-
-# Alert Policy 3: Model ROC-AUC Degradation
-# This monitors a custom metric published by the model evaluation pipeline
-resource "google_monitoring_alert_policy" "model_roc_auc_low" {
-  display_name = "Model ROC-AUC Below Threshold (${var.environment})"
+# Alert Policy 1: Cloud Run Job Failure
+resource "google_monitoring_alert_policy" "cloud_run_job_failure" {
+  display_name = "Cloud Run Job Failure (${var.environment})"
   combiner     = "OR"
   enabled      = true
 
   conditions {
-    display_name = "ROC-AUC < 0.85"
+    display_name = "Cloud Run job logs include ERROR"
 
-    condition_threshold {
-      filter          = "resource.type=\"global\" AND metric.type=\"custom.googleapis.com/model/roc_auc\" AND resource.labels.project_id=\"${var.project_id}\""
-      duration        = "60s"
-      comparison      = "COMPARISON_LT"
-      threshold_value = 0.85
+    condition_matched_log {
+      filter = <<-EOT
+        resource.type="cloud_run_job"
+        severity>=ERROR
+      EOT
+    }
+  }
 
-      aggregations {
-        alignment_period   = "300s"
-        per_series_aligner = "ALIGN_MEAN"
-      }
+  notification_channels = local.alert_notification_channel_ids
+
+  alert_strategy {
+    auto_close = "1800s"
+
+    notification_rate_limit {
+      period = "300s"
+    }
+  }
+
+  documentation {
+    content   = "A Cloud Run job emitted an ERROR log. Check the job execution logs in Cloud Run and the linked job history."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [
+    google_logging_metric.cloud_run_job_failures,
+    google_monitoring_notification_channel.email,
+    google_monitoring_notification_channel.slack,
+  ]
+}
+
+# Alert Policy 2: Model ROC-AUC below 0.85 (email only)
+resource "google_monitoring_alert_policy" "test_roc_auc_low" {
+  display_name = "Model Test ROC-AUC Below 0.85 (${var.environment})"
+  combiner     = "OR"
+  enabled      = true
+
+  conditions {
+    display_name = "Training logs include TEST_ROC_AUC_LOW"
+
+    condition_matched_log {
+      filter = <<-EOT
+        resource.type="cloud_run_job"
+        textPayload=~"TEST_ROC_AUC_LOW"
+      EOT
     }
   }
 
@@ -138,55 +153,126 @@ resource "google_monitoring_alert_policy" "model_roc_auc_low" {
 
   alert_strategy {
     auto_close = "3600s"
+
+    notification_rate_limit {
+      period = "300s"
+    }
   }
 
   documentation {
-    content   = "Model ROC-AUC has dropped below 0.85 threshold. This indicates potential model degradation. Review recent training runs in MLflow: ${var.enable_mlflow ? google_cloud_run_v2_service.mlflow[0].uri : "N/A"}"
+    content   = "Training produced a ROC-AUC below 0.85. Review the latest Cloud Run job output and MLflow run metrics."
     mime_type = "text/markdown"
   }
 
   depends_on = [
+    google_logging_metric.test_roc_auc_low,
     google_monitoring_notification_channel.email,
-    google_monitoring_metric_descriptor.model_roc_auc,
   ]
 }
 
-# Alert Policy 4: Data Drift Detection
-# This monitors drift metrics published by the drift detection pipeline
-resource "google_monitoring_alert_policy" "data_drift_detected" {
-  display_name = "Data Drift Detected (${var.environment})"
+# Alert Policy 3: Drift detected (Slack only)
+resource "google_monitoring_alert_policy" "drift_detected" {
+  display_name = "Drift Detected (${var.environment})"
   combiner     = "OR"
   enabled      = true
 
   conditions {
-    display_name = "Drift metric > 0.1"
+    display_name = "Feature engineering logs include DRIFT_DETECTED"
 
-    condition_threshold {
-      filter          = "resource.type=\"global\" AND metric.type=\"custom.googleapis.com/data/drift_score\" AND resource.labels.project_id=\"${var.project_id}\""
-      duration        = "60s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 0.1
-
-      aggregations {
-        alignment_period   = "300s"
-        per_series_aligner = "ALIGN_MAX"
-      }
+    condition_matched_log {
+      filter = <<-EOT
+        resource.type="cloud_run_job"
+        textPayload=~"DRIFT_DETECTED"
+      EOT
     }
   }
 
-  notification_channels = [for ch in google_monitoring_notification_channel.email : ch.id]
+  notification_channels = local.slack_notifications_enabled ? [google_monitoring_notification_channel.slack[0].id] : []
 
   alert_strategy {
     auto_close = "7200s"
+
+    notification_rate_limit {
+      period = "300s"
+    }
   }
 
   documentation {
-    content   = "Data drift has been detected in the production data. This may indicate that the model needs retraining. Check the monitoring dashboard for detailed drift analysis."
+    content   = "Drift was detected in the feature engineering pipeline. Review the bias report and recent pipeline execution logs."
     mime_type = "text/markdown"
   }
 
   depends_on = [
+    google_logging_metric.drift_detected,
+    google_monitoring_notification_channel.slack,
+  ]
+}
+
+# Uptime check for the public API health endpoint
+resource "google_monitoring_uptime_check_config" "api_health" {
+  display_name = "Foresight API Health Uptime (${var.environment})"
+  timeout      = "10s"
+  period       = "60s"
+
+  monitored_resource {
+    type = "uptime_url"
+    labels = {
+      project_id = var.project_id
+      host       = local.api_uptime_host
+    }
+  }
+
+  http_check {
+    path           = "/health"
+    port           = 443
+    use_ssl        = true
+    validate_ssl   = true
+    request_method = "GET"
+  }
+
+  selected_regions = ["USA", "EUROPE", "ASIA_PACIFIC"]
+}
+
+# Alert Policy 6: API uptime check failures
+resource "google_monitoring_alert_policy" "api_uptime_check_failed" {
+  display_name = "Foresight API Uptime Check Failed (${var.environment})"
+  combiner     = "OR"
+  enabled      = true
+
+  conditions {
+    display_name = "Uptime check pass ratio < 1"
+
+    condition_threshold {
+      filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND metric.labels.check_id=\"${google_monitoring_uptime_check_config.api_health.uptime_check_id}\" AND resource.type=\"uptime_url\""
+      duration        = "120s"
+      comparison      = "COMPARISON_LT"
+      threshold_value = 1
+
+      aggregations {
+        alignment_period   = "120s"
+        per_series_aligner = "ALIGN_NEXT_OLDER"
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  notification_channels = local.alert_notification_channel_ids
+
+  alert_strategy {
+    auto_close = "1800s"
+  }
+
+  documentation {
+    content   = "The API uptime check for /health is failing. Verify Cloud Run service health and recent deployments."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [
+    google_monitoring_uptime_check_config.api_health,
     google_monitoring_notification_channel.email,
-    google_monitoring_metric_descriptor.data_drift_score,
+    google_monitoring_notification_channel.slack,
   ]
 }
