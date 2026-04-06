@@ -99,6 +99,12 @@ output "dashboard_service_account_email" {
   value       = google_service_account.dashboard.email
 }
 
+output "slack_alert_adapter_url" {
+  description = "Cloud Run URL for the Monitoring-to-Slack webhook adapter"
+  value       = local.slack_notifications_enabled ? google_cloud_run_v2_service.slack_alert_adapter[0].uri : ""
+  sensitive   = true
+}
+
 # output "airflow_url" {
 #   description = "Airflow web UI URL (Cloud Run - deprecated)"
 #   value       = google_cloud_run_v2_service.airflow.uri

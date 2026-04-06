@@ -273,11 +273,7 @@ def get_company_history(panel: pd.DataFrame, firm_id: str) -> pd.DataFrame:
     """Get all quarterly rows for a company, sorted chronologically."""
     if panel.empty:
         return pd.DataFrame()
-    return (
-        panel[panel["firm_id"] == firm_id]
-        .sort_values(["fiscal_year", "fiscal_period"])
-        .copy()
-    )
+    return panel[panel["firm_id"] == firm_id].sort_values(["fiscal_year", "fiscal_period"]).copy()
 
 
 def get_shap_for_company(

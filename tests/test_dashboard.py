@@ -22,7 +22,6 @@ from src.dashboard.utils import (
     shap_color,
 )
 
-
 # ---------------------------------------------------------------------------
 # risk_level
 # ---------------------------------------------------------------------------
@@ -263,11 +262,13 @@ class TestGcsLoader:
     def test_get_company_history_filters(self) -> None:
         from src.dashboard.data.gcs_loader import get_company_history
 
-        panel = pd.DataFrame({
-            "firm_id": ["AAA", "BBB", "AAA"],
-            "fiscal_year": [2022, 2022, 2023],
-            "fiscal_period": ["Q1", "Q1", "Q2"],
-        })
+        panel = pd.DataFrame(
+            {
+                "firm_id": ["AAA", "BBB", "AAA"],
+                "fiscal_year": [2022, 2022, 2023],
+                "fiscal_period": ["Q1", "Q1", "Q2"],
+            }
+        )
         result = get_company_history(panel, "AAA")
         assert len(result) == 2
         assert all(result["firm_id"] == "AAA")
@@ -281,22 +282,26 @@ class TestGcsLoader:
     def test_get_shap_for_company_filters(self) -> None:
         from src.dashboard.data.gcs_loader import get_shap_for_company
 
-        shap_df = pd.DataFrame({
-            "firm_id": ["AAA", "BBB", "AAA"],
-            "fiscal_year": [2022, 2022, 2023],
-            "shap_net_income": [0.1, 0.2, 0.3],
-        })
+        shap_df = pd.DataFrame(
+            {
+                "firm_id": ["AAA", "BBB", "AAA"],
+                "fiscal_year": [2022, 2022, 2023],
+                "shap_net_income": [0.1, 0.2, 0.3],
+            }
+        )
         result = get_shap_for_company(shap_df, "AAA")
         assert len(result) == 2
 
     def test_get_shap_for_company_with_year_filter(self) -> None:
         from src.dashboard.data.gcs_loader import get_shap_for_company
 
-        shap_df = pd.DataFrame({
-            "firm_id": ["AAA", "AAA", "AAA"],
-            "fiscal_year": [2022, 2023, 2023],
-            "shap_net_income": [0.1, 0.2, 0.3],
-        })
+        shap_df = pd.DataFrame(
+            {
+                "firm_id": ["AAA", "AAA", "AAA"],
+                "fiscal_year": [2022, 2023, 2023],
+                "shap_net_income": [0.1, 0.2, 0.3],
+            }
+        )
         result = get_shap_for_company(shap_df, "AAA", fiscal_year=2023)
         assert len(result) == 2
 
@@ -392,12 +397,14 @@ class TestWatchlistBuilder:
     def test_basic_watchlist(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        preds = pd.DataFrame({
-            "firm_id": ["AAA", "AAA", "BBB"],
-            "fiscal_year": [2022, 2023, 2023],
-            "fiscal_period": ["Q1", "Q2", "Q2"],
-            "distress_probability": [0.3, 0.8, 0.1],
-        })
+        preds = pd.DataFrame(
+            {
+                "firm_id": ["AAA", "AAA", "BBB"],
+                "fiscal_year": [2022, 2023, 2023],
+                "fiscal_period": ["Q1", "Q2", "Q2"],
+                "distress_probability": [0.3, 0.8, 0.1],
+            }
+        )
         result = _build_watchlist(preds, pd.DataFrame())
         assert len(result) == 2
         assert "risk_score" in result.columns
@@ -407,20 +414,24 @@ class TestWatchlistBuilder:
     def test_watchlist_with_panel_signals(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        preds = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "distress_probability": [0.9],
-        })
-        panel = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "net_income": [-500_000],
-            "total_assets": [1_000_000],
-            "total_liabilities": [900_000],
-        })
+        preds = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "distress_probability": [0.9],
+            }
+        )
+        panel = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "net_income": [-500_000],
+                "total_assets": [1_000_000],
+                "total_liabilities": [900_000],
+            }
+        )
         result = _build_watchlist(preds, panel)
         assert len(result) == 1
         assert "Neg. income" in result.iloc[0]["signals"]
@@ -428,12 +439,14 @@ class TestWatchlistBuilder:
     def test_watchlist_change_column(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        preds = pd.DataFrame({
-            "firm_id": ["AAA", "AAA"],
-            "fiscal_year": [2022, 2023],
-            "fiscal_period": ["Q1", "Q2"],
-            "distress_probability": [0.3, 0.8],
-        })
+        preds = pd.DataFrame(
+            {
+                "firm_id": ["AAA", "AAA"],
+                "fiscal_year": [2022, 2023],
+                "fiscal_period": ["Q1", "Q2"],
+                "distress_probability": [0.3, 0.8],
+            }
+        )
         result = _build_watchlist(preds, pd.DataFrame())
         assert len(result) == 1
         assert result.iloc[0]["change"] == pytest.approx(0.5, abs=0.01)
@@ -441,32 +454,38 @@ class TestWatchlistBuilder:
     def test_watchlist_sector_default(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        preds = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "distress_probability": [0.5],
-        })
+        preds = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "distress_probability": [0.5],
+            }
+        )
         result = _build_watchlist(preds, pd.DataFrame())
         assert result.iloc[0]["sector"] == "—"
 
     def test_watchlist_no_signals(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        preds = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "distress_probability": [0.5],
-        })
-        panel = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "net_income": [1_000_000],
-            "total_assets": [10_000_000],
-            "total_liabilities": [2_000_000],
-        })
+        preds = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "distress_probability": [0.5],
+            }
+        )
+        panel = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "net_income": [1_000_000],
+                "total_assets": [10_000_000],
+                "total_liabilities": [2_000_000],
+            }
+        )
         result = _build_watchlist(preds, panel)
         assert result.iloc[0]["signals"] == "—"
 
@@ -502,11 +521,13 @@ class TestGcsLoaderDefaults:
     def test_get_company_history_sorted(self) -> None:
         from src.dashboard.data.gcs_loader import get_company_history
 
-        panel = pd.DataFrame({
-            "firm_id": ["AAA", "AAA", "AAA"],
-            "fiscal_year": [2023, 2022, 2023],
-            "fiscal_period": ["Q2", "Q4", "Q1"],
-        })
+        panel = pd.DataFrame(
+            {
+                "firm_id": ["AAA", "AAA", "AAA"],
+                "fiscal_year": [2023, 2022, 2023],
+                "fiscal_period": ["Q2", "Q4", "Q1"],
+            }
+        )
         result = get_company_history(panel, "AAA")
         assert list(result["fiscal_year"]) == [2022, 2023, 2023]
 
@@ -601,8 +622,18 @@ class TestUtilsEdgeCases:
         assert quarter_sort_key(2022, "Q4") < quarter_sort_key(2023, "Q1")
 
     def test_colors_dict_has_required_keys(self) -> None:
-        required = ["high", "medium", "low", "high_bg", "medium_bg", "low_bg",
-                     "shap_positive", "shap_negative", "text", "border"]
+        required = [
+            "high",
+            "medium",
+            "low",
+            "high_bg",
+            "medium_bg",
+            "low_bg",
+            "shap_positive",
+            "shap_negative",
+            "text",
+            "border",
+        ]
         for key in required:
             assert key in COLORS
 
@@ -740,79 +771,95 @@ class TestWatchlistEdgeCases:
     def test_high_leverage_signal(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        preds = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "distress_probability": [0.8],
-        })
-        panel = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "total_assets": [1_000_000],
-            "total_liabilities": [850_000],
-        })
+        preds = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "distress_probability": [0.8],
+            }
+        )
+        panel = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "total_assets": [1_000_000],
+                "total_liabilities": [850_000],
+            }
+        )
         result = _build_watchlist(preds, panel)
         assert "High leverage" in result.iloc[0]["signals"]
 
     def test_negative_cashflow_signal(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        preds = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "distress_probability": [0.6],
-        })
-        panel = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "NetCashProvidedByUsedInOperatingActivities": [-500_000],
-        })
+        preds = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "distress_probability": [0.6],
+            }
+        )
+        panel = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "NetCashProvidedByUsedInOperatingActivities": [-500_000],
+            }
+        )
         result = _build_watchlist(preds, panel)
         assert "Neg. cash flow" in result.iloc[0]["signals"]
 
     def test_retained_earnings_signal(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        preds = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "distress_probability": [0.7],
-        })
-        panel = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "RetainedEarningsAccumulatedDeficit": [-2_000_000],
-        })
+        preds = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "distress_probability": [0.7],
+            }
+        )
+        panel = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "RetainedEarningsAccumulatedDeficit": [-2_000_000],
+            }
+        )
         result = _build_watchlist(preds, panel)
         assert "Retained earnings" in result.iloc[0]["signals"]
 
     def test_multiple_firms(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        preds = pd.DataFrame({
-            "firm_id": ["AAA", "BBB", "CCC"],
-            "fiscal_year": [2023, 2023, 2023],
-            "fiscal_period": ["Q1", "Q1", "Q1"],
-            "distress_probability": [0.9, 0.5, 0.1],
-        })
+        preds = pd.DataFrame(
+            {
+                "firm_id": ["AAA", "BBB", "CCC"],
+                "fiscal_year": [2023, 2023, 2023],
+                "fiscal_period": ["Q1", "Q1", "Q1"],
+                "distress_probability": [0.9, 0.5, 0.1],
+            }
+        )
         result = _build_watchlist(preds, pd.DataFrame())
         assert len(result) == 3
 
     def test_watchlist_quarter_column(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        preds = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q3"],
-            "distress_probability": [0.5],
-        })
+        preds = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q3"],
+                "distress_probability": [0.5],
+            }
+        )
         result = _build_watchlist(preds, pd.DataFrame())
         assert "Q3" in result.iloc[0]["quarter"]
         assert "2023" in result.iloc[0]["quarter"]
@@ -902,13 +949,15 @@ class TestShapFeaturesEdgeCases:
     def test_top_n_limits_results(self) -> None:
         from src.dashboard.pages.company_risk import _get_top_shap_features
 
-        shap_df = pd.DataFrame({
-            "shap_a": [0.5],
-            "shap_b": [-0.4],
-            "shap_c": [0.3],
-            "shap_d": [-0.2],
-            "shap_e": [0.1],
-        })
+        shap_df = pd.DataFrame(
+            {
+                "shap_a": [0.5],
+                "shap_b": [-0.4],
+                "shap_c": [0.3],
+                "shap_d": [-0.2],
+                "shap_e": [0.1],
+            }
+        )
         result = _get_top_shap_features(shap_df, top_n=3)
         assert len(result) == 3
         assert result[0]["rank"] == 1
@@ -918,11 +967,13 @@ class TestShapFeaturesEdgeCases:
     def test_sorts_by_absolute_value(self) -> None:
         from src.dashboard.pages.company_risk import _get_top_shap_features
 
-        shap_df = pd.DataFrame({
-            "shap_small": [0.01],
-            "shap_big_negative": [-0.9],
-            "shap_medium": [0.5],
-        })
+        shap_df = pd.DataFrame(
+            {
+                "shap_small": [0.01],
+                "shap_big_negative": [-0.9],
+                "shap_medium": [0.5],
+            }
+        )
         result = _get_top_shap_features(shap_df, top_n=3)
         assert result[0]["feature"] == "big_negative"
         assert result[1]["feature"] == "medium"
@@ -954,26 +1005,30 @@ class TestWatchlistSignalCombinations:
     """Test all signal detection paths in _build_watchlist."""
 
     def _make_preds(self, firm_id: str = "AAA") -> pd.DataFrame:
-        return pd.DataFrame({
-            "firm_id": [firm_id],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "distress_probability": [0.8],
-        })
+        return pd.DataFrame(
+            {
+                "firm_id": [firm_id],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "distress_probability": [0.8],
+            }
+        )
 
     def test_all_four_signals(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        panel = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "net_income": [-100],
-            "NetCashProvidedByUsedInOperatingActivities": [-50],
-            "RetainedEarningsAccumulatedDeficit": [-200],
-            "total_assets": [1000],
-            "total_liabilities": [850],
-        })
+        panel = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "net_income": [-100],
+                "NetCashProvidedByUsedInOperatingActivities": [-50],
+                "RetainedEarningsAccumulatedDeficit": [-200],
+                "total_assets": [1000],
+                "total_liabilities": [850],
+            }
+        )
         result = _build_watchlist(self._make_preds(), panel)
         signals = result.iloc[0]["signals"]
         assert "Neg. income" in signals
@@ -984,24 +1039,28 @@ class TestWatchlistSignalCombinations:
     def test_sector_from_panel(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        panel = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "sector_proxy": ["Technology"],
-        })
+        panel = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "sector_proxy": ["Technology"],
+            }
+        )
         result = _build_watchlist(self._make_preds(), panel)
         assert result.iloc[0]["sector"] == "Technology"
 
     def test_size_from_panel(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
-        panel = pd.DataFrame({
-            "firm_id": ["AAA"],
-            "fiscal_year": [2023],
-            "fiscal_period": ["Q1"],
-            "company_size_bucket": ["large"],
-        })
+        panel = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "company_size_bucket": ["large"],
+            }
+        )
         result = _build_watchlist(self._make_preds(), panel)
         assert result.iloc[0]["size"] == "large"
 
@@ -1043,11 +1102,13 @@ class TestCompanyRiskHelpers:
     def test_get_top_shap_features_from_columns(self) -> None:
         from src.dashboard.pages.company_risk import _get_top_shap_features
 
-        shap_df = pd.DataFrame({
-            "shap_net_income": [-0.5],
-            "shap_total_assets": [0.3],
-            "shap_leverage": [0.1],
-        })
+        shap_df = pd.DataFrame(
+            {
+                "shap_net_income": [-0.5],
+                "shap_total_assets": [0.3],
+                "shap_leverage": [0.1],
+            }
+        )
         result = _get_top_shap_features(shap_df, top_n=2)
         assert len(result) == 2
         assert result[0]["feature"] == "net_income"

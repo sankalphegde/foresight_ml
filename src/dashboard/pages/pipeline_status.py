@@ -220,11 +220,15 @@ def render() -> None:
     high_risk = 0
     if has_predictions and "distress_probability" in predictions.columns:
         high_risk = int((predictions["distress_probability"] >= 0.70).sum())
-    m3.metric("High-risk companies (≥0.70)", high_risk,
-              help="Companies above the high-risk threshold")
+    m3.metric(
+        "High-risk companies (≥0.70)", high_risk, help="Companies above the high-risk threshold"
+    )
 
-    m4.metric("Model ROC-AUC", f"{roc_auc:.4f}" if roc_auc > 0 else "—",
-              help="Model's ability to distinguish distressed from healthy firms. Target ≥ 0.80")
+    m4.metric(
+        "Model ROC-AUC",
+        f"{roc_auc:.4f}" if roc_auc > 0 else "—",
+        help="Model's ability to distinguish distressed from healthy firms. Target ≥ 0.80",
+    )
     # ── Artifact status ──────────────────────────────────────────────
     st.markdown("---")
     st.markdown("#### Artifact status")

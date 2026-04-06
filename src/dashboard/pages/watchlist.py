@@ -17,7 +17,6 @@ from src.dashboard.data.gcs_loader import (
 )
 from src.dashboard.utils import risk_emoji
 
-
 # ---------------------------------------------------------------------------
 # Watchlist builder
 # ---------------------------------------------------------------------------
@@ -45,12 +44,18 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
     if not panel.empty:
         panel_latest = (
             panel.sort_values(["firm_id", "fiscal_year", "fiscal_period"])
-            .groupby("firm_id").last().reset_index()
+            .groupby("firm_id")
+            .last()
+            .reset_index()
         )
         signal_cols = [
-            "sector_proxy", "company_size_bucket", "net_income",
+            "sector_proxy",
+            "company_size_bucket",
+            "net_income",
             "NetCashProvidedByUsedInOperatingActivities",
-            "RetainedEarningsAccumulatedDeficit", "total_liabilities", "total_assets",
+            "RetainedEarningsAccumulatedDeficit",
+            "total_liabilities",
+            "total_assets",
         ]
         merge_cols = ["firm_id"] + [c for c in signal_cols if c in panel_latest.columns]
         latest = latest.merge(panel_latest[merge_cols], on="firm_id", how="left")
@@ -63,25 +68,38 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
         signals = []
         if pd.notna(r.get("net_income")) and r["net_income"] < 0:
             signals.append("Neg. income")
-        if pd.notna(r.get("NetCashProvidedByUsedInOperatingActivities")) and r["NetCashProvidedByUsedInOperatingActivities"] < 0:
+        if (
+            pd.notna(r.get("NetCashProvidedByUsedInOperatingActivities"))
+            and r["NetCashProvidedByUsedInOperatingActivities"] < 0
+        ):
             signals.append("Neg. cash flow")
-        if pd.notna(r.get("RetainedEarningsAccumulatedDeficit")) and r["RetainedEarningsAccumulatedDeficit"] < 0:
+        if (
+            pd.notna(r.get("RetainedEarningsAccumulatedDeficit"))
+            and r["RetainedEarningsAccumulatedDeficit"] < 0
+        ):
             signals.append("Retained earnings ↓")
-        if pd.notna(r.get("total_assets")) and r.get("total_assets", 0) > 0 and pd.notna(r.get("total_liabilities")) and r["total_liabilities"] / r["total_assets"] > 0.8:
+        if (
+            pd.notna(r.get("total_assets"))
+            and r.get("total_assets", 0) > 0
+            and pd.notna(r.get("total_liabilities"))
+            and r["total_liabilities"] / r["total_assets"] > 0.8
+        ):
             signals.append("High leverage")
 
         prev_val = r.get("prev_prob")
         change = prob - float(prev_val) if pd.notna(prev_val) else 0.0
 
-        rows.append({
-            "firm_id": r["firm_id"],
-            "sector": r.get("sector_proxy", "—"),
-            "size": r.get("company_size_bucket", "—"),
-            "risk_score": prob,
-            "change": change,
-            "signals": " · ".join(signals) if signals else "—",
-            "quarter": f"{r.get('fiscal_period', '')} {int(r.get('fiscal_year', 0))}",
-        })
+        rows.append(
+            {
+                "firm_id": r["firm_id"],
+                "sector": r.get("sector_proxy", "—"),
+                "size": r.get("company_size_bucket", "—"),
+                "risk_score": prob,
+                "change": change,
+                "signals": " · ".join(signals) if signals else "—",
+                "quarter": f"{r.get('fiscal_period', '')} {int(r.get('fiscal_year', 0))}",
+            }
+        )
 
     return pd.DataFrame(rows)
 
@@ -134,10 +152,13 @@ def render() -> None:
 
     with col_thresh:
         threshold = st.slider(
-            "Minimum risk score", min_value=0.0, max_value=1.0,
-            value=0.5, step=0.05,
+            "Minimum risk score",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.5,
+            step=0.05,
             help="Show companies with predicted distress probability ≥ this value. "
-                 "High risk ≥ 0.70, Medium ≥ 0.30",
+            "High risk ≥ 0.70, Medium ≥ 0.30",
         )
 
     with col_sector:
@@ -170,7 +191,10 @@ def render() -> None:
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Companies shown", f"{len(filtered):,}")
     m2.metric("🔴 High risk (≥0.70)", len(filtered[filtered["risk_score"] >= 0.70]))
-    m3.metric("🟡 Medium (0.30–0.70)", len(filtered[(filtered["risk_score"] >= 0.30) & (filtered["risk_score"] < 0.70)]))
+    m3.metric(
+        "🟡 Medium (0.30–0.70)",
+        len(filtered[(filtered["risk_score"] >= 0.30) & (filtered["risk_score"] < 0.70)]),
+    )
     m4.metric("Total scored", f"{len(watchlist):,}")
 
     # ── Sector breakdown chart ───────────────────────────────────────
@@ -181,27 +205,42 @@ def render() -> None:
             col_chart, _ = st.columns([1, 2])
             with col_chart:
                 st.markdown("#### Risk by sector")
-                palette = ["#b91c1c", "#d97706", "#3b7dd8", "#16a34a", "#9333ea", "#0891b2", "#be185d", "#4f46e5"]
-                fig = go.Figure(data=[go.Pie(
-                    labels=sector_counts.index.tolist(),
-                    values=sector_counts.values.tolist(),
-                    hole=0.5,
-                    marker={"colors": palette[:len(sector_counts)]},
-                    textinfo="label+value",
-                    textfont={"size": 11},
-                    hovertemplate="%{label}: %{value} companies<extra></extra>",
-                )])
+                palette = [
+                    "#b91c1c",
+                    "#d97706",
+                    "#3b7dd8",
+                    "#16a34a",
+                    "#9333ea",
+                    "#0891b2",
+                    "#be185d",
+                    "#4f46e5",
+                ]
+                fig = go.Figure(
+                    data=[
+                        go.Pie(
+                            labels=sector_counts.index.tolist(),
+                            values=sector_counts.values.tolist(),
+                            hole=0.5,
+                            marker={"colors": palette[: len(sector_counts)]},
+                            textinfo="label+value",
+                            textfont={"size": 11},
+                            hovertemplate="%{label}: %{value} companies<extra></extra>",
+                        )
+                    ]
+                )
                 fig.update_layout(
-                    height=220, showlegend=False,
+                    height=220,
+                    showlegend=False,
                     margin={"l": 0, "r": 0, "t": 10, "b": 10},
-                    paper_bgcolor="white", plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    plot_bgcolor="white",
                 )
                 st.plotly_chart(fig, width="stretch")
 
     # ── Add company names ────────────────────────────────────────────
     if not company_map.empty:
-        name_map = dict(zip(company_map["firm_id"], company_map["name"]))
-        ticker_map = dict(zip(company_map["firm_id"], company_map["ticker"]))
+        name_map = dict(zip(company_map["firm_id"], company_map["name"], strict=False))
+        ticker_map = dict(zip(company_map["firm_id"], company_map["ticker"], strict=False))
         filtered["company"] = filtered["firm_id"].map(name_map).fillna("—")
         filtered["ticker"] = filtered["firm_id"].map(ticker_map).fillna("—")
     else:
@@ -218,19 +257,26 @@ def render() -> None:
             )
         return
 
-    st.markdown(f"**Showing {len(filtered):,} companies** · Sorted by predicted distress probability")
+    st.markdown(
+        f"**Showing {len(filtered):,} companies** · Sorted by predicted distress probability"
+    )
 
     display = filtered.copy()
     display["risk"] = display["risk_score"].apply(lambda s: f"{risk_emoji(s)} {s:.2%}")
     display["trend"] = display["change"].apply(
-        lambda c: f"🔴 +{c:.2%} ↑" if c > 0.01
-        else (f"🟢 {c:.2%} ↓" if c < -0.01 else "— 0.00")
+        lambda c: f"🔴 +{c:.2%} ↑" if c > 0.01 else (f"🟢 {c:.2%} ↓" if c < -0.01 else "— 0.00")
     )
 
     col_map = {
-        "company": "Company", "ticker": "Ticker", "firm_id": "CIK",
-        "sector": "Sector", "size": "Size", "risk": "Risk Score",
-        "trend": "vs Last Qtr", "signals": "Active Distress Signals", "quarter": "Quarter",
+        "company": "Company",
+        "ticker": "Ticker",
+        "firm_id": "CIK",
+        "sector": "Sector",
+        "size": "Size",
+        "risk": "Risk Score",
+        "trend": "vs Last Qtr",
+        "signals": "Active Distress Signals",
+        "quarter": "Quarter",
     }
     st.dataframe(
         display[list(col_map.keys())].rename(columns=col_map),

@@ -143,4 +143,3 @@ exclude_lines = [
     "if __name__",
     "raise NotImplementedError",
 ]
-

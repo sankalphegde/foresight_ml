@@ -6,6 +6,8 @@ SHAP risk drivers, key signal chips, and financial snapshot.
 
 from __future__ import annotations
 
+from typing import Any
+
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -18,6 +20,7 @@ from src.dashboard.data.gcs_loader import (
     load_shap_values,
 )
 from src.dashboard.utils import (
+    COLORS,
     apply_chart_theme,
     fmt_large_number,
     parse_top_features_json,
@@ -26,12 +29,7 @@ from src.dashboard.utils import (
     risk_badge_html,
     risk_color,
     shap_color,
-    COLORS,
 )
-
-from typing import Any
-
-import pandas as pd
 
 # ---------------------------------------------------------------------------
 # Signal chip builder
@@ -82,17 +80,12 @@ def _get_top_shap_features(company_shap: Any, top_n: int = 5) -> list[dict]:
     """Extract top-N SHAP features from raw columns for richer display."""
     shap_cols = [c for c in company_shap.columns if c.startswith("shap_")]
     if not shap_cols:
-        return parse_top_features_json(
-            company_shap.iloc[-1].get("top_features_json", "[]")
-        )
+        return parse_top_features_json(company_shap.iloc[-1].get("top_features_json", "[]"))
 
     row = company_shap.iloc[-1]
     vals = {c.replace("shap_", ""): float(row[c]) for c in shap_cols}
     sorted_feats = sorted(vals.items(), key=lambda x: abs(x[1]), reverse=True)[:top_n]
-    return [
-        {"feature": f, "shap_value": v, "rank": i + 1}
-        for i, (f, v) in enumerate(sorted_feats)
-    ]
+    return [{"feature": f, "shap_value": v, "rank": i + 1} for i, (f, v) in enumerate(sorted_feats)]
 
 
 def _render_shap_bars(features: list[dict], latest_score: float, has_preds: bool) -> None:
@@ -304,9 +297,7 @@ def render() -> None:
     with col_quarter:
         if firm_preds is not None and len(firm_preds) > 1:
             quarters = firm_preds.apply(
-                lambda r: quarter_label(
-                    int(r["fiscal_year"]), str(r.get("fiscal_period", ""))
-                ),
+                lambda r: quarter_label(int(r["fiscal_year"]), str(r.get("fiscal_period", ""))),
                 axis=1,
             ).tolist()
             st.selectbox("Quarter", options=quarters, index=len(quarters) - 1)
@@ -356,29 +347,49 @@ def render() -> None:
         )
 
         fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=dp["quarter"], y=dp["distress_probability"],
-            mode="lines+markers",
-            line={"color": risk_color(latest_score), "width": 2.5},
-            marker={"size": 8},
-            hovertemplate="Quarter: %{x}<br>Probability: %{y:.2%}<extra></extra>",
-        ))
-        fig.add_hline(y=0.70, line_dash="dash", line_color=COLORS["high"], opacity=0.4,
-                      annotation_text="High risk (0.70)", annotation_position="top left")
-        fig.add_hline(y=0.30, line_dash="dash", line_color=COLORS["medium"], opacity=0.3,
-                      annotation_text="Medium (0.30)", annotation_position="top left")
+        fig.add_trace(
+            go.Scatter(
+                x=dp["quarter"],
+                y=dp["distress_probability"],
+                mode="lines+markers",
+                line={"color": risk_color(latest_score), "width": 2.5},
+                marker={"size": 8},
+                hovertemplate="Quarter: %{x}<br>Probability: %{y:.2%}<extra></extra>",
+            )
+        )
+        fig.add_hline(
+            y=0.70,
+            line_dash="dash",
+            line_color=COLORS["high"],
+            opacity=0.4,
+            annotation_text="High risk (0.70)",
+            annotation_position="top left",
+        )
+        fig.add_hline(
+            y=0.30,
+            line_dash="dash",
+            line_color=COLORS["medium"],
+            opacity=0.3,
+            annotation_text="Medium (0.30)",
+            annotation_position="top left",
+        )
         fig.update_yaxes(title_text="Distress probability", range=[-0.05, 1.05], tickformat=".0%")
         fig.update_layout(height=280, showlegend=False)
         apply_chart_theme(fig)
         st.plotly_chart(fig, width="stretch")
 
     elif firm_preds is not None and len(firm_preds) == 1:
-        st.metric("Predicted distress probability", f"{latest_score:.2%}",
-                  help="Single quarter prediction from XGBoost model")
+        st.metric(
+            "Predicted distress probability",
+            f"{latest_score:.2%}",
+            help="Single quarter prediction from XGBoost model",
+        )
 
     elif not history.empty and "distress_label" in history.columns:
         st.markdown("#### Distress label — last 8 quarters")
-        st.caption("⚠️ Binary labels. Continuous probability scores available for test set (2022–2023).")
+        st.caption(
+            "⚠️ Binary labels. Continuous probability scores available for test set (2022–2023)."
+        )
 
         recent = history.tail(8).copy()
         recent["quarter"] = recent.apply(
@@ -392,11 +403,15 @@ def render() -> None:
         recent = recent.sort_values("sort_key")
 
         fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=recent["quarter"], y=recent["distress_label"],
-            mode="lines+markers",
-            line={"color": risk_color(latest_score), "width": 2}, marker={"size": 7},
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=recent["quarter"],
+                y=recent["distress_label"],
+                mode="lines+markers",
+                line={"color": risk_color(latest_score), "width": 2},
+                marker={"size": 7},
+            )
+        )
         fig.update_yaxes(range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["Healthy", "Distressed"])
         fig.update_layout(height=250, showlegend=False)
         apply_chart_theme(fig)

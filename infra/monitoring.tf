@@ -87,10 +87,15 @@ resource "google_monitoring_notification_channel" "slack" {
   enabled      = true
 
   labels = {
-    url      = var.slack_webhook_url
+    url      = google_cloud_run_v2_service.slack_alert_adapter[0].uri
     username = "foresight"
     password = "unused"
   }
+
+  depends_on = [
+    google_cloud_run_v2_service.slack_alert_adapter,
+    google_cloud_run_v2_service_iam_member.slack_alert_adapter_public,
+  ]
 }
 
 # Alert Policy 1: Cloud Run Job Failure
@@ -102,11 +107,16 @@ resource "google_monitoring_alert_policy" "cloud_run_job_failure" {
   conditions {
     display_name = "Cloud Run job logs include ERROR"
 
-    condition_matched_log {
-      filter = <<-EOT
-        resource.type="cloud_run_job"
-        severity>=ERROR
-      EOT
+    condition_threshold {
+      filter          = "resource.type=\"cloud_run_job\" AND metric.type=\"logging.googleapis.com/user/cloud_run_job_failures\""
+      duration        = "0s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_DELTA"
+      }
     }
   }
 
@@ -114,10 +124,6 @@ resource "google_monitoring_alert_policy" "cloud_run_job_failure" {
 
   alert_strategy {
     auto_close = "1800s"
-
-    notification_rate_limit {
-      period = "300s"
-    }
   }
 
   documentation {
@@ -141,11 +147,16 @@ resource "google_monitoring_alert_policy" "test_roc_auc_low" {
   conditions {
     display_name = "Training logs include TEST_ROC_AUC_LOW"
 
-    condition_matched_log {
-      filter = <<-EOT
-        resource.type="cloud_run_job"
-        textPayload=~"TEST_ROC_AUC_LOW"
-      EOT
+    condition_threshold {
+      filter          = "resource.type=\"cloud_run_job\" AND metric.type=\"logging.googleapis.com/user/test_roc_auc_low\""
+      duration        = "0s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_DELTA"
+      }
     }
   }
 
@@ -153,10 +164,6 @@ resource "google_monitoring_alert_policy" "test_roc_auc_low" {
 
   alert_strategy {
     auto_close = "3600s"
-
-    notification_rate_limit {
-      period = "300s"
-    }
   }
 
   documentation {
@@ -179,11 +186,16 @@ resource "google_monitoring_alert_policy" "drift_detected" {
   conditions {
     display_name = "Feature engineering logs include DRIFT_DETECTED"
 
-    condition_matched_log {
-      filter = <<-EOT
-        resource.type="cloud_run_job"
-        textPayload=~"DRIFT_DETECTED"
-      EOT
+    condition_threshold {
+      filter          = "resource.type=\"cloud_run_job\" AND metric.type=\"logging.googleapis.com/user/drift_detected\""
+      duration        = "0s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_DELTA"
+      }
     }
   }
 
@@ -191,10 +203,6 @@ resource "google_monitoring_alert_policy" "drift_detected" {
 
   alert_strategy {
     auto_close = "7200s"
-
-    notification_rate_limit {
-      period = "300s"
-    }
   }
 
   documentation {

@@ -16,7 +16,7 @@ from src.dashboard.data.gcs_loader import (
     load_predictions,
     load_slice_performance,
 )
-from src.dashboard.utils import apply_chart_theme, COLORS
+from src.dashboard.utils import COLORS, apply_chart_theme
 
 
 def render() -> None:
@@ -137,7 +137,11 @@ def render() -> None:
                 if isinstance(feat, dict):
                     name = feat.get("feature", str(feat))
                     psi = feat.get("psi", 0)
-                    color = COLORS["high"] if psi > 0.25 else (COLORS["medium"] if psi > 0.10 else COLORS["low"])
+                    color = (
+                        COLORS["high"]
+                        if psi > 0.25
+                        else (COLORS["medium"] if psi > 0.10 else COLORS["low"])
+                    )
                     st.markdown(
                         f"""<div style="display:flex;justify-content:space-between;padding:4px 0;
                         border-bottom:0.5px solid rgba(0,0,0,0.05);font-size:12px">
@@ -167,14 +171,26 @@ def render() -> None:
         probs = predictions["distress_probability"]
 
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total scored", f"{len(predictions):,}",
-                  help="Number of company-quarters scored by the model")
-        m2.metric("Mean probability", f"{probs.mean():.2%}",
-                  help="Average predicted distress probability across all companies")
-        m3.metric("High risk (≥0.70)", f"{(probs >= 0.70).sum():,}",
-                  help="Companies with >70% predicted chance of distress in 6 months")
-        m4.metric("Median probability", f"{probs.median():.4f}",
-                  help="Middle value — 50% of companies are above, 50% below")
+        m1.metric(
+            "Total scored",
+            f"{len(predictions):,}",
+            help="Number of company-quarters scored by the model",
+        )
+        m2.metric(
+            "Mean probability",
+            f"{probs.mean():.2%}",
+            help="Average predicted distress probability across all companies",
+        )
+        m3.metric(
+            "High risk (≥0.70)",
+            f"{(probs >= 0.70).sum():,}",
+            help="Companies with >70% predicted chance of distress in 6 months",
+        )
+        m4.metric(
+            "Median probability",
+            f"{probs.median():.4f}",
+            help="Middle value — 50% of companies are above, 50% below",
+        )
 
         fig = go.Figure()
         fig.add_trace(
@@ -186,12 +202,20 @@ def render() -> None:
             )
         )
         fig.add_vline(
-            x=0.70, line_dash="dash", line_color=COLORS["high"], opacity=0.6,
-            annotation_text="High risk", annotation_position="top right",
+            x=0.70,
+            line_dash="dash",
+            line_color=COLORS["high"],
+            opacity=0.6,
+            annotation_text="High risk",
+            annotation_position="top right",
         )
         fig.add_vline(
-            x=0.30, line_dash="dash", line_color=COLORS["medium"], opacity=0.4,
-            annotation_text="Medium", annotation_position="top right",
+            x=0.30,
+            line_dash="dash",
+            line_color=COLORS["medium"],
+            opacity=0.4,
+            annotation_text="Medium",
+            annotation_position="top right",
         )
         fig.update_xaxes(title_text="Distress probability", range=[0, 1])
         fig.update_yaxes(title_text="Number of companies")
@@ -209,9 +233,15 @@ def render() -> None:
 
     if not slice_perf.empty:
         display_cols = [
-            c for c in [
-                "dimension", "slice", "sample_count", "roc_auc",
-                "recall_at_5pct", "precision_at_5pct", "brier_score",
+            c
+            for c in [
+                "dimension",
+                "slice",
+                "sample_count",
+                "roc_auc",
+                "recall_at_5pct",
+                "precision_at_5pct",
+                "brier_score",
             ]
             if c in slice_perf.columns
         ]

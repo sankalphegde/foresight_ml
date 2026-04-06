@@ -316,16 +316,20 @@ if "loaded" not in st.session_state:
 # ---------------------------------------------------------------------------
 if page == "Risk Analysis":
     from src.dashboard.pages.company_risk import render
+
     render()
 
 elif page == "Watchlist":
     from src.dashboard.pages.watchlist import render
+
     render()
 
 elif page == "Model Health":
     from src.dashboard.pages.model_health import render
+
     render()
 
 elif page == "Pipeline Status":
     from src.dashboard.pages.pipeline_status import render
+
     render()
