@@ -399,7 +399,7 @@ def save_shap_parquet(
     id_cols = ["firm_id", "fiscal_year", "fiscal_period"]
     for col in id_cols:
         if col in eval_df.columns:
-            shap_df.insert(0, col, eval_df[col].values) # type: ignore
+            shap_df.insert(0, col, eval_df[col].values)
 
     shap_df["top_features_json"] = top_features_json
 
@@ -587,49 +587,7 @@ def run_shap_analysis(
     log.info("SHAP analysis complete: %s", json.dumps(result, indent=2))
     return result
 
-# ---------------------------------------------------------------------------
-# API Helper: Retrieve top features for Dashboard
-# ---------------------------------------------------------------------------
 
-def get_top_features(cik: str, quarter: str) -> list[dict]:
-    """
-    Reads shap_values.parquet from GCS and returns the top 3 SHAP contributors 
-    for a given company (CIK) and quarter.
-    """
-    # Parse the quarter string (e.g., "2025-Q1" becomes year=2025, period="Q1")
-    try:
-        year_str, period = quarter.split("-")
-        fiscal_year = int(year_str)
-    except ValueError:
-        log.error(f"Invalid quarter format: {quarter}. Expected YYYY-QX.")
-        return []
-
-    shap_path = "gs://financial-distress-data/shap/shap_values.parquet"
-    
-    try:
-        shap_df = pd.read_parquet(shap_path)
-        
-        # Filter for the specific company and quarter
-        # Note: In the project schema, CIK maps to 'firm_id'
-        filtered_df = shap_df[
-            (shap_df['firm_id'] == cik) & 
-            (shap_df['fiscal_year'] == fiscal_year) & 
-            (shap_df['fiscal_period'] == period)
-        ]
-        
-        if filtered_df.empty:
-            log.warning(f"No SHAP values found for CIK {cik} in {quarter}")
-            return []
-            
-        top_features_str = filtered_df.iloc[0]['top_features_json']
-        top_features = json.loads(top_features_str)
-        
-        return top_features[:3]
-        
-    except Exception as e:
-        log.error(f"Error reading SHAP values from GCS: {e}")
-        return []
-    
 # ---------------------------------------------------------------------------
 # CLI entrypoint
 # ---------------------------------------------------------------------------
