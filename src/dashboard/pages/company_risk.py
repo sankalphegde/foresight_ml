@@ -29,13 +29,16 @@ from src.dashboard.utils import (
     COLORS,
 )
 
+from typing import Any
+
+import pandas as pd
 
 # ---------------------------------------------------------------------------
 # Signal chip builder
 # ---------------------------------------------------------------------------
 
 
-def _build_signal_chips(row: object) -> str:
+def _build_signal_chips(row: Any) -> str:
     """Build HTML signal chips from a company's latest financial data."""
     chips = []
 
@@ -75,7 +78,7 @@ def _build_signal_chips(row: object) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _get_top_shap_features(company_shap: object, top_n: int = 5) -> list[dict]:
+def _get_top_shap_features(company_shap: Any, top_n: int = 5) -> list[dict]:
     """Extract top-N SHAP features from raw columns for richer display."""
     shap_cols = [c for c in company_shap.columns if c.startswith("shap_")]
     if not shap_cols:

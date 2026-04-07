@@ -21,7 +21,7 @@ API_BASE_URL = os.getenv(
 API_TIMEOUT = 10  # seconds
 
 
-def _get(endpoint: str, params: dict | None = None) -> dict | None:
+def _get(endpoint: str, params: dict | None = None) -> dict | None:  # type: ignore[type-arg]
     """Make a GET request to the API. Returns None on failure."""
     try:
         url = f"{API_BASE_URL}{endpoint}"
@@ -33,7 +33,7 @@ def _get(endpoint: str, params: dict | None = None) -> dict | None:
         return None
 
 
-def _post(endpoint: str, payload: dict) -> dict | None:
+def _post(endpoint: str, payload: dict) -> dict | None:  # type: ignore[type-arg]
     """Make a POST request to the API. Returns None on failure."""
     try:
         url = f"{API_BASE_URL}{endpoint}"

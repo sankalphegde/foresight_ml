@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 
+from typing import Any
+
 import pandas as pd
 
 # ---------------------------------------------------------------------------
@@ -139,7 +141,7 @@ def quarter_sort_key(year: int, period: str) -> int:
 # ---------------------------------------------------------------------------
 
 
-def apply_chart_theme(fig: object) -> object:
+def apply_chart_theme(fig: Any) -> Any:
     """Apply consistent Foresight-ML theme to a Plotly figure."""
     fig.update_layout(
         font_family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",

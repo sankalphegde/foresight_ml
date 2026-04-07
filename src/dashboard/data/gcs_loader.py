@@ -59,7 +59,7 @@ DEFAULT_MANIFEST = {
 # ---------------------------------------------------------------------------
 
 
-def _read_gcs_json(uri: str) -> dict | None:
+def _read_gcs_json(uri: str) -> dict | None:  # type: ignore[type-arg]
     """Read a JSON file from GCS. Returns None on any failure."""
     try:
         from google.cloud import storage
