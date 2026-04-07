@@ -624,7 +624,7 @@ def get_top_features(cik: str, quarter: str) -> list[dict]:
         top_features_str = filtered_df.iloc[0]['top_features_json']
         top_features = json.loads(top_features_str)
         
-        return top_features[:3]
+        return top_features[:3]  # type: ignore
         
     except Exception as e:
         log.error(f"Error reading SHAP values from GCS: {e}")
