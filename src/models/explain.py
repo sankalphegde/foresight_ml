@@ -592,9 +592,9 @@ def run_shap_analysis(
 # ---------------------------------------------------------------------------
 
 def get_top_features(cik: str, quarter: str) -> list[dict]:
-    """
-    Reads shap_values.parquet from GCS and returns the top 3 SHAP contributors 
-    for a given company (CIK) and quarter.
+    """Reads shap_values.parquet from GCS and returns the top 3 SHAP contributors.
+
+    Finds the values for a given company (CIK) and quarter.
     """
     # Parse the quarter string (e.g., "2025-Q1" becomes year=2025, period="Q1")
     try:
