@@ -62,9 +62,9 @@ def test_no_nulls_in_financial_tags(cleaned_data):
         # Only test the tag if it actually exists in the dataset
         if tag in cleaned_data.columns:
             null_count = cleaned_data[tag].isnull().sum()
-            assert null_count == 0, (
-                f"Zero-imputation failed! Column '{tag}' contains {null_count} nulls."
-            )
+            assert (
+                null_count == 0
+            ), f"Zero-imputation failed! Column '{tag}' contains {null_count} nulls."
 
 
 # -------------------------------------------------------------------
@@ -78,6 +78,6 @@ def test_no_nulls_in_macro_data(cleaned_data):
         if col in cleaned_data.columns:
             null_count = cleaned_data[col].isnull().sum()
             # Allow up to 200 nulls for historical edge cases (GDP quarterly gaps, etc.)
-            assert null_count < 200, (
-                f"Macro imputation failed! Column '{col}' contains {null_count} nulls."
-            )
+            assert (
+                null_count < 200
+            ), f"Macro imputation failed! Column '{col}' contains {null_count} nulls."

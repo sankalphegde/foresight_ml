@@ -81,8 +81,10 @@ def filter_active_companies(companies_df: pd.DataFrame, sec: "SECClient") -> pd.
             print(f"SEC API check failed for CIK {cik} (keeping company): {e}")
 
     n_filtered = int((~active_mask).sum())
-    print(f"filter_active_companies: removed {n_filtered} inactive companies, "
-          f"{int(active_mask.sum())} remaining")
+    print(
+        f"filter_active_companies: removed {n_filtered} inactive companies, "
+        f"{int(active_mask.sum())} remaining"
+    )
     return companies_df[active_mask].reset_index(drop=True)
 
 

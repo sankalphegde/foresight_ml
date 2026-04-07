@@ -1043,11 +1043,11 @@ def generate_dashboard_html(
         "bias": [],
     }
     for fname, title, badge, desc, section, layout in charts:
-        card_html = f'''<div class="card {"full-width" if layout == "full" else ""}">
+        card_html = f"""<div class="card {"full-width" if layout == "full" else ""}">
           <div class="card-header"><h3>{title}</h3><span class="card-badge">{badge}</span></div>
           <div class="card-body"><img src="{fname}" alt="{title}" onclick="openLightbox(this)"></div>
           <div class="card-description">{desc}</div>
-        </div>'''
+        </div>"""
         sections[section].append((card_html, layout))
 
     def _render_section(items: list[tuple[str, str]]) -> str:
@@ -1097,13 +1097,13 @@ def generate_dashboard_html(
     for sec_key in ["correlation", "distribution", "missing", "bias"]:
         icon, css_class, title, subtitle = section_meta[sec_key]
         cards_html = _render_section(sections[sec_key])
-        sections_html += f'''<div class="section" data-section="{sec_key}">
+        sections_html += f"""<div class="section" data-section="{sec_key}">
       <div class="section-header">
         <div class="section-icon {css_class}">{icon}</div>
         <div><div class="section-title">{title}</div><div class="section-subtitle">{subtitle}</div></div>
       </div>
       {cards_html}
-    </div>\n'''
+    </div>\n"""
 
     html = f"""<!DOCTYPE html>
 <html lang="en">

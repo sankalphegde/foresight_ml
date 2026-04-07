@@ -183,6 +183,7 @@ def test_no_data_overlap(
     test_df: pd.DataFrame,
 ) -> None:
     """Train/val/test firm-year-quarter tuples must be disjoint."""
+
     def _keys(df: pd.DataFrame) -> set[tuple[str, int, str]]:
         return set(
             zip(
@@ -353,16 +354,18 @@ def test_stratification_key_merges_rare(full_df: pd.DataFrame) -> None:
     df = make_stratification_key(full_df, min_count=10)
 
     # Check that 'other' exists if any raw combo had < 10 rows
-    raw_key = full_df["company_size_bucket"].astype(str) + "__" + full_df["sector_proxy"].astype(str)
+    raw_key = (
+        full_df["company_size_bucket"].astype(str) + "__" + full_df["sector_proxy"].astype(str)
+    )
     counts = raw_key.value_counts()
     rare_exist = (counts < 10).any()
 
     if rare_exist:
         assert "other" in df["_strat_key"].values, "Rare strata should be merged to 'other'"
     else:
-        assert "other" not in df["_strat_key"].values, (
-            "'other' should not appear when no rare strata"
-        )
+        assert (
+            "other" not in df["_strat_key"].values
+        ), "'other' should not appear when no rare strata"
 
     # Original columns should be unchanged
     assert df["company_size_bucket"].equals(full_df["company_size_bucket"])
@@ -381,6 +384,4 @@ def test_year_2009_excluded(
 ) -> None:
     """No rows with fiscal_year == 2009 should appear in any split."""
     for name, split in [("train", train_df), ("val", val_df), ("test", test_df)]:
-        assert 2009 not in split["fiscal_year"].values, (
-            f"Year 2009 found in {name} split"
-        )
+        assert 2009 not in split["fiscal_year"].values, f"Year 2009 found in {name} split"

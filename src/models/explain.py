@@ -15,7 +15,6 @@ Artifacts produced:
 from __future__ import annotations
 
 import json
-import logging
 import os
 import tempfile
 from pathlib import Path
@@ -44,9 +43,9 @@ from src.models.train import (
     DEFAULT_VAL_URI,
     LABEL_COL,
 )
+from src.utils.logging import get_logger
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Default URIs / paths
@@ -399,7 +398,7 @@ def save_shap_parquet(
     id_cols = ["firm_id", "fiscal_year", "fiscal_period"]
     for col in id_cols:
         if col in eval_df.columns:
-            shap_df.insert(0, col, eval_df[col].values) 
+            shap_df.insert(0, col, eval_df[col].values)
 
     shap_df["top_features_json"] = top_features_json
 
@@ -587,9 +586,11 @@ def run_shap_analysis(
     log.info("SHAP analysis complete: %s", json.dumps(result, indent=2))
     return result
 
+
 # ---------------------------------------------------------------------------
 # API Helper: Retrieve top features for Dashboard
 # ---------------------------------------------------------------------------
+
 
 def get_top_features(cik: str, quarter: str) -> list[dict]:
     """Reads shap_values.parquet from GCS and returns the top 3 SHAP contributors.
@@ -605,31 +606,36 @@ def get_top_features(cik: str, quarter: str) -> list[dict]:
         return []
 
     shap_path = "gs://financial-distress-data/shap/shap_values.parquet"
-    
+
     try:
         shap_df = pd.read_parquet(shap_path)
-        
+
         # Filter for the specific company and quarter
         # Note: In the project schema, CIK maps to 'firm_id'
         filtered_df = shap_df[
-            (shap_df['firm_id'] == cik) & 
-            (shap_df['fiscal_year'] == fiscal_year) & 
-            (shap_df['fiscal_period'] == period)
+            (shap_df["firm_id"] == cik)
+            & (shap_df["fiscal_year"] == fiscal_year)
+            & (shap_df["fiscal_period"] == period)
         ]
-        
+
         if filtered_df.empty:
             log.warning(f"No SHAP values found for CIK {cik} in {quarter}")
             return []
-            
-        top_features_str = filtered_df.iloc[0]['top_features_json']
-        top_features = json.loads(top_features_str)
-        
-        return top_features[:3]  # type: ignore
-        
+
+        top_features_str = filtered_df.iloc[0]["top_features_json"]
+        parsed_top_features = json.loads(top_features_str)
+        if not isinstance(parsed_top_features, list):
+            log.warning("Unexpected top_features_json format for CIK %s in %s", cik, quarter)
+            return []
+
+        typed_top_features = [item for item in parsed_top_features if isinstance(item, dict)]
+        return typed_top_features[:3]
+
     except Exception as e:
         log.error(f"Error reading SHAP values from GCS: {e}")
         return []
-    
+
+
 # ---------------------------------------------------------------------------
 # CLI entrypoint
 # ---------------------------------------------------------------------------

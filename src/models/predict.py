@@ -6,9 +6,8 @@ Enhanced with:
 - manifest.json provenance certificate written alongside scores
 """
 
-import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import mlflow
@@ -23,9 +22,9 @@ from src.models.inference_schema import (
 )
 from src.models.manifest_io import upload_manifest_to_gcs, write_manifest
 from src.models.manifest_schema import ManifestSchema
+from src.utils.logging import get_logger
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> None:
@@ -62,12 +61,14 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
         )
     mv = prod_versions[0]
     run = client.get_run(mv.run_id)
-    trained_at = datetime.fromtimestamp(run.info.start_time / 1000, tz=timezone.utc)
+    trained_at = datetime.fromtimestamp(run.info.start_time / 1000, tz=UTC)
     model_roc_auc = run.data.metrics.get("test_roc_auc", 0.0)
 
     logger.info(
         "Model metadata: version=v%s, run_id=%s, roc_auc=%.4f",
-        mv.version, mv.run_id, model_roc_auc,
+        mv.version,
+        mv.run_id,
+        model_roc_auc,
     )
 
     # --- Step 2: Load and validate input ---
@@ -76,18 +77,14 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
 
     input_errors = validate_inference_input(latest_features_df)
     if input_errors:
-        error_msg = "Input validation failed:\n" + "\n".join(
-            f"  - {e}" for e in input_errors
-        )
+        error_msg = "Input validation failed:\n" + "\n".join(f"  - {e}" for e in input_errors)
         logger.error(error_msg)
         raise ValueError(error_msg)
     logger.info("Input schema validation passed (%d rows)", len(latest_features_df))
 
     # --- Step 3: Generate predictions ---
     # Capture pre-dummy raw feature columns for manifest
-    raw_feature_columns = [
-        c for c in latest_features_df.columns if c not in IDENTITY_COLUMNS
-    ]
+    raw_feature_columns = [c for c in latest_features_df.columns if c not in IDENTITY_COLUMNS]
 
     X_predict = latest_features_df.drop(columns=IDENTITY_COLUMNS)
     predictions = model.predict(X_predict)
@@ -98,7 +95,7 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
     latest_features_df["confidence_interval_upper"] = np.clip(predictions + 0.05, 0, 1)
 
     # --- Step 5: Inject versioning columns ---
-    scored_at = datetime.now(timezone.utc)
+    scored_at = datetime.now(UTC)
     latest_features_df["model_version"] = f"v{mv.version}"
     latest_features_df["mlflow_run_id"] = mv.run_id
     latest_features_df["trained_at"] = trained_at.isoformat()
@@ -159,6 +156,4 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
 
 
 if __name__ == "__main__":
-    run_batch_inference(
-        "gs://financial-distress-data/features/latest.parquet", version_str="1.0"
-    )
+    run_batch_inference("gs://financial-distress-data/features/latest.parquet", version_str="1.0")

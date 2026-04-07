@@ -22,7 +22,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import cast, Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -49,16 +49,19 @@ def _load_training_report() -> dict[str, Any]:
 def _get_latest_mlflow_run_id() -> tuple[str, float]:
     """Fetch the most recent MLflow run_id and its test_roc_auc."""
     import mlflow
+
     from src.config.settings import settings
 
     if settings.mlflow_tracking_uri:
         mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 
-    runs: pd.DataFrame = pd.DataFrame(mlflow.search_runs(
-        experiment_names=[settings.mlflow_experiment_name],
-        order_by=["start_time DESC"],
-        max_results=1,
-    ))
+    runs: pd.DataFrame = pd.DataFrame(
+        mlflow.search_runs(
+            experiment_names=[settings.mlflow_experiment_name],
+            order_by=["start_time DESC"],
+            max_results=1,
+        )
+    )
     if runs.empty:
         raise RuntimeError(
             f"No MLflow runs found in experiment '{settings.mlflow_experiment_name}'. "
@@ -71,11 +74,11 @@ def _get_latest_mlflow_run_id() -> tuple[str, float]:
 
 def main() -> None:
     """Run full model pipeline: train → evaluate → quality gate → SHAP → inference → register."""
-
     # ── Step 1: Train ────────────────────────────────────────────────────
     logger.info("Step 1/6 — Model training (XGBoost + Optuna)")
     try:
         from src.models.train import main as run_training
+
         run_training()
         logger.info("Training complete")
     except Exception as e:
@@ -86,6 +89,7 @@ def main() -> None:
     logger.info("Step 2/6 — Model evaluation on held-out test set")
     try:
         from src.models.evaluate import main as run_evaluation
+
         run_evaluation()
         logger.info("Evaluation complete")
     except Exception as e:
@@ -114,37 +118,32 @@ def main() -> None:
     logger.info("Step 4/6 — SHAP explainability + bias report generation")
     try:
         from src.models.explain import main as run_shap
+
         run_shap()
         logger.info("SHAP analysis and bias report complete")
     except Exception as e:
         # Non-fatal — SHAP failure should not block model registration
-        logger.warning(
-            f"SHAP/bias analysis failed (non-fatal, continuing): {e}"
-        )
+        logger.warning(f"SHAP/bias analysis failed (non-fatal, continuing): {e}")
 
     # ── Step 5: Batch inference ──────────────────────────────────────────
     logger.info("Step 5/6 — Batch inference with SHAP explanations")
     try:
         from src.models.predict import run_batch_inference
+
         features_path = os.environ.get(
-            "FEATURES_GCS_PATH",
-            f"gs://{GCS_BUCKET}/features/labeled_v1/labeled_panel.parquet"
+            "FEATURES_GCS_PATH", f"gs://{GCS_BUCKET}/features/labeled_v1/labeled_panel.parquet"
         )
-        run_batch_inference(
-            features_gcs_path=features_path,
-            version_str="1.0"
-        )
+        run_batch_inference(features_gcs_path=features_path, version_str="1.0")
         logger.info("Batch inference complete")
     except Exception as e:
         # Non-fatal — inference failure should not block registration
-        logger.warning(
-            f"Batch inference failed (non-fatal, continuing): {e}"
-        )
+        logger.warning(f"Batch inference failed (non-fatal, continuing): {e}")
 
     # ── Step 6: Register ─────────────────────────────────────────────────
     logger.info("Step 6/6 — Model registration with rollback check")
     try:
         from src.models.registry import evaluate_and_register_model
+
         run_id, mlflow_roc_auc = _get_latest_mlflow_run_id()
         promoted = evaluate_and_register_model(
             run_id=run_id,

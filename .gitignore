@@ -59,7 +59,7 @@ temp/
 .dvc/cache
 .dvc/plots
 
-# Data Files 
+# Data Files
 *.parquet
 *.csv
 *.xlsx

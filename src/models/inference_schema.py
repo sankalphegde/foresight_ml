@@ -14,13 +14,11 @@ creates a dynamic column set depending on the data.
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 import pandas as pd
 from pydantic import BaseModel, Field
 
 # Identity columns — required for downstream joins, NOT features.
-IDENTITY_COLUMNS: List[str] = ["firm_id", "fiscal_year", "fiscal_period"]
+IDENTITY_COLUMNS: list[str] = ["firm_id", "fiscal_year", "fiscal_period"]
 
 # The label column — must NOT be present in inference input.
 LABEL_COLUMN: str = "distress_label"
@@ -52,13 +50,13 @@ class InferenceOutputRow(BaseModel):
     )
 
     # --- Confidence Intervals (optional — simple ±5% margin) ---
-    confidence_interval_lower: Optional[float] = Field(
+    confidence_interval_lower: float | None = Field(
         None,
         description="Lower bound of confidence interval.",
         ge=0.0,
         le=1.0,
     )
-    confidence_interval_upper: Optional[float] = Field(
+    confidence_interval_upper: float | None = Field(
         None,
         description="Upper bound of confidence interval.",
         ge=0.0,
@@ -97,7 +95,7 @@ class InferenceOutputRow(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def validate_inference_input(df: "pd.DataFrame") -> List[str]:  # noqa: F821
+def validate_inference_input(df: pd.DataFrame) -> list[str]:  # noqa: F821
     """Validate input DataFrame before prediction.
 
     Checks structural rules rather than a hardcoded feature list,
@@ -112,7 +110,7 @@ def validate_inference_input(df: "pd.DataFrame") -> List[str]:  # noqa: F821
     Returns:
         List of human-readable error strings.
     """
-    errors: List[str] = []
+    errors: list[str] = []
 
     # Identity columns must exist
     for col in IDENTITY_COLUMNS:
@@ -122,8 +120,7 @@ def validate_inference_input(df: "pd.DataFrame") -> List[str]:  # noqa: F821
     # Label should NOT be present in inference input
     if LABEL_COLUMN in df.columns:
         errors.append(
-            f"Label column '{LABEL_COLUMN}' found in inference input — "
-            "remove it before scoring"
+            f"Label column '{LABEL_COLUMN}' found in inference input — " "remove it before scoring"
         )
 
     # Feature columns (everything except identity) must be numeric
@@ -140,7 +137,7 @@ def validate_inference_input(df: "pd.DataFrame") -> List[str]:  # noqa: F821
     return errors
 
 
-def validate_inference_output(df: "pd.DataFrame") -> List[str]:  # noqa: F821
+def validate_inference_output(df: pd.DataFrame) -> list[str]:  # noqa: F821
     """Validate output scores DataFrame.
 
     Args:
@@ -149,7 +146,7 @@ def validate_inference_output(df: "pd.DataFrame") -> List[str]:  # noqa: F821
     Returns:
         List of human-readable error strings.
     """
-    errors: List[str] = []
+    errors: list[str] = []
 
     required = [
         "firm_id",

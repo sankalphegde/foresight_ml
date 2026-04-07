@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
 import pandas as pd
+import pytest
 from pydantic import ValidationError
 
 from src.models.inference_schema import (
@@ -13,7 +13,6 @@ from src.models.inference_schema import (
     validate_inference_input,
     validate_inference_output,
 )
-
 
 # ---------- Helpers ----------
 
@@ -55,7 +54,6 @@ def _make_output_df(**overrides) -> pd.DataFrame:
 
 
 class TestConstants:
-
     def test_identity_columns_has_three(self):
         assert len(IDENTITY_COLUMNS) == 3
 
@@ -72,7 +70,6 @@ class TestConstants:
 
 
 class TestInferenceOutputRow:
-
     def test_valid_output_row(self):
         row = InferenceOutputRow(
             firm_id="0000001750",
@@ -152,7 +149,6 @@ class TestInferenceOutputRow:
 
 
 class TestValidateInferenceInput:
-
     def test_valid_df_no_errors(self):
         df = _make_input_df()
         errors = validate_inference_input(df)
@@ -190,7 +186,6 @@ class TestValidateInferenceInput:
 
 
 class TestValidateInferenceOutput:
-
     def test_valid_output_no_errors(self):
         df = _make_output_df()
         errors = validate_inference_output(df)

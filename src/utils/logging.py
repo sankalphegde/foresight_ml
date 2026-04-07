@@ -1,19 +1,46 @@
-"""Logging configuration utilities."""
+"""Structured logging utilities.
 
+Provides a JSON formatter and a logger factory for consistent log output.
+"""
+
+from __future__ import annotations
+
+import json
 import logging
-import sys
+from datetime import UTC, datetime
+
+
+class StructuredFormatter(logging.Formatter):
+    """Format log records as JSON for machine-friendly ingestion."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Serialize a single log record as a JSON string."""
+        payload: dict[str, str] = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
+            "severity": record.levelname,
+            "message": record.getMessage(),
+            "module": record.module,
+            "function": record.funcName,
+        }
+
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+
+        return json.dumps(payload)
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Create and configure a module-level logger."""
+    """Get a logger configured with the structured JSON formatter."""
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
 
-    handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
-    handler.setFormatter(formatter)
-
-    if not logger.handlers:
+    has_structured_handler = any(
+        isinstance(handler.formatter, StructuredFormatter) for handler in logger.handlers
+    )
+    if not has_structured_handler:
+        handler = logging.StreamHandler()
+        handler.setFormatter(StructuredFormatter())
         logger.addHandler(handler)
 
+    logger.propagate = False
     return logger

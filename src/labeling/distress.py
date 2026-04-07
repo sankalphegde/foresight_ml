@@ -106,7 +106,7 @@ class DistressLabeler:
     def apply(self) -> pd.DataFrame:
         """Generate composite distress labels and return the updated DataFrame.
 
-        Returns
+        Returns:
         -------
         pd.DataFrame
             Original DataFrame with a new integer column ``distress_label``
@@ -122,30 +122,22 @@ class DistressLabeler:
         # ---- Compute each signal per firm --------------------------------
         logger.info("Signal 1: consecutive negative net income")
         df["_s1"] = (
-            df.groupby("firm_id", group_keys=False)
-            .apply(self._signal_neg_income)
-            .astype(float)
+            df.groupby("firm_id", group_keys=False).apply(self._signal_neg_income).astype(float)
         )
 
         logger.info("Signal 2: consecutive negative operating cash flow")
         df["_s2"] = (
-            df.groupby("firm_id", group_keys=False)
-            .apply(self._signal_neg_ocf)
-            .astype(float)
+            df.groupby("firm_id", group_keys=False).apply(self._signal_neg_ocf).astype(float)
         )
 
         logger.info("Signal 3: debt-to-equity spike >= 20 %% over 4 quarters")
         df["_s3"] = (
-            df.groupby("firm_id", group_keys=False)
-            .apply(self._signal_leverage_spike)
-            .astype(float)
+            df.groupby("firm_id", group_keys=False).apply(self._signal_leverage_spike).astype(float)
         )
 
         logger.info("Signal 4: low interest coverage ratio for 2 consecutive quarters")
         df["_s4"] = (
-            df.groupby("firm_id", group_keys=False)
-            .apply(self._signal_low_coverage)
-            .astype(float)
+            df.groupby("firm_id", group_keys=False).apply(self._signal_low_coverage).astype(float)
         )
 
         logger.info("Signal 5: declining retained earnings for 3 consecutive quarters")
@@ -161,10 +153,9 @@ class DistressLabeler:
 
         # ---- Shift forward by horizon quarters (no leakage) --------------
         logger.info("Shifting composite label forward by %d quarter(s)", self.horizon)
-        df["distress_label"] = (
-            df.groupby("firm_id")["_signal_count"]
-            .transform(lambda s: (s >= 2).shift(-self.horizon))  # noqa: B023
-        )
+        df["distress_label"] = df.groupby("firm_id")["_signal_count"].transform(
+            lambda s: (s >= 2).shift(-self.horizon)
+        )  # noqa: B023
 
         # Fill boundary NaNs with 0 (non-distress)
         df["distress_label"] = df["distress_label"].fillna(0).astype(int)
@@ -175,7 +166,9 @@ class DistressLabeler:
 
         # ---- Post-labeling diagnostics -----------------------------------
         positive_rate: float = float(df["distress_label"].mean())
-        logger.info("Distress label positive rate: %.4f (%.2f%%)", positive_rate, positive_rate * 100)
+        logger.info(
+            "Distress label positive rate: %.4f (%.2f%%)", positive_rate, positive_rate * 100
+        )
 
         if positive_rate < _MIN_POSITIVE_RATE:
             logger.warning(

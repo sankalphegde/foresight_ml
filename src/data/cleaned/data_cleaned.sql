@@ -8,12 +8,12 @@ WITH sec_wide AS (
     quarter_key,
     end_date,
     filed_date,
-    
+
     -- 1. Core Accounting Tags (Used for math checks)
     MAX(CASE WHEN tag = 'Assets' THEN value END) AS Assets,
     MAX(CASE WHEN tag = 'Liabilities' THEN value END) AS Liabilities,
     MAX(CASE WHEN tag = 'StockholdersEquity' THEN value END) AS StockholdersEquity,
-    
+
     -- 2. The Rest of the Top 40 Tags
     MAX(CASE WHEN tag = 'LiabilitiesAndStockholdersEquity' THEN value END) AS LiabilitiesAndStockholdersEquity,
     MAX(CASE WHEN tag = 'RetainedEarningsAccumulatedDeficit' THEN value END) AS RetainedEarningsAccumulatedDeficit,
@@ -52,7 +52,7 @@ WITH sec_wide AS (
     MAX(CASE WHEN tag = 'DepreciationDepletionAndAmortization' THEN value END) AS DepreciationDepletionAndAmortization,
     MAX(CASE WHEN tag = 'OtherNonoperatingIncomeExpense' THEN value END) AS OtherNonoperatingIncomeExpense,
     MAX(CASE WHEN tag = 'ProfitLoss' THEN value END) AS ProfitLoss
-    
+
   FROM `financial-distress-ew.foresight_raw.sec_long`
   GROUP BY cik, fiscal_year, fiscal_period, quarter_key, end_date, filed_date
 ),
@@ -145,7 +145,7 @@ SELECT
     LAST_VALUE(BBB_spread IGNORE NULLS) OVER (PARTITION BY cik ORDER BY filed_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW),
     FIRST_VALUE(BBB_spread IGNORE NULLS) OVER (PARTITION BY cik ORDER BY filed_date ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
   ) AS BBB_spread,
-  
+
   COALESCE(
     CPI,
     LAST_VALUE(CPI IGNORE NULLS) OVER (PARTITION BY cik ORDER BY filed_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW),
