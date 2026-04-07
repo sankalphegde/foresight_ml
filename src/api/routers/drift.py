@@ -1,3 +1,4 @@
+"""Model drift status endpoint router."""
 from fastapi import APIRouter
 from src.api.schemas import DriftStatusResponse
 

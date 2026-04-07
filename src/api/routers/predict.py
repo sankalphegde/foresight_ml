@@ -1,3 +1,4 @@
+"""Predict endpoint router."""
 from fastapi import APIRouter
 from src.api.schemas import PredictRequest, PredictResponse
 

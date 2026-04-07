@@ -1,3 +1,4 @@
+"""System health endpoint router."""
 from fastapi import APIRouter
 from src.api.schemas import HealthResponse
 from src.models.manifest_schema import ManifestSchema

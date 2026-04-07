@@ -1,3 +1,4 @@
+"""Company data endpoint router."""
 from fastapi import APIRouter
 
 router = APIRouter()

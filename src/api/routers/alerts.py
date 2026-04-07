@@ -1,3 +1,4 @@
+"""Watchlist alerts endpoint router."""
 from fastapi import APIRouter
 from src.api.schemas import AlertsResponse
 
