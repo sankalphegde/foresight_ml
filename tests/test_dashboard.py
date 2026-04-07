@@ -375,6 +375,238 @@ class TestApiClient:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Watchlist builder
+# ---------------------------------------------------------------------------
+
+
+class TestWatchlistBuilder:
+    """Tests for watchlist._build_watchlist()."""
+
+    def test_empty_predictions(self) -> None:
+        from src.dashboard.pages.watchlist import _build_watchlist
+
+        result = _build_watchlist(pd.DataFrame(), pd.DataFrame())
+        assert result.empty
+
+    def test_basic_watchlist(self) -> None:
+        from src.dashboard.pages.watchlist import _build_watchlist
+
+        preds = pd.DataFrame({
+            "firm_id": ["AAA", "AAA", "BBB"],
+            "fiscal_year": [2022, 2023, 2023],
+            "fiscal_period": ["Q1", "Q2", "Q2"],
+            "distress_probability": [0.3, 0.8, 0.1],
+        })
+        result = _build_watchlist(preds, pd.DataFrame())
+        assert len(result) == 2
+        assert "risk_score" in result.columns
+        assert "signals" in result.columns
+        assert "change" in result.columns
+
+    def test_watchlist_with_panel_signals(self) -> None:
+        from src.dashboard.pages.watchlist import _build_watchlist
+
+        preds = pd.DataFrame({
+            "firm_id": ["AAA"],
+            "fiscal_year": [2023],
+            "fiscal_period": ["Q1"],
+            "distress_probability": [0.9],
+        })
+        panel = pd.DataFrame({
+            "firm_id": ["AAA"],
+            "fiscal_year": [2023],
+            "fiscal_period": ["Q1"],
+            "net_income": [-500_000],
+            "total_assets": [1_000_000],
+            "total_liabilities": [900_000],
+        })
+        result = _build_watchlist(preds, panel)
+        assert len(result) == 1
+        assert "Neg. income" in result.iloc[0]["signals"]
+
+    def test_watchlist_change_column(self) -> None:
+        from src.dashboard.pages.watchlist import _build_watchlist
+
+        preds = pd.DataFrame({
+            "firm_id": ["AAA", "AAA"],
+            "fiscal_year": [2022, 2023],
+            "fiscal_period": ["Q1", "Q2"],
+            "distress_probability": [0.3, 0.8],
+        })
+        result = _build_watchlist(preds, pd.DataFrame())
+        assert len(result) == 1
+        assert result.iloc[0]["change"] == pytest.approx(0.5, abs=0.01)
+
+    def test_watchlist_sector_default(self) -> None:
+        from src.dashboard.pages.watchlist import _build_watchlist
+
+        preds = pd.DataFrame({
+            "firm_id": ["AAA"],
+            "fiscal_year": [2023],
+            "fiscal_period": ["Q1"],
+            "distress_probability": [0.5],
+        })
+        result = _build_watchlist(preds, pd.DataFrame())
+        assert result.iloc[0]["sector"] == "—"
+
+    def test_watchlist_no_signals(self) -> None:
+        from src.dashboard.pages.watchlist import _build_watchlist
+
+        preds = pd.DataFrame({
+            "firm_id": ["AAA"],
+            "fiscal_year": [2023],
+            "fiscal_period": ["Q1"],
+            "distress_probability": [0.5],
+        })
+        panel = pd.DataFrame({
+            "firm_id": ["AAA"],
+            "fiscal_year": [2023],
+            "fiscal_period": ["Q1"],
+            "net_income": [1_000_000],
+            "total_assets": [10_000_000],
+            "total_liabilities": [2_000_000],
+        })
+        result = _build_watchlist(preds, panel)
+        assert result.iloc[0]["signals"] == "—"
+
+
+# ---------------------------------------------------------------------------
+# GCS loader — additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestGcsLoaderDefaults:
+    """Tests for gcs_loader default values and edge cases."""
+
+    def test_read_gcs_json_failure(self) -> None:
+        from src.dashboard.data.gcs_loader import _read_gcs_json
+
+        result = _read_gcs_json("gs://nonexistent-bucket/file.json")
+        assert result is None
+
+    def test_default_manifest_keys(self) -> None:
+        from src.dashboard.data.gcs_loader import DEFAULT_MANIFEST
+
+        assert "model_name" in DEFAULT_MANIFEST
+        assert "roc_auc" in DEFAULT_MANIFEST
+        assert "schema_version" in DEFAULT_MANIFEST
+
+    def test_get_shap_missing_firm_id_column(self) -> None:
+        from src.dashboard.data.gcs_loader import get_shap_for_company
+
+        shap_df = pd.DataFrame({"some_col": [1, 2, 3]})
+        result = get_shap_for_company(shap_df, "AAA")
+        assert result.empty
+
+    def test_get_company_history_sorted(self) -> None:
+        from src.dashboard.data.gcs_loader import get_company_history
+
+        panel = pd.DataFrame({
+            "firm_id": ["AAA", "AAA", "AAA"],
+            "fiscal_year": [2023, 2022, 2023],
+            "fiscal_period": ["Q2", "Q4", "Q1"],
+        })
+        result = get_company_history(panel, "AAA")
+        assert list(result["fiscal_year"]) == [2022, 2023, 2023]
+
+
+# ---------------------------------------------------------------------------
+# API client — additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestApiClientEndpoints:
+    """Tests for api_client public endpoint wrappers."""
+
+    @patch("src.dashboard.data.api_client._get")
+    def test_check_health(self, mock: MagicMock) -> None:
+        from src.dashboard.data.api_client import check_health
+
+        mock.return_value = {"status": "healthy"}
+        assert check_health() == {"status": "healthy"}
+
+    @patch("src.dashboard.data.api_client._get")
+    def test_get_model_info(self, mock: MagicMock) -> None:
+        from src.dashboard.data.api_client import get_model_info
+
+        mock.return_value = {"model": "v1"}
+        assert get_model_info() == {"model": "v1"}
+
+    @patch("src.dashboard.data.api_client._post")
+    def test_predict(self, mock: MagicMock) -> None:
+        from src.dashboard.data.api_client import predict
+
+        mock.return_value = {"distress_probability": 0.5}
+        assert predict("0000001234") == {"distress_probability": 0.5}
+
+    @patch("src.dashboard.data.api_client._get")
+    def test_get_company(self, mock: MagicMock) -> None:
+        from src.dashboard.data.api_client import get_company
+
+        mock.return_value = {"cik": "123", "history": []}
+        result = get_company("123")
+        assert result is not None
+        assert result["cik"] == "123"
+
+    @patch("src.dashboard.data.api_client._get")
+    def test_get_alerts(self, mock: MagicMock) -> None:
+        from src.dashboard.data.api_client import get_alerts
+
+        mock.return_value = {"alerts": []}
+        assert get_alerts(0.70) == {"alerts": []}
+
+    @patch("src.dashboard.data.api_client._get")
+    def test_get_drift_status(self, mock: MagicMock) -> None:
+        from src.dashboard.data.api_client import get_drift_status
+
+        mock.return_value = {"dataset_drift": False}
+        assert get_drift_status() == {"dataset_drift": False}
+
+
+# ---------------------------------------------------------------------------
+# Utils — additional edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestUtilsEdgeCases:
+    """Additional edge case tests for utils."""
+
+    def test_risk_level_exact_boundaries(self) -> None:
+        assert risk_level(0.30) == "Medium"
+        assert risk_level(0.70) == "High"
+        assert risk_level(0.0) == "Low"
+        assert risk_level(1.0) == "High"
+
+    def test_fmt_large_number_negative_millions(self) -> None:
+        assert fmt_large_number(-5.5e6) == "-$5.5M"
+
+    def test_fmt_large_number_negative_thousands(self) -> None:
+        assert fmt_large_number(-250_000) == "-$250K"
+
+    def test_risk_badge_contains_score(self) -> None:
+        result = risk_badge_html(0.42)
+        assert "0.42" in result
+        assert "Medium" in result
+
+    def test_parse_top_features_multiple(self) -> None:
+        data = [
+            {"feature": "a", "shap_value": 0.1},
+            {"feature": "b", "shap_value": -0.2},
+        ]
+        result = parse_top_features_json(json.dumps(data))
+        assert len(result) == 2
+
+    def test_quarter_sort_key_cross_year(self) -> None:
+        assert quarter_sort_key(2022, "Q4") < quarter_sort_key(2023, "Q1")
+
+    def test_colors_dict_has_required_keys(self) -> None:
+        required = ["high", "medium", "low", "high_bg", "medium_bg", "low_bg",
+                     "shap_positive", "shap_negative", "text", "border"]
+        for key in required:
+            assert key in COLORS
+
+
 class TestCompanyRiskHelpers:
     """Tests for company_risk.py helper functions."""
 
