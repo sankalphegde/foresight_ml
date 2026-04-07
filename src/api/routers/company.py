@@ -1,9 +1,10 @@
+"""Company data endpoint router."""
 from fastapi import APIRouter
 
 router = APIRouter()
 
 @router.get("/company/{cik}")
-def get_company_history(cik: str):
+def get_company_history(cik: str) -> dict:
     """Mocks historical distress scores for a specific company."""
     return {
         "cik": cik,

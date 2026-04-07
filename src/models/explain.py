@@ -399,7 +399,7 @@ def save_shap_parquet(
     id_cols = ["firm_id", "fiscal_year", "fiscal_period"]
     for col in id_cols:
         if col in eval_df.columns:
-            shap_df.insert(0, col, eval_df[col].values) # type: ignore
+            shap_df.insert(0, col, eval_df[col].values) 
 
     shap_df["top_features_json"] = top_features_json
 

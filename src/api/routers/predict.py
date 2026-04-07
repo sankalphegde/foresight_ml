@@ -1,10 +1,11 @@
+"""Predict endpoint router."""
 from fastapi import APIRouter
 from src.api.schemas import PredictRequest, PredictResponse
 
 router = APIRouter()
 
 @router.post("/predict", response_model=PredictResponse)
-def predict_distress(request: PredictRequest):
+def predict_distress(request: PredictRequest) -> dict:
     """Mocks a live prediction for Day 1 testing."""
     return {
         "distress_probability": 0.88,
