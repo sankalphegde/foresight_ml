@@ -8,6 +8,22 @@ import gcsfs
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def trigger_rollback_alert(new_score: float, prod_score: float, version: str) -> None:
+    """Fires an alert when a model degrades and triggers a rollback."""
+    alert_message = (
+        f"\n{'='*50}\n"
+        f"🚨 MODEL ROLLBACK ALERT 🚨\n"
+        f"{'='*50}\n"
+        f"A newly trained model failed to beat the Production baseline.\n"
+        f"• New Model Score:  {new_score:.4f}\n"
+        f"• Production Score: {prod_score:.4f}\n"
+        f"• Version Staged:   {version}\n"
+        f"Action Taken: The new model was blocked. Production model retained.\n"
+        f"{'='*50}"
+    )
+    logger.error(alert_message)
+    
+
 def evaluate_and_register_model(run_id: str, test_roc_auc: float, recall_critically_low: bool, model_name: str = "foresight_xgboost", version_str: str = "1.0") -> bool:
     
     """Evaluates model metrics, registers to MLflow, and handles promotion."""
@@ -50,6 +66,12 @@ def evaluate_and_register_model(run_id: str, test_roc_auc: float, recall_critica
             if test_roc_auc < (prod_roc_auc - 0.02):
                 promote_to_production = False
                 logger.warning("New model is significantly worse than Production. Keeping existing Production version.")
+
+                trigger_rollback_alert(
+                    new_score=test_roc_auc,
+                    prod_score=prod_roc_auc,
+                    version=mv.version
+                )
         else:
             logger.warning("Current Production model has no run_id. Promoting new model by default.")
             
