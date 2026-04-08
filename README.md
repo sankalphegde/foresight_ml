@@ -499,7 +499,7 @@ NetIncomeLoss dominates with a mean |SHAP| of 6.58 — roughly 12× larger than 
 - Current registered model: `foresight_xgboost` — latest version in Production
 
 ### Model Registry and Batch Inference
-The final trained XGBoost model is versioned and tracked via MLflow. Before promotion, the automated registry pipeline verifies that the new model exceeds the static baseline (ROC-AUC > 0.80) and performs a rollback check to ensure its performance does not degrade by more than 2% compared to the existing Production model. 
+The final trained XGBoost model is versioned and tracked via MLflow. Before promotion, the automated registry pipeline verifies that the new model exceeds the static baseline (ROC-AUC > 0.80) and performs a rollback check to ensure its performance does not degrade by more than 2% compared to the existing Production model.
 
 * **Current Production Version:** Version 1
 * **Evaluation Metric (Test ROC-AUC):** 0.9757

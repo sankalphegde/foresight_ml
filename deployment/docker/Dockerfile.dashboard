@@ -1,0 +1,29 @@
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+WORKDIR /app
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=README.md,target=README.md \
+    uv sync --frozen --no-dev
+
+COPY src/dashboard/ /app/src/dashboard/
+COPY pyproject.toml uv.lock README.md ./
+
+ENV GCS_BUCKET=financial-distress-data \
+    MLFLOW_TRACKING_URI=https://foresight-mlflow-6ool3rlbea-uc.a.run.app \
+    SCORES_PATH=gs://financial-distress-data/inference/scores_v1.0/scores.parquet \
+    MANIFEST_PATH=gs://financial-distress-data/inference/scores_v1.0/manifest.json \
+    DRIFT_SUMMARY_PATH=gs://financial-distress-data/monitoring/drift_reports/summary_latest.json \
+    VALIDATION_REPORT_PATH=gs://financial-distress-data/processed/validation_report.json \
+    API_BASE_URL=https://foresight-api-6ool3rlbea-uc.a.run.app \
+    PORT=8080
+
+EXPOSE 8080
+
+CMD ["uv", "run", "streamlit", "run", "src/dashboard/app.py", \
+     "--server.port=8080", \
+     "--server.address=0.0.0.0", \
+     "--server.headless=true", \
+     "--browser.gatherUsageStats=false"]

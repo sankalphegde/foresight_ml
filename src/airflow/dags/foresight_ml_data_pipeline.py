@@ -25,6 +25,7 @@ from src.utils.gcs import read_parquet_from_gcs  # noqa: E402
 
 sys.path.insert(0, "/opt/airflow")
 
+
 def run_fred_ingestion(**context: Any) -> None:
     """Run FRED data ingestion."""
     logical_date = context.get("logical_date")

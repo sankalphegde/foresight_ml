@@ -1,0 +1,16 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "-t",
+        "${_REGION}-docker.pkg.dev/$PROJECT_ID/foresight/slack-alert-adapter:${_IMAGE_TAG}",
+        "-f",
+        "deployment/docker/Dockerfile.slack_adapter",
+        ".",
+      ]
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/foresight/slack-alert-adapter:${_IMAGE_TAG}"
+substitutions:
+  _REGION: "us-central1"
+  _IMAGE_TAG: "latest"

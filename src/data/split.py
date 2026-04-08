@@ -176,12 +176,12 @@ def validate_no_temporal_leakage(
     max_val = val["fiscal_year"].max()
     min_test = test["fiscal_year"].min()
 
-    assert max_train < min_val, (
-        f"Temporal leakage: max train year {max_train} >= min val year {min_val}"
-    )
-    assert max_val < min_test, (
-        f"Temporal leakage: max val year {max_val} >= min test year {min_test}"
-    )
+    assert (
+        max_train < min_val
+    ), f"Temporal leakage: max train year {max_train} >= min val year {min_val}"
+    assert (
+        max_val < min_test
+    ), f"Temporal leakage: max val year {max_val} >= min test year {min_test}"
     log.info("No temporal leakage: train<=%d < val<=%d < test<=%d", max_train, max_val, min_test)
 
 
@@ -211,11 +211,7 @@ def validate_stratification(
 
 def get_numeric_columns(df: pd.DataFrame) -> list[str]:
     """Return list of numeric feature columns (excluding identifiers/target)."""
-    return [
-        c
-        for c in df.select_dtypes(include=np.number).columns
-        if c not in NON_NUMERIC_COLS
-    ]
+    return [c for c in df.select_dtypes(include=np.number).columns if c not in NON_NUMERIC_COLS]
 
 
 def fit_scaler(
@@ -234,10 +230,12 @@ def fit_scaler(
     if numeric_cols is None:
         numeric_cols = get_numeric_columns(train_df)
 
-    pipeline = Pipeline([
-        ("imputer", SimpleImputer(strategy="median")),
-        ("scaler", StandardScaler()),
-    ])
+    pipeline = Pipeline(
+        [
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler()),
+        ]
+    )
     pipeline.fit(train_df[numeric_cols])
     log.info("Fitted scaler pipeline on %d training columns", len(numeric_cols))
     return pipeline, numeric_cols

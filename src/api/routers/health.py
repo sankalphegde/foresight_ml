@@ -1,14 +1,18 @@
 """System health endpoint router."""
+
 from fastapi import APIRouter
+
 from src.api.schemas import HealthResponse
 from src.models.manifest_schema import ManifestSchema
 
 router = APIRouter()
 
+
 @router.get("/health", response_model=HealthResponse)
 def health_check() -> dict:
     """Simple health check endpoint for Cloud Run."""
     return {"status": "healthy"}
+
 
 @router.get("/model/info", response_model=ManifestSchema)
 def get_model_info() -> dict:

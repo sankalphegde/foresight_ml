@@ -14,7 +14,6 @@ Why Pydantic instead of raw ``json.dumps(dict)``?
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -75,7 +74,7 @@ class ManifestSchema(BaseModel):
         description="Number of quarters ahead the label predicts.",
         ge=1,
     )
-    features_used: List[str] = Field(
+    features_used: list[str] = Field(
         ...,
         description="Pre-dummy raw feature columns the model was trained on.",
         min_length=1,

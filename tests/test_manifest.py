@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from src.models.manifest_io import read_manifest, validate_manifest_dict, write_manifest
 from src.models.manifest_schema import ManifestSchema
-
 
 # ---------- Fixtures ----------
 
@@ -44,7 +42,6 @@ def valid_manifest(valid_manifest_data: dict) -> ManifestSchema:
 
 
 class TestManifestSchemaValidation:
-
     def test_valid_manifest_passes(self, valid_manifest_data):
         m = ManifestSchema(**valid_manifest_data)
         assert m.model_name == "foresight_xgboost"
@@ -124,7 +121,6 @@ class TestManifestSchemaValidation:
 
 
 class TestManifestSerialization:
-
     def test_round_trip_json(self, valid_manifest):
         json_str = valid_manifest.model_dump_json(indent=2)
         restored = ManifestSchema.model_validate_json(json_str)
@@ -166,7 +162,6 @@ class TestManifestSerialization:
 
 
 class TestManifestIO:
-
     def test_write_and_read_roundtrip(self, tmp_path, valid_manifest):
         path = tmp_path / "manifest.json"
         write_manifest(valid_manifest, path)

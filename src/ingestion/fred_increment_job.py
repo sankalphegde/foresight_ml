@@ -13,7 +13,9 @@ from src.data.clients.fred_client import FREDClient
 RAW_PREFIX = "raw/fred"
 
 
-def load_existing(storage_client: Client, bucket_name: str, series_id: str) -> "pd.DataFrame | None":
+def load_existing(
+    storage_client: Client, bucket_name: str, series_id: str
+) -> "pd.DataFrame | None":
     """Load existing FRED data from cloud storage."""
     blob_path = f"{RAW_PREFIX}/series_id={series_id}.parquet"
     bucket = storage_client.bucket(bucket_name)

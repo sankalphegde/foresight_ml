@@ -18,7 +18,7 @@ env:
   PROJECT_ID: financial-distress-ew
   PROJECT_NUMBER: 771179250808
   REGION: us-central1
-  ARTIFACT_REPO: foresight        # fixed: was 'mlops'
+  ARTIFACT_REPO: foresight
   IMAGE_NAME: data-ingestion
 
 jobs:
@@ -47,6 +47,15 @@ jobs:
           docker build -f deployment/docker/Dockerfile.ingestion -t $IMAGE_URI .
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_URI }}
+          format: table
+          exit-code: 0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
       - name: Push Docker image
         run: docker push $IMAGE_URI
 
@@ -73,3 +82,19 @@ jobs:
             --set-env-vars="GCS_BUCKET=financial-distress-data" \
             --set-secrets="SEC_USER_AGENT=sec-user-agent:latest" \
             --project=$PROJECT_ID
+
+      - name: Notify Slack on success
+        if: success()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: '{"text":"✅ CD-DEV succeeded — ingestion jobs deployed at ${{ github.sha }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: '{"text":"❌ CD-DEV failed on branch ${{ github.ref }} — ${{ github.sha }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

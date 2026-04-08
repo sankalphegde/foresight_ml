@@ -1,0 +1,96 @@
+name: CD-API
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - deployment/docker/Dockerfile.api
+      - src/api/**
+      - src/models/predict.py
+      - src/models/explain.py
+      - pyproject.toml
+      - uv.lock
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  PROJECT_ID: financial-distress-ew
+  PROJECT_NUMBER: 771179250808
+  REGION: us-central1
+  ARTIFACT_REPO: foresight
+  IMAGE_NAME: foresight-api
+  SERVICE_NAME: foresight-api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-deployer@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud config set project $PROJECT_ID
+          gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+
+      - name: Build Docker image
+        run: |
+          IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$ARTIFACT_REPO/$IMAGE_NAME:${{ github.sha }}
+          docker build -f deployment/docker/Dockerfile.api -t $IMAGE_URI .
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_URI }}
+          format: table
+          exit-code: 0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Push Docker image
+        run: docker push $IMAGE_URI
+
+      - name: Deploy API service to Cloud Run
+        run: |
+          gcloud run deploy $SERVICE_NAME \
+            --image=$IMAGE_URI \
+            --region=$REGION \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=8080 \
+            --min-instances=1 \
+            --max-instances=3 \
+            --memory=2Gi \
+            --cpu=2 \
+            --service-account=github-deployer@$PROJECT_ID.iam.gserviceaccount.com \
+            --set-env-vars="GCS_BUCKET=financial-distress-data,MLFLOW_TRACKING_URI=https://foresight-mlflow-6ool3rlbea-uc.a.run.app" \
+            --set-secrets="FORESIGHT_API_KEY=foresight-api-keys:latest" \
+            --project=$PROJECT_ID
+
+      - name: Notify Slack on success
+        if: success()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: '{"text":"✅ CD-API succeeded — foresight-api deployed at ${{ github.sha }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: '{"text":"❌ CD-API failed on branch ${{ github.ref }} — ${{ github.sha }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
