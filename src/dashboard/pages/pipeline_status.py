@@ -6,6 +6,7 @@ last run timestamps, and key summary metrics.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import streamlit as st
@@ -16,6 +17,8 @@ from src.dashboard.data.gcs_loader import (
     load_optuna_results,
     load_predictions,
 )
+
+GCS_BUCKET = os.getenv("GCS_BUCKET", "financial-distress-data")
 
 
 def _status_dot(status: str) -> str:
@@ -257,6 +260,6 @@ def render() -> None:
     link1, link2, link3 = st.columns(3)
     link1.markdown("[🔗 MLflow](https://foresight-mlflow-6ool3rlbea-uc.a.run.app)")
     link2.markdown(
-        "[🔗 GCS Bucket](https://console.cloud.google.com/storage/browser/financial-distress-data)"
+        f"[🔗 GCS Bucket](https://console.cloud.google.com/storage/browser/{GCS_BUCKET})"
     )
     link3.markdown("[🔗 GitHub](https://github.com/Foresight-ML/foresight_ml)")

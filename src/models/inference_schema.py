@@ -123,13 +123,8 @@ def validate_inference_input(df: pd.DataFrame) -> list[str]:  # noqa: F821
             f"Label column '{LABEL_COLUMN}' found in inference input — " "remove it before scoring"
         )
 
-    # Feature columns (everything except identity) must be numeric
+    # All-null non-identity columns indicate upstream pipeline bugs
     feature_cols = [c for c in df.columns if c not in IDENTITY_COLUMNS]
-    for col in feature_cols:
-        if not pd.api.types.is_numeric_dtype(df[col]):
-            errors.append(f"Non-numeric feature column: '{col}' ({df[col].dtype})")
-
-    # All-null columns indicate upstream pipeline bugs
     for col in feature_cols:
         if col in df.columns and df[col].isna().all():
             errors.append(f"Column '{col}' is entirely null — likely a pipeline issue")

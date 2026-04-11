@@ -54,6 +54,16 @@ resource "google_cloud_run_v2_service" "dashboard" {
       }
 
       env {
+        name  = "FORESIGHT_API_URL"
+        value = google_cloud_run_v2_service.api.uri
+      }
+
+      env {
+        name  = "GCS_BUCKET"
+        value = "financial-distress-data"
+      }
+
+      env {
         name  = "MLFLOW_TRACKING_URI"
         value = var.enable_mlflow ? google_cloud_run_v2_service.mlflow[0].uri : ""
       }
@@ -71,7 +81,7 @@ resource "google_cloud_run_v2_service" "dashboard" {
       resources {
         limits = {
           cpu    = "1"
-          memory = "1Gi"
+          memory = "2Gi"
         }
       }
     }

@@ -32,7 +32,9 @@ async def get_company_history(cik: str) -> list[dict[str, Any]]:
 
     except FileNotFoundError:
         logger.error("scores.parquet not found in GCS. Batch inference may not have run.")
-        raise HTTPException(status_code=503, detail="Historical scores are currently unavailable.") from None
+        raise HTTPException(
+            status_code=503, detail="Historical scores are currently unavailable."
+        ) from None
     except Exception as e:
         logger.error(f"Error fetching company data: {e}")
         raise HTTPException(

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -21,12 +22,12 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # GCS paths — single source of truth
 # ---------------------------------------------------------------------------
-GCS_BUCKET = "financial-distress-data"
+GCS_BUCKET = os.getenv("GCS_BUCKET", "financial-distress-data")
 
-SCORES_URI = f"gs://{GCS_BUCKET}/inference/scores_v1/scores.parquet"
+SCORES_URI = f"gs://{GCS_BUCKET}/inference/scores_v1.0/scores.parquet"
 SHAP_URI = f"gs://{GCS_BUCKET}/shap/shap_values.parquet"
 LABELED_PANEL_URI = f"gs://{GCS_BUCKET}/features/labeled_v1/labeled_panel.parquet"
-MANIFEST_URI = f"gs://{GCS_BUCKET}/inference/scores_v1/manifest.json"
+MANIFEST_URI = f"gs://{GCS_BUCKET}/inference/scores_v1.0/manifest.json"
 OPTUNA_URI = f"gs://{GCS_BUCKET}/models/optuna_results.json"
 DRIFT_SUMMARY_URI = f"gs://{GCS_BUCKET}/monitoring/drift_reports/summary_latest.json"
 SLICE_PERF_URI = f"gs://{GCS_BUCKET}/mlflow/artifacts/slice_metrics/slice_performance.csv"
@@ -210,7 +211,7 @@ def load_predictions() -> pd.DataFrame:
         features = pd.get_dummies(features, dummy_na=True)
 
         # Align to model's expected columns
-        trained_cols = model.get_booster().feature_names
+        trained_cols = list(model.get_booster().feature_names or [])
         if trained_cols:
             features = features.reindex(columns=trained_cols, fill_value=0)
 

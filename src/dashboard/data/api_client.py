@@ -14,8 +14,8 @@ import requests
 
 log = logging.getLogger(__name__)
 
-API_BASE_URL = os.getenv(
-    "FORESIGHT_API_URL",
+API_BASE_URL = os.getenv("FORESIGHT_API_URL") or os.getenv(
+    "API_URL",
     "https://foresight-api-6ool3rlbea-uc.a.run.app",
 )
 API_TIMEOUT = 10  # seconds

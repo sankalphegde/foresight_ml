@@ -12,8 +12,8 @@ resource "null_resource" "build_airflow_image" {
   triggers = {
     dockerfile_hash = filemd5("${path.module}/../deployment/docker/Dockerfile.airflow")
     cloudbuild_hash = filemd5("${path.module}/../deployment/cloudbuild.yaml")
-    # Update this timestamp to force a rebuild: 2026-02-06
-    force_rebuild = "2026-02-06-001"
+    # Update this timestamp to force a rebuild: 2026-04-10
+    force_rebuild = "2026-04-10-001"
   }
 
   provisioner "local-exec" {

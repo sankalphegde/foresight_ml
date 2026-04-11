@@ -1,0 +1,19 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+    args:
+      [
+        'build',
+        '-t',
+        'us-central1-docker.pkg.dev/$PROJECT_ID/foresight/dashboard:$_IMAGE_TAG',
+        '-f',
+        'deployment/docker/Dockerfile.dashboard',
+        '.',
+      ]
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/foresight/dashboard:$_IMAGE_TAG'
+
+substitutions:
+  _IMAGE_TAG: 'latest'
