@@ -17,7 +17,6 @@ class PanelBuilder:
         "Assets": "total_assets",
         "Liabilities": "total_liabilities",
         "StockholdersEquity": "total_equity",
-        "LongTermDebt": "total_debt",
         "NetIncomeLoss": "net_income",
         "NetCashProvidedByUsedInOperatingActivities": "operating_cash_flow",
         "InterestExpense": "interest_expense",
@@ -32,7 +31,6 @@ class PanelBuilder:
         "total_liabilities",
         "net_income",
         "operating_cash_flow",
-        "total_debt",
         "total_equity",
         "interest_expense",
         "operating_income",
@@ -90,7 +88,6 @@ class PanelBuilder:
             "net_income",
             # new distress-signal columns
             "operating_cash_flow",
-            "total_debt",
             "total_equity",
             "interest_expense",
             "operating_income",
