@@ -279,29 +279,34 @@ def load_predictions() -> pd.DataFrame:
 @st.cache_data(ttl=3600, show_spinner="Loading company names...")
 def load_company_map() -> pd.DataFrame:
     """Load company name/ticker/CIK mapping.
-
-    Tries local SEC company names file first, falls back to reference CSV.
+    Tries local files first, then GCS.
     Returns DataFrame with columns: firm_id, ticker, name.
     """
     empty = pd.DataFrame(columns=["firm_id", "ticker", "name"])
-
     try:
         if LOCAL_COMPANY_NAMES.exists():
             df = pd.read_csv(LOCAL_COMPANY_NAMES, dtype={"cik": str})
         elif LOCAL_COMPANY_REF.exists():
             df = pd.read_csv(LOCAL_COMPANY_REF)
             df["cik"] = df["cik"].astype(str)
-            df["name"] = df["ticker"]  # fallback: use ticker as name
+            df["name"] = df["ticker"]
         else:
-            return empty
-
+            # Try GCS
+            try:
+                df = pd.read_csv(f"gs://{GCS_BUCKET}/reference/company_names.csv", dtype={"cik": str})
+            except Exception:
+                try:
+                    df = pd.read_csv(f"gs://{GCS_BUCKET}/reference/companies.csv")
+                    df["cik"] = df["cik"].astype(str)
+                    df["name"] = df["ticker"]
+                except Exception:
+                    return empty
         df["firm_id"] = df["cik"].str.zfill(10)
         log.info("Loaded %d company mappings", len(df))
         return df[["firm_id", "ticker", "name"]]
     except Exception as e:
         log.warning("Company map not available: %s", e)
         return empty
-
 
 # ---------------------------------------------------------------------------
 # Query helpers
