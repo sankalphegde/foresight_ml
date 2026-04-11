@@ -126,6 +126,16 @@ def validate_inference_input(df: pd.DataFrame) -> list[str]:  # noqa: F821
     # All-null non-identity columns indicate upstream pipeline bugs
     feature_cols = [c for c in df.columns if c not in IDENTITY_COLUMNS]
     for col in feature_cols:
+        if col == LABEL_COLUMN:
+            continue
+
+        # Enforce numeric features before model-side preprocessing.
+        non_null = df[col].dropna()
+        if not non_null.empty:
+            coerced = pd.to_numeric(non_null, errors="coerce")
+            if coerced.isna().any():
+                errors.append(f"Non-numeric values found in feature column '{col}'")
+
         if col in df.columns and df[col].isna().all():
             errors.append(f"Column '{col}' is entirely null — likely a pipeline issue")
 
