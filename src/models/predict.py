@@ -98,20 +98,29 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
     logger.info("Input schema validation passed (%d rows)", len(latest_features_df))
 
     # --- Step 3: Generate predictions ---
-    # Capture pre-dummy raw feature columns for manifest
     raw_feature_columns = [c for c in latest_features_df.columns if c not in IDENTITY_COLUMNS]
 
-    X_predict = latest_features_df.drop(columns=IDENTITY_COLUMNS).copy()
-    for col in X_predict.columns:
-        if is_datetime64_any_dtype(X_predict[col]):
-            X_predict[col] = X_predict[col].astype("int64")
-    X_predict = pd.get_dummies(X_predict, dummy_na=True)
+    X_predict = latest_features_df.drop(columns=IDENTITY_COLUMNS)
 
-    trained_cols = getattr(getattr(model, "get_booster", lambda: None)(), "feature_names", None)
-    if trained_cols:
-        X_predict = X_predict.reindex(columns=list(trained_cols), fill_value=0)
+    # Load native XGBoost model from GCS — mlflow pyfunc returns class labels not probabilities
+    from xgboost import XGBClassifier
+    from google.cloud import storage as _gcs
 
-    predictions = model.predict(X_predict)
+    _model_local = Path("/tmp/xgb_model_infer.pkl")
+    _gcs.Client().bucket("financial-distress-data").blob(
+        "models/xgb_model.pkl"
+    ).download_to_filename(str(_model_local))
+
+    _xgb = XGBClassifier()
+    _xgb.load_model(str(_model_local))
+
+    # Align columns to training feature set
+    _trained_cols = _xgb.get_booster().feature_names
+    X_aligned = pd.get_dummies(X_predict, dummy_na=True).reindex(
+        columns=_trained_cols, fill_value=0
+    )
+
+    predictions = _xgb.predict_proba(X_aligned)[:, 1]
     latest_features_df["distress_probability"] = predictions
 
     # --- Step 4: Confidence intervals ---

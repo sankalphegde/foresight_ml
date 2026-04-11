@@ -11,9 +11,14 @@ from pathlib import Path
 from typing import Any
 
 from airflow import DAG
-from airflow.providers.standard.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator, BranchPythonOperator
 from google.cloud import bigquery
 from google.cloud.storage import Client
+from airflow.operators.empty import EmptyOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+
+from src.monitoring.drift_monitor import run_drift_monitor
+from src.monitoring.retrain_trigger import branch_on_retrain_flag
 
 from src.ingestion.fred_increment_job import main as fred_main  # noqa: E402
 from src.ingestion.sec_xbrl_increment_job import main as sec_main  # noqa: E402
@@ -188,6 +193,14 @@ def run_feature_bias_pipeline(**context: Any) -> None:
 
     if completed.returncode != 0:
         raise RuntimeError(f"Feature/bias pipeline failed with exit code {completed.returncode}")
+    
+def run_drift_monitoring(**context: Any) -> None:
+    """Run Evidently drift monitoring and write reports to GCS."""
+    summary = run_drift_monitor()
+    print(
+        f"Drift monitoring complete — dataset_drift={summary['dataset_drift']} "
+        f"drifted_features={summary['n_drifted_features']}"
+    )
 
 
 with DAG(
@@ -244,6 +257,26 @@ with DAG(
         python_callable=run_feature_bias_pipeline,
     )
 
+    drift_monitoring_task = PythonOperator(
+        task_id="run_drift_monitoring",
+        python_callable=run_drift_monitoring,
+        retries=1,
+    )
+
+    check_retrain_task = BranchPythonOperator(
+        task_id="check_retrain_flag",
+        python_callable=branch_on_retrain_flag,
+    )
+
+    trigger_training_task = TriggerDagRunOperator(
+        task_id="trigger_training_dag",
+        trigger_dag_id="foresight_training",
+        wait_for_completion=False,
+        reset_dag_run=True,
+    )
+
+    skip_retraining_task = EmptyOperator(task_id="skip_retraining")
+
     (
         [fred_task, *sec_tasks]
         >> preprocess_task
@@ -252,4 +285,7 @@ with DAG(
         >> labeling_task
         >> feature_bias_task
         >> validation_anomaly_task
+        >> drift_monitoring_task
+        >> check_retrain_task
+        >> [trigger_training_task, skip_retraining_task]
     )

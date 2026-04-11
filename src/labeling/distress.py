@@ -68,8 +68,8 @@ class DistressLabeler:
         return neg.rolling(2).sum() == 2
 
     def _signal_leverage_spike(self, grp: pd.DataFrame) -> pd.Series:
-        """Signal 3: debt_to_equity ratio increased by >= 20 % over 4 quarters."""
-        de_ratio = _safe_divide(grp["total_debt"], grp["total_equity"])
+        """Signal 3: liabilities_to_equity ratio increased by >= 20 % over 4 quarters."""
+        de_ratio = _safe_divide(grp["total_liabilities"], grp["total_equity"])
         de_4q_ago = de_ratio.shift(4)
         # pct change vs 4 quarters ago; NaN when de_4q_ago is 0 or missing
         pct_change = _safe_divide(de_ratio - de_4q_ago, de_4q_ago.abs())
