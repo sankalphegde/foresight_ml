@@ -15,13 +15,13 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
-from evidently import ColumnMapping
-from evidently.metric_preset import DataDriftPreset, DataQualityPreset
-from evidently.report import Report
+from evidently import Report
+from evidently.presets import DataDriftPreset, DataSummaryPreset
 
 from src.utils.logging import get_logger
 
@@ -36,14 +36,20 @@ PSI_THRESHOLD = 0.25
 
 # Columns to exclude from drift analysis
 EXCLUDE_COLS = [
-    "firm_id", "date", "fiscal_year", "fiscal_period",
-    "quarter_key", "filed_date", "distress_label",
+    "firm_id",
+    "date",
+    "fiscal_year",
+    "fiscal_period",
+    "quarter_key",
+    "filed_date",
+    "distress_label",
 ]
 
 
 def _upload_to_gcs(local_path: Path, gcs_path: str) -> None:
     """Upload a local file to GCS."""
     from google.cloud import storage
+
     client = storage.Client()
     bucket = client.bucket(GCS_BUCKET)
     bucket.blob(gcs_path).upload_from_filename(str(local_path))
@@ -53,8 +59,9 @@ def _upload_to_gcs(local_path: Path, gcs_path: str) -> None:
 def _write_retrain_flag(reason: str, drifted_features: list[str]) -> None:
     """Write retrain flag JSON to GCS."""
     from google.cloud import storage
+
     flag = {
-        "triggered_at": datetime.now(timezone.utc).isoformat(),
+        "triggered_at": datetime.now(UTC).isoformat(),
         "reason": reason,
         "drifted_features": drifted_features,
     }
@@ -66,7 +73,9 @@ def _write_retrain_flag(reason: str, drifted_features: list[str]) -> None:
     )
     logger.warning(
         "Retrain flag written to gs://%s/%s — reason: %s",
-        GCS_BUCKET, RETRAIN_FLAG_PATH, reason,
+        GCS_BUCKET,
+        RETRAIN_FLAG_PATH,
+        reason,
     )
 
 
@@ -76,7 +85,7 @@ def run_drift_monitor() -> dict:
     Returns:
         Summary dict with drift status and metrics.
     """
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
 
     logger.info("Loading reference dataset from %s", REFERENCE_PATH)
     reference_df = pd.read_parquet(REFERENCE_PATH)
@@ -86,7 +95,8 @@ def run_drift_monitor() -> dict:
 
     # Select only numeric feature columns present in both datasets
     feature_cols = [
-        c for c in reference_df.columns
+        c
+        for c in reference_df.columns
         if c not in EXCLUDE_COLS
         and pd.api.types.is_numeric_dtype(reference_df[c])
         and c in current_df.columns
@@ -96,28 +106,57 @@ def run_drift_monitor() -> dict:
     ref = reference_df[feature_cols].copy()
     cur = current_df[feature_cols].copy()
 
-    column_mapping = ColumnMapping(numerical_features=feature_cols)
-
-    report = Report(metrics=[DataDriftPreset(), DataQualityPreset()])
-    report.run(reference_data=ref, current_data=cur, column_mapping=column_mapping)
+    report = Report(metrics=[DataDriftPreset(), DataSummaryPreset()])
+    snapshot = report.run(reference_data=ref, current_data=cur)
 
     # Save HTML report locally then upload
     tmp_dir = Path("/tmp/drift_reports")
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
     html_path = tmp_dir / f"report_{today}.html"
-    report.save_html(str(html_path))
+    if hasattr(snapshot, "save_html"):
+        snapshot.save_html(str(html_path))
+    else:
+        raise RuntimeError("Evidently report object does not support save_html")
     _upload_to_gcs(html_path, f"{DRIFT_REPORTS_PREFIX}/report_{today}.html")
 
     # Extract summary metrics
-    report_dict = report.as_dict()
-    drift_metric = report_dict["metrics"][0]["result"]
-    dataset_drift = drift_metric.get("dataset_drift", False)
-    drift_share = drift_metric.get("share_of_drifted_columns", 0.0)
-    drifted_features = [
-        col for col, val in drift_metric.get("drift_by_columns", {}).items()
-        if val.get("drift_detected", False)
-    ]
+    if hasattr(snapshot, "dict"):
+        report_dict = snapshot.dict()
+    elif hasattr(snapshot, "dump_dict"):
+        report_dict = snapshot.dump_dict()
+    else:
+        raise RuntimeError("Evidently report object does not support dict export")
+    metrics = report_dict.get("metrics", [])
+
+    count_metric: dict[str, Any] = next(
+        (
+            m
+            for m in metrics
+            if str(m.get("metric_name", "")).startswith("DriftedColumnsCount")
+            or str(m.get("config", {}).get("type", "")).endswith("DriftedColumnsCount")
+        ),
+        {},
+    )
+    count_value = count_metric.get("value", {})
+    drift_share = float(count_value.get("share", 0.0) or 0.0)
+    drift_threshold = float(count_metric.get("config", {}).get("drift_share", 0.5) or 0.5)
+    dataset_drift = drift_share >= drift_threshold
+
+    drifted_features = []
+    for metric in metrics:
+        if not str(metric.get("metric_name", "")).startswith("ValueDrift"):
+            continue
+        column = str(metric.get("config", {}).get("column", ""))
+        threshold = float(metric.get("config", {}).get("threshold", 0.05) or 0.05)
+        raw_value = metric.get("value")
+        try:
+            drift_score = float(raw_value)
+        except (TypeError, ValueError):
+            continue
+
+        if column and drift_score <= threshold:
+            drifted_features.append(column)
 
     summary = {
         "date": today,
@@ -143,7 +182,9 @@ def run_drift_monitor() -> dict:
     if dataset_drift:
         logger.warning(
             "Dataset drift detected — %d/%d features drifted (%.1f%%)",
-            len(drifted_features), len(feature_cols), drift_share * 100,
+            len(drifted_features),
+            len(feature_cols),
+            drift_share * 100,
         )
         _write_retrain_flag(
             reason="dataset_drift",
@@ -153,7 +194,9 @@ def run_drift_monitor() -> dict:
     else:
         logger.info(
             "No dataset drift detected — %d/%d features drifted (%.1f%%)",
-            len(drifted_features), len(feature_cols), drift_share * 100,
+            len(drifted_features),
+            len(feature_cols),
+            drift_share * 100,
         )
 
     logger.info("Drift monitoring complete — summary_latest.json written to GCS")

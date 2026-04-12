@@ -1880,7 +1880,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=46.0.7" },
     { name = "dvc", specifier = ">=3.66.1" },
     { name = "dvc-gs", specifier = ">=3.0.2" },
-    { name = "evidently", specifier = ">=0.4.0" },
+    { name = "evidently", specifier = "==0.7.21" },
     { name = "fastapi", specifier = ">=0.117.1" },
     { name = "gcsfs", specifier = ">=2024.10.0" },
     { name = "google-cloud-bigquery", specifier = ">=3.14.0" },
