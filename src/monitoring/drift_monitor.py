@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from evidently import Report
-from evidently.presets import DataDriftPreset, DataSummaryPreset
+from evidently.report import Report
+from evidently.metric_preset import DataDriftPreset, DataQualityPreset
 
 from src.utils.logging import get_logger
 
@@ -106,7 +106,7 @@ def run_drift_monitor() -> dict:
     ref = reference_df[feature_cols].copy()
     cur = current_df[feature_cols].copy()
 
-    report = Report(metrics=[DataDriftPreset(), DataSummaryPreset()])
+    report = Report(metrics=[DataDriftPreset(), DataQualityPreset()])
     snapshot = report.run(reference_data=ref, current_data=cur)
 
     # Save HTML report locally then upload

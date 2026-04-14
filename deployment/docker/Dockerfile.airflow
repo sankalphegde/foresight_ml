@@ -27,7 +27,8 @@ RUN pip install --no-cache-dir \
     google-cloud-storage>=2.14.0 \
     google-cloud-bigquery>=3.12.0 \
     google-cloud-bigquery-storage>=2.22.0 \
-    evidently>=0.4.0
+    evidently==0.4.36
+
 
 # Copy entire src directory (includes ingestion code)
 COPY --chown=airflow:root src /opt/airflow/src
