@@ -22,9 +22,10 @@ def _make_input_df(**overrides) -> pd.DataFrame:
         "firm_id": ["0000001750"],
         "fiscal_year": [2025],
         "fiscal_period": ["Q4"],
-        "quarter_key": ["2025_Q4"],       # add
-        "date": ["2025-12-31"],            # add
-        "filed_date": ["2026-01-15"],      # add
+        "quarter_key": ["2025_Q4"],
+        "date": ["2025-12-31"],
+        "filed_date": ["2026-01-15"],
+        "distress_label": [0],     
         "total_assets": [1_000_000.0],
         "total_liabilities": [500_000.0],
         "net_income": [50_000.0],
