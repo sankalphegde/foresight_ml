@@ -370,7 +370,7 @@ def main() -> None:
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
 
-    # Save model
+    # Save model locally
     model_path = out_dir / "xgb_model.pkl"
     best_model.save_model(str(model_path))
 
@@ -378,7 +378,20 @@ def main() -> None:
     plot_path = out_dir / "optuna_sensitivity.png"
     save_sensitivity_plot(study, plot_path)
 
-    # Upload artifacts to GCS
+    # Log model + artifacts to MLflow so registry.py can load them via artifact URI
+    import mlflow.xgboost as mlflow_xgb
+
+    with mlflow.start_run(run_name="final_model") as final_run:
+        mlflow.log_params(best_params)
+        mlflow.log_metric("test_roc_auc", float(test_roc))
+        mlflow.log_metric("baseline_val_roc", float(baseline_roc))
+        mlflow.log_artifact(str(report_path), artifact_path="reports")
+        mlflow.log_artifact(str(plot_path), artifact_path="reports")
+        # Log the model under the "model" artifact path so registry.py's
+        # source_uri = f"{run.info.artifact_uri}/model" resolves correctly
+        mlflow_xgb.log_model(best_model, artifact_path="model")
+
+    # Upload artifacts to GCS (kept for backwards compatibility)
     _upload_local_to_gcs(report_path, os.getenv("MODEL_REPORT_URI", DEFAULT_TUNING_REPORT_URI))
     _upload_local_to_gcs(model_path, os.getenv("MODEL_ARTIFACT_URI", DEFAULT_MODEL_URI))
     _upload_local_to_gcs(plot_path, os.getenv("SENS_PLOT_URI", DEFAULT_SENS_PLOT_URI))

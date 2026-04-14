@@ -50,7 +50,36 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
 
     # --- Step 1: Load model and fetch version metadata ---
     logger.info(f"Loading Production model from {model_uri}")
-    model = mlflow.pyfunc.load_model(model_uri)
+    try:
+        model = mlflow.pyfunc.load_model(model_uri)
+    except Exception as mlflow_load_err:
+        # MLflow artifact store may be empty if train.py ran before log_model was added.
+        # Fall back to loading the XGBoost model directly from GCS.
+        import os
+        import tempfile
+
+        import gcsfs
+        from xgboost import XGBClassifier
+
+        logger.warning(
+            "MLflow artifact load failed (%s). Falling back to GCS model at "
+            "gs://financial-distress-data/models/xgb_model.pkl",
+            mlflow_load_err,
+        )
+        gcs_model_path = f"gs://{os.environ.get('GCS_BUCKET', 'financial-distress-data')}/models/xgb_model.pkl"
+        fs = gcsfs.GCSFileSystem()
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+        fs.get(gcs_model_path.replace("gs://", ""), tmp_path)
+        _xgb = XGBClassifier()
+        _xgb.load_model(tmp_path)
+
+        # Wrap in a simple object that matches the .predict() interface mlflow pyfunc uses
+        class _GCSModelWrapper:
+            def predict(self, X: "pd.DataFrame") -> "np.ndarray":
+                return _xgb.predict_proba(X)[:, 1]
+
+        model = _GCSModelWrapper()
 
     client = MlflowClient()
     prod_versions = client.get_latest_versions(model_name, stages=["Production"])
@@ -102,21 +131,27 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
     latest_features_df["scored_at"] = scored_at.isoformat()
     latest_features_df["model_roc_auc"] = model_roc_auc
 
-    # Load precomputed SHAP values from Person 4
+    # Load precomputed SHAP values — gracefully degrade if file not yet generated
     shap_path = "gs://financial-distress-data/shap/shap_values.parquet"
     logger.info(f"Loading SHAP values from {shap_path}")
-    shap_df = pd.read_parquet(shap_path)
-
-    # Extract the necessary columns
-    shap_subset = shap_df[["firm_id", "fiscal_year", "fiscal_period", "top_features_json"]]
-
-    # Attach precomputed SHAP top_features_json to each scored row
-    final_scored_df = pd.merge(
-        latest_features_df,
-        shap_subset,
-        on=["firm_id", "fiscal_year", "fiscal_period"],
-        how="left",
-    )
+    try:
+        shap_df = pd.read_parquet(shap_path)
+        shap_subset = shap_df[["firm_id", "fiscal_year", "fiscal_period", "top_features_json"]]
+        final_scored_df = pd.merge(
+            latest_features_df,
+            shap_subset,
+            on=["firm_id", "fiscal_year", "fiscal_period"],
+            how="left",
+        )
+        logger.info("SHAP values merged: %d rows matched", final_scored_df["top_features_json"].notna().sum())
+    except Exception as shap_err:
+        logger.warning(
+            "SHAP values unavailable (%s) — scores.parquet will be written without "
+            "top_features_json. Re-run explain.py to populate SHAP and re-score.",
+            shap_err,
+        )
+        final_scored_df = latest_features_df.copy()
+        final_scored_df["top_features_json"] = None
 
     # --- Step 6: Validate output ---
     output_errors = validate_inference_output(final_scored_df)

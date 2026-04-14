@@ -5,8 +5,8 @@ Orchestrates the full model development lifecycle:
   2. Evaluate     — held-out test set metrics + per-slice evaluation
   3. Quality gate — blocks registration if test_roc_auc < 0.80
   4. SHAP         — feature importance + bias report generation
-  5. Inference    — batch scoring with SHAP explanations attached
-  6. Register     — MLflow registry + rollback check
+  5. Register     — MLflow registry + rollback check (must run before inference)
+  6. Inference    — batch scoring using the newly registered Production model
 
 Exit codes:
     0  — pipeline succeeded, quality gate passed, model registered
@@ -128,22 +128,10 @@ def main() -> None:
         # Non-fatal — SHAP failure should not block model registration
         logger.warning(f"SHAP/bias analysis failed (non-fatal, continuing): {e}")
 
-    # ── Step 5: Batch inference ──────────────────────────────────────────
-    logger.info("Step 5/6 — Batch inference with SHAP explanations")
-    try:
-        from src.models.predict import run_batch_inference
-
-        features_path = os.environ.get(
-            "FEATURES_GCS_PATH", f"gs://{GCS_BUCKET}/features/labeled_v1/labeled_panel.parquet"
-        )
-        run_batch_inference(features_gcs_path=features_path, version_str="1.0")
-        logger.info("Batch inference complete")
-    except Exception as e:
-        # Non-fatal — inference failure should not block registration
-        logger.warning(f"Batch inference failed (non-fatal, continuing): {e}")
-
-    # ── Step 6: Register ─────────────────────────────────────────────────
-    logger.info("Step 6/6 — Model registration with rollback check")
+    # ── Step 5: Register ─────────────────────────────────────────────────
+    # Registration runs BEFORE batch inference so that a Production model
+    # exists in the MLflow registry when predict.py loads it.
+    logger.info("Step 5/6 — Model registration with rollback check")
     try:
         from src.models.registry import evaluate_and_register_model
 
@@ -162,6 +150,22 @@ def main() -> None:
             )
     except Exception as e:
         logger.error(f"Registration failed: {e}")
+        sys.exit(1)
+
+    # ── Step 6: Batch inference ──────────────────────────────────────────
+    # Runs AFTER registration so models:/foresight_xgboost/Production always exists.
+    logger.info("Step 6/6 — Batch inference with SHAP explanations")
+    try:
+        from src.models.predict import run_batch_inference
+
+        features_path = os.environ.get(
+            "FEATURES_GCS_PATH", f"gs://{GCS_BUCKET}/features/labeled_v1/labeled_panel.parquet"
+        )
+        run_batch_inference(features_gcs_path=features_path, version_str="1.0")
+        logger.info("Batch inference complete")
+    except Exception as e:
+        # Fatal — scores.parquet is required by the API. Fail loudly.
+        logger.error(f"Batch inference FAILED — scores.parquet not written: {e}")
         sys.exit(1)
 
     logger.info("Training pipeline complete — all 6 steps finished successfully")
