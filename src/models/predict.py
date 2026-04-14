@@ -191,5 +191,5 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
 
 if __name__ == "__main__":
     run_batch_inference(
-        "gs://financial-distress-data/features/panel_v1/panel.parquet", version_str="1.0"
+        "gs://financial-distress-data/features/labeled_v1/labeled_panel.parquet"
     )

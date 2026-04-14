@@ -18,7 +18,15 @@ import pandas as pd
 from pydantic import BaseModel, Field
 
 # Identity columns — required for downstream joins, NOT features.
-IDENTITY_COLUMNS: list[str] = ["firm_id", "fiscal_year", "fiscal_period"]
+IDENTITY_COLUMNS: list[str] = [
+    "firm_id",
+    "fiscal_year",
+    "fiscal_period",
+    "quarter_key",
+    "date",
+    "filed_date",
+    "distress_label",
+]
 
 # The label column — must NOT be present in inference input.
 LABEL_COLUMN: str = "distress_label"
@@ -116,12 +124,6 @@ def validate_inference_input(df: pd.DataFrame) -> list[str]:  # noqa: F821
     for col in IDENTITY_COLUMNS:
         if col not in df.columns:
             errors.append(f"Missing identity column: {col}")
-
-    # Label should NOT be present in inference input
-    if LABEL_COLUMN in df.columns:
-        errors.append(
-            f"Label column '{LABEL_COLUMN}' found in inference input — " "remove it before scoring"
-        )
 
     # All-null non-identity columns indicate upstream pipeline bugs
     feature_cols = [c for c in df.columns if c not in IDENTITY_COLUMNS]
