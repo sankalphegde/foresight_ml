@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from evidently import Report
-from evidently.presets import DataDriftPreset, DataSummaryPreset
+from evidently.report import Report
+from evidently.metric_preset import DataDriftPreset, DataQualityPreset
 
 from src.utils.logging import get_logger
 
@@ -106,27 +106,19 @@ def run_drift_monitor() -> dict:
     ref = reference_df[feature_cols].copy()
     cur = current_df[feature_cols].copy()
 
-    report = Report(metrics=[DataDriftPreset(), DataSummaryPreset()])
-    snapshot = report.run(reference_data=ref, current_data=cur)
+    report = Report(metrics=[DataDriftPreset(), DataQualityPreset()])
 
     # Save HTML report locally then upload
     tmp_dir = Path("/tmp/drift_reports")
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
+    report.run(reference_data=ref, current_data=cur)
+
     html_path = tmp_dir / f"report_{today}.html"
-    if hasattr(snapshot, "save_html"):
-        snapshot.save_html(str(html_path))
-    else:
-        raise RuntimeError("Evidently report object does not support save_html")
+    report.save_html(str(html_path))
     _upload_to_gcs(html_path, f"{DRIFT_REPORTS_PREFIX}/report_{today}.html")
 
-    # Extract summary metrics
-    if hasattr(snapshot, "dict"):
-        report_dict = snapshot.dict()
-    elif hasattr(snapshot, "dump_dict"):
-        report_dict = snapshot.dump_dict()
-    else:
-        raise RuntimeError("Evidently report object does not support dict export")
+    report_dict = report.as_dict()
     metrics = report_dict.get("metrics", [])
 
     count_metric: dict[str, Any] = next(
