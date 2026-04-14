@@ -78,7 +78,7 @@ def _run_model_training(**context: Any) -> None:
 
     # .result() blocks until the operation completes
     # raises google.api_core.exceptions.GoogleAPICallError on failure
-    result = operation.result(timeout=7200)
+    result = operation.result(timeout=10800)
 
     print(f"Training job completed successfully: {result.name if result else 'done'}")
 
