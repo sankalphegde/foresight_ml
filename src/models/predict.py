@@ -106,7 +106,7 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
     from xgboost import XGBClassifier
     from google.cloud import storage as _gcs
 
-    _model_local = Path("/tmp/xgb_model_infer.pkl")
+    _model_local = Path("/tmp/xgb_model_infer.json")
     _gcs.Client().bucket("financial-distress-data").blob(
         "models/xgb_model.pkl"
     ).download_to_filename(str(_model_local))

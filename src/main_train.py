@@ -134,7 +134,7 @@ def main() -> None:
         from src.models.predict import run_batch_inference
 
         features_path = os.environ.get(
-            "FEATURES_GCS_PATH", f"gs://{GCS_BUCKET}/features/panel_v1/panel.parquet"
+            "FEATURES_GCS_PATH", f"gs://{GCS_BUCKET}/features/labeled_v1/labeled_panel.parquet"
         )
         run_batch_inference(features_gcs_path=features_path, version_str="1.0")
         logger.info("Batch inference complete")
