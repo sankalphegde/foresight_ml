@@ -116,6 +116,7 @@ def run_drift_monitor() -> dict:
 
     html_path = tmp_dir / f"report_{today}.html"
     report.save_html(str(html_path))
+    _upload_to_gcs(html_path, f"{DRIFT_REPORTS_PREFIX}/report_{today}.html")
 
     report_dict = report.as_dict()
     metrics = report_dict.get("metrics", [])
