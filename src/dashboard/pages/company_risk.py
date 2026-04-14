@@ -40,14 +40,12 @@ def _build_signal_chips(row: Any) -> str:
     chips = []
 
     def _chip(label: str, is_bad: bool) -> str:
-        if is_bad:
-            return (
-                f'<span style="background:#fee2e2;color:#b91c1c;padding:3px 10px;'
-                f'border-radius:20px;font-size:11px;margin-right:4px">🔴 {label}</span>'
-            )
+        bg = "#fee2e2" if is_bad else "#dcfce7"
+        color = "#b91c1c" if is_bad else "#166534"
+        dot = "🔴" if is_bad else "🟢"
         return (
-            f'<span style="background:#dcfce7;color:#166534;padding:3px 10px;'
-            f'border-radius:20px;font-size:11px;margin-right:4px">🟢 {label}</span>'
+            f'<span style="background:{bg};color:{color};padding:3px 10px;'
+            f'border-radius:20px;font-size:11px;margin-right:4px">{dot} {label}</span>'
         )
 
     ni = row.get("net_income", 0)
@@ -71,7 +69,7 @@ def _build_signal_chips(row: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
-# SHAP bar builder
+# SHAP helpers
 # ---------------------------------------------------------------------------
 
 
@@ -115,7 +113,7 @@ def _render_shap_bars(features: list[dict], latest_score: float, has_preds: bool
             unsafe_allow_html=True,
         )
 
-    st.caption("🟢 Green = reduces risk · 🔴 Red = increases risk")
+    st.caption("🟢 Reduces risk · 🔴 Increases risk")
     if has_preds:
         st.caption(f"Predicted probability: **{latest_score:.2%}**")
 
@@ -128,7 +126,7 @@ def _render_shap_bars(features: list[dict], latest_score: float, has_preds: bool
 def render() -> None:
     """Render the Company Risk Explorer page."""
     st.header("Company Risk Explorer")
-    st.caption("Probability of financial distress within the next 6 months (2 quarters)")
+    st.caption("Predicted probability of financial distress within the next 6 months")
 
     with st.expander("ℹ️ How to use this page", expanded=False):
         st.markdown(
@@ -137,15 +135,15 @@ def render() -> None:
             distress for any US public company within the next 6 months.
 
             **How to read the results:**
-            - **Risk badge** — 🟢 Low (<30%), 🟡 Medium (30-70%), 🔴 High (>70%)
+            - **Risk badge** — 🟢 Low (<30%), 🟡 Medium (30–70%), 🔴 High (>70%)
             - **Signal chips** — Quick health indicators based on latest financials
-            - **SHAP drivers** — Top 5 features pushing the prediction up (🔴) or down (🟢)
+            - **Risk drivers** — Top 5 features pushing the prediction up or down
             - **Trend chart** — How the company's risk has changed across quarters
 
             **Tips:**
-            - Type a company name, ticker (e.g. AAPL), or CIK number to search
-            - Only companies in the 2022–2023 test set have model predictions
-            - Other companies show binary distress labels instead of probabilities
+            - Type a company name, ticker (e.g. AAPL), or CIK number
+            - Select a quarter to view historical predictions
+            - Use "Score now" to get a live prediction from the API
             """
         )
 
@@ -160,10 +158,10 @@ def render() -> None:
 
     if predictions.empty and not panel_firm_ids:
         st.error(
-            "😕 We couldn't load any company data right now. This usually means:\n\n"
+            "We couldn't load any company data right now. This usually means:\n\n"
             "- The data pipeline hasn't run yet\n"
             "- GCS credentials aren't set up on this machine\n\n"
-            "Try running `make data` or contact your team lead for access.",
+            "Try running the data pipeline or contact your team lead for access.",
             icon="🚫",
         )
         return
@@ -183,22 +181,23 @@ def render() -> None:
             "Run the training pipeline to generate probability scores.",
             icon="⚠️",
         )
+
     # ── Data freshness alert ─────────────────────────────────────────
     if not predictions.empty and "fiscal_year" in predictions.columns:
         max_year = int(predictions["fiscal_year"].max())
         if max_year < 2024:
             st.warning(
-                f"⚠️ Predictions are from {max_year}. Scores may not reflect "
-                f"current financial conditions. Run the training pipeline for fresh predictions.",
+                f"Predictions are based on {max_year} data. "
+                f"Run the training pipeline for fresh predictions.",
                 icon="⚠️",
             )
+
     # ── Data quality check ───────────────────────────────────────────
     if not predictions.empty:
         nan_count = predictions["distress_probability"].isna().sum()
         if nan_count > 0:
             st.warning(
-                f"⚠️ {nan_count:,} predictions have missing probability scores. "
-                f"These companies will be excluded from rankings.",
+                f"{nan_count:,} predictions have missing scores and will be excluded.",
                 icon="⚠️",
             )
             predictions = predictions.dropna(subset=["distress_probability"])
@@ -221,12 +220,21 @@ def render() -> None:
     col_search, col_quarter = st.columns([3, 1])
 
     with col_search:
+        pre_selected_idx = None
+        if "view_company" in st.session_state:
+            target_firm = st.session_state.pop("view_company")
+            for i, opt in enumerate(display_options):
+                if target_firm in opt:
+                    pre_selected_idx = i
+                    break
+
         selected_display = st.selectbox(
             "Search company",
             options=display_options,
-            index=None,
+            index=pre_selected_idx,
             placeholder="Type a company name, ticker, or CIK...",
-            help="Type a company name, ticker symbol, or CIK number to search",
+            help="Search by company name, ticker symbol, or CIK number",
+            key="company_search",
         )
 
     selected_firm = None
@@ -237,35 +245,17 @@ def render() -> None:
             else selected_display
         )
 
-    st.caption(
-        f"📋 {len(display_options):,} companies available · "
-        "Can't find a company? Only US public companies with SEC filings "
-        "in the 2022–2023 test period are scored."
-    )
+    st.caption(f"📋 {len(display_options):,} companies available")
 
     if not selected_firm:
         return
 
-    # ── Loading spinner ──────────────────────────────────────────────
-    loading = st.empty()
-    loading.markdown(
-        """<div style="display:flex;align-items:center;justify-content:center;
-        padding:40px;gap:10px">
-            <div style="width:20px;height:20px;border:2.5px solid #f0efea;
-            border-top:2.5px solid #3b7dd8;border-radius:50%;
-            animation:spin 0.8s linear infinite"></div>
-            <span style="font-size:14px;color:#9c9a92">Analyzing company...</span>
-        </div>
-        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # ── Fetch company data ───────────────────────────────────────────
+# ── Fetch company data ───────────────────────────────────────────
     firm_preds = None
     if not predictions.empty:
         fp = predictions[predictions["firm_id"] == selected_firm].copy()
         if not fp.empty:
+            fp = fp.drop_duplicates(subset=["fiscal_year", "fiscal_period"], keep="last")
             fp["sort_key"] = fp.apply(
                 lambda r: quarter_sort_key(
                     int(r["fiscal_year"]), str(r.get("fiscal_period", "Q1"))
@@ -278,35 +268,40 @@ def render() -> None:
     if not history.empty:
         history = history.sort_values(["fiscal_year", "fiscal_period"]).copy()
 
-    # Determine latest score
+    # ── Quarter selector (wired up) ──────────────────────────────────
+    selected_quarter_idx = -1  # default to latest
+    if firm_preds is not None and len(firm_preds) > 1:
+        quarters = firm_preds.apply(
+            lambda r: quarter_label(int(r["fiscal_year"]), str(r.get("fiscal_period", ""))),
+            axis=1,
+        ).tolist()
+        with col_quarter:
+            selected_q = st.selectbox(
+                "Quarter",
+                options=quarters,
+                index=len(quarters) - 1,
+                key="quarter_select",
+            )
+            selected_quarter_idx = quarters.index(selected_q)
+
+    # ── Determine score for selected quarter ─────────────────────────
     if firm_preds is not None and not firm_preds.empty:
-        lp = firm_preds.iloc[-1]
-        latest_score = float(lp["distress_probability"])
-        latest_year = int(lp["fiscal_year"])
-        latest_period = str(lp.get("fiscal_period", "Q4"))
+        row_data = firm_preds.iloc[selected_quarter_idx]
+        latest_score = float(row_data["distress_probability"])
+        latest_year = int(row_data["fiscal_year"])
+        latest_period = str(row_data.get("fiscal_period", "Q4"))
     elif not history.empty:
         lr = history.iloc[-1]
         latest_score = float(lr.get("distress_label", 0))
         latest_year = int(lr["fiscal_year"])
         latest_period = str(lr.get("fiscal_period", "Q4"))
     else:
-        loading.empty()
         st.warning(
             f"No data found for **{selected_firm}**. This company may not have "
-            f"SEC filings in the 2022–2023 test period, or its data may be incomplete.",
+            f"SEC filings in the scored period, or its data may be incomplete.",
             icon="⚠️",
         )
         return
-
-    with col_quarter:
-        if firm_preds is not None and len(firm_preds) > 1:
-            quarters = firm_preds.apply(
-                lambda r: quarter_label(int(r["fiscal_year"]), str(r.get("fiscal_period", ""))),
-                axis=1,
-            ).tolist()
-            st.selectbox("Quarter", options=quarters, index=len(quarters) - 1)
-
-    loading.empty()
 
     # ── Header: company name + risk badge + signals ──────────────────
     st.markdown("---")
@@ -330,16 +325,36 @@ def render() -> None:
         meta.append(quarter_label(latest_year, latest_period))
         st.caption(" · ".join(meta))
 
-        # Signal chips
         if not history.empty:
             st.markdown(_build_signal_chips(history.iloc[-1]), unsafe_allow_html=True)
 
     with hdr_right:
         st.markdown(risk_badge_html(latest_score), unsafe_allow_html=True)
         if data_source == "predictions":
-            st.caption("🤖 6-month distress prediction (XGBoost)")
+            st.caption("🤖 6-month distress prediction")
         else:
             st.caption("📋 Distress label (no model predictions)")
+
+        # ── Score now button ─────────────────────────────────────
+        if st.button("🔄 Score now", help="Get a live prediction from the API", key="score_now"):
+            from src.dashboard.data.api_client import predict
+
+            payload = {
+                "firm_id": selected_firm,
+                "fiscal_year": latest_year,
+                "fiscal_period": latest_period,
+                "total_assets": float(history.iloc[-1].get("total_assets", 0)) if not history.empty else 0.0,
+                "total_liabilities": float(history.iloc[-1].get("total_liabilities", 0)) if not history.empty else 0.0,
+                "net_income": float(history.iloc[-1].get("net_income", 0)) if not history.empty else 0.0,
+            }
+            with st.spinner("Scoring via API..."):
+                result = predict(payload)
+            if result and "distress_probability" in result:
+                prob = result["distress_probability"]
+                level = result.get("risk_level", "—")
+                st.success(f"Live score: **{prob:.2%}** ({level})", icon="🤖")
+            else:
+                st.warning("API scoring unavailable right now.", icon="⚠️")
 
     # ── Trend chart ──────────────────────────────────────────────────
     if firm_preds is not None and len(firm_preds) > 1:
@@ -361,21 +376,26 @@ def render() -> None:
                 hovertemplate="Quarter: %{x}<br>Probability: %{y:.2%}<extra></extra>",
             )
         )
-        fig.add_hline(
-            y=0.70,
-            line_dash="dash",
-            line_color=COLORS["high"],
-            opacity=0.4,
-            annotation_text="High risk (0.70)",
-            annotation_position="top left",
+        # Highlight selected quarter
+        sel_q = quarter_label(latest_year, latest_period)
+        sel_prob = latest_score
+        fig.add_trace(
+            go.Scatter(
+                x=[sel_q],
+                y=[sel_prob],
+                mode="markers",
+                marker={"size": 14, "color": risk_color(latest_score), "line": {"width": 2, "color": "white"}},
+                hovertemplate=f"Selected: {sel_q}<br>Probability: {sel_prob:.2%}<extra></extra>",
+                showlegend=False,
+            )
         )
         fig.add_hline(
-            y=0.30,
-            line_dash="dash",
-            line_color=COLORS["medium"],
-            opacity=0.3,
-            annotation_text="Medium (0.30)",
-            annotation_position="top left",
+            y=0.70, line_dash="dash", line_color=COLORS["high"], opacity=0.4,
+            annotation_text="High risk", annotation_position="top left",
+        )
+        fig.add_hline(
+            y=0.30, line_dash="dash", line_color=COLORS["medium"], opacity=0.3,
+            annotation_text="Medium", annotation_position="top left",
         )
         fig.update_yaxes(title_text="Distress probability", range=[-0.05, 1.05], tickformat=".0%")
         fig.update_layout(height=280, showlegend=False)
@@ -386,14 +406,12 @@ def render() -> None:
         st.metric(
             "Predicted distress probability",
             f"{latest_score:.2%}",
-            help="Single quarter prediction from XGBoost model",
+            help="Single quarter prediction",
         )
 
     elif not history.empty and "distress_label" in history.columns:
         st.markdown("#### Distress label — last 8 quarters")
-        st.caption(
-            "⚠️ Binary labels. Continuous probability scores available for test set (2022–2023)."
-        )
+        st.caption("Binary labels. Continuous probability scores available for scored companies.")
 
         recent = history.tail(8).copy()
         recent["quarter"] = recent.apply(
@@ -434,17 +452,23 @@ def render() -> None:
                 has_preds = firm_preds is not None and not firm_preds.empty
                 _render_shap_bars(features, latest_score, has_preds)
             else:
-                st.info("No SHAP explanations available for this quarter.")
+                st.info("No risk driver data available for this quarter.")
         else:
-            st.info(
-                "SHAP data not available for this company. "
-                "SHAP values are computed on the test set (2022–2023)."
-            )
+            st.info("Risk driver data not available for this company.")
 
     with col_snap:
         st.markdown("#### Financial snapshot")
+
+        # Use selected quarter's history if available
+        snap_row = None
         if not history.empty:
-            lh = history.iloc[-1]
+            match = history[
+                (history["fiscal_year"] == latest_year)
+                & (history["fiscal_period"] == latest_period)
+            ]
+            snap_row = match.iloc[-1] if not match.empty else history.iloc[-1]
+
+        if snap_row is not None:
             fields = [
                 ("Net income", "net_income"),
                 ("Total assets", "total_assets"),
@@ -455,8 +479,8 @@ def render() -> None:
                 ("Retained earnings", "RetainedEarningsAccumulatedDeficit"),
             ]
             for label, col in fields:
-                if col in lh.index:
-                    val = lh[col]
+                if col in snap_row.index:
+                    val = snap_row[col]
                     st.markdown(
                         f"""<div style="display:flex;justify-content:space-between;
                         padding:5px 0;border-bottom:0.5px solid rgba(0,0,0,0.07);
@@ -468,7 +492,8 @@ def render() -> None:
                     )
 
             if firm_preds is not None and not firm_preds.empty:
-                ci_lo, ci_hi = max(0, latest_score - 0.05), min(1, latest_score + 0.05)
+                ci_lo = max(0, latest_score - 0.05)
+                ci_hi = min(1, latest_score + 0.05)
                 st.markdown(
                     f"""<div style="display:flex;justify-content:space-between;
                     padding:5px 0;border-bottom:0.5px solid rgba(0,0,0,0.07);font-size:13px">

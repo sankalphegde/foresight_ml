@@ -65,9 +65,9 @@ def get_model_info() -> dict | None:
     return _get("/model/info")
 
 
-def predict(cik: str) -> dict | None:
+def predict(payload: dict) -> dict | None:
     """POST /predict — get distress prediction for a company."""
-    return _post("/predict", {"cik": cik})
+    return _post("/predict", payload)
 
 
 def get_company(cik: str) -> dict | None:

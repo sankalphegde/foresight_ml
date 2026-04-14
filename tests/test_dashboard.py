@@ -349,7 +349,7 @@ class TestApiClient:
             json=lambda: {"distress_probability": 0.88},
         )
         mock_post.return_value.raise_for_status = MagicMock()
-        result = _post("/predict", {"cik": "0000001234"})
+        result = _post("/predict", {"firm_id": "0000001234"})
         assert result == {"distress_probability": 0.88}
 
     @patch("src.dashboard.data.api_client.requests.post")
@@ -357,7 +357,7 @@ class TestApiClient:
         from src.dashboard.data.api_client import _post
 
         mock_post.side_effect = Exception("Timeout")
-        result = _post("/predict", {"cik": "0000001234"})
+        result = _post("/predict", {"firm_id": "0000001234"})
         assert result is None
 
     @patch("src.dashboard.data.api_client.check_health")
@@ -373,11 +373,6 @@ class TestApiClient:
 
         mock_health.return_value = None
         assert is_api_available() is False
-
-
-# ---------------------------------------------------------------------------
-# Company risk page helpers
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -451,7 +446,7 @@ class TestWatchlistBuilder:
         assert len(result) == 1
         assert result.iloc[0]["change"] == pytest.approx(0.5, abs=0.01)
 
-    def test_watchlist_sector_default(self) -> None:
+    def test_watchlist_columns(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
         preds = pd.DataFrame(
@@ -463,7 +458,10 @@ class TestWatchlistBuilder:
             }
         )
         result = _build_watchlist(preds, pd.DataFrame())
-        assert result.iloc[0]["sector"] == "—"
+        assert "firm_id" in result.columns
+        assert "risk_score" in result.columns
+        assert "signals" in result.columns
+        assert "quarter" in result.columns
 
     def test_watchlist_no_signals(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
@@ -559,7 +557,9 @@ class TestApiClientEndpoints:
         from src.dashboard.data.api_client import predict
 
         mock.return_value = {"distress_probability": 0.5}
-        assert predict("0000001234") == {"distress_probability": 0.5}
+        payload = {"firm_id": "0000001234", "fiscal_year": 2023, "fiscal_period": "Q1",
+                    "total_assets": 1000, "total_liabilities": 500, "net_income": 100}
+        assert predict(payload) == {"distress_probability": 0.5}
 
     @patch("src.dashboard.data.api_client._get")
     def test_get_company(self, mock: MagicMock) -> None:
@@ -646,42 +646,15 @@ class TestUtilsEdgeCases:
 class TestPipelineStatusHelpers:
     """Tests for pipeline_status.py helper functions."""
 
-    def test_status_dot_success(self) -> None:
-        from src.dashboard.pages.pipeline_status import _status_dot
+    def test_pipeline_row_colors(self) -> None:
+        from src.dashboard.pages.pipeline_status import _pipeline_row
 
-        result = _status_dot("success")
-        assert "#16a34a" in result
-        assert "border-radius:50%" in result
-
-    def test_status_dot_failed(self) -> None:
-        from src.dashboard.pages.pipeline_status import _status_dot
-
-        result = _status_dot("failed")
-        assert "#b91c1c" in result
-
-    def test_status_dot_warning(self) -> None:
-        from src.dashboard.pages.pipeline_status import _status_dot
-
-        result = _status_dot("warning")
-        assert "#d97706" in result
-
-    def test_status_dot_running(self) -> None:
-        from src.dashboard.pages.pipeline_status import _status_dot
-
-        result = _status_dot("running")
-        assert "#3b7dd8" in result
-
-    def test_status_dot_pending(self) -> None:
-        from src.dashboard.pages.pipeline_status import _status_dot
-
-        result = _status_dot("pending")
-        assert "#9c9a92" in result
-
-    def test_status_dot_unknown(self) -> None:
-        from src.dashboard.pages.pipeline_status import _status_dot
-
-        result = _status_dot("unknown_status")
-        assert "#9c9a92" in result
+        assert "#16a34a" in _pipeline_row("Task", "~1m", "success", "OK")
+        assert "#b91c1c" in _pipeline_row("Task", "~1m", "failed", "Error")
+        assert "#d97706" in _pipeline_row("Task", "~1m", "warning", "Warn")
+        assert "#3b7dd8" in _pipeline_row("Task", "~1m", "running", "Go")
+        assert "#9c9a92" in _pipeline_row("Task", "~1m", "pending", "Wait")
+        assert "#9c9a92" in _pipeline_row("Task", "~1m", "unknown_status", "?")
 
     def test_pipeline_row_success(self) -> None:
         from src.dashboard.pages.pipeline_status import _pipeline_row
@@ -725,9 +698,8 @@ class TestGcsLoaderCachedFunctions:
         from src.dashboard.data.gcs_loader import DEFAULT_MANIFEST
 
         mock_read.return_value = None
-        # Can't easily call the cached function, but test the logic
         result = mock_read("gs://fake") or DEFAULT_MANIFEST
-        assert result["model_name"] == "foresight-xgboost"
+        assert result["model_name"] == "foresight_xgboost"
 
     @patch("src.dashboard.data.gcs_loader._read_gcs_json")
     def test_load_optuna_fallback(self, mock_read: MagicMock) -> None:
@@ -791,7 +763,29 @@ class TestWatchlistEdgeCases:
         result = _build_watchlist(preds, panel)
         assert "High leverage" in result.iloc[0]["signals"]
 
-    def test_negative_cashflow_signal(self) -> None:
+    def test_negative_cashflow_signal_new_col(self) -> None:
+        from src.dashboard.pages.watchlist import _build_watchlist
+
+        preds = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "distress_probability": [0.6],
+            }
+        )
+        panel = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "operating_cash_flow": [-500_000],
+            }
+        )
+        result = _build_watchlist(preds, panel)
+        assert "Neg. cash flow" in result.iloc[0]["signals"]
+
+    def test_negative_cashflow_signal_old_col(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
         preds = pd.DataFrame(
@@ -813,7 +807,29 @@ class TestWatchlistEdgeCases:
         result = _build_watchlist(preds, panel)
         assert "Neg. cash flow" in result.iloc[0]["signals"]
 
-    def test_retained_earnings_signal(self) -> None:
+    def test_retained_earnings_signal_new_col(self) -> None:
+        from src.dashboard.pages.watchlist import _build_watchlist
+
+        preds = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "distress_probability": [0.7],
+            }
+        )
+        panel = pd.DataFrame(
+            {
+                "firm_id": ["AAA"],
+                "fiscal_year": [2023],
+                "fiscal_period": ["Q1"],
+                "retained_earnings": [-2_000_000],
+            }
+        )
+        result = _build_watchlist(preds, panel)
+        assert "Retained earnings" in result.iloc[0]["signals"]
+
+    def test_retained_earnings_signal_old_col(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
         preds = pd.DataFrame(
@@ -1023,8 +1039,8 @@ class TestWatchlistSignalCombinations:
                 "fiscal_year": [2023],
                 "fiscal_period": ["Q1"],
                 "net_income": [-100],
-                "NetCashProvidedByUsedInOperatingActivities": [-50],
-                "RetainedEarningsAccumulatedDeficit": [-200],
+                "operating_cash_flow": [-50],
+                "retained_earnings": [-200],
                 "total_assets": [1000],
                 "total_liabilities": [850],
             }
@@ -1036,7 +1052,7 @@ class TestWatchlistSignalCombinations:
         assert "Retained earnings" in signals
         assert "High leverage" in signals
 
-    def test_sector_from_panel(self) -> None:
+    def test_signals_from_panel_new_columns(self) -> None:
         from src.dashboard.pages.watchlist import _build_watchlist
 
         panel = pd.DataFrame(
@@ -1044,25 +1060,19 @@ class TestWatchlistSignalCombinations:
                 "firm_id": ["AAA"],
                 "fiscal_year": [2023],
                 "fiscal_period": ["Q1"],
-                "sector_proxy": ["Technology"],
+                "net_income": [-100],
+                "operating_cash_flow": [-50],
+                "retained_earnings": [-200],
+                "total_assets": [1000],
+                "total_liabilities": [850],
             }
         )
         result = _build_watchlist(self._make_preds(), panel)
-        assert result.iloc[0]["sector"] == "Technology"
-
-    def test_size_from_panel(self) -> None:
-        from src.dashboard.pages.watchlist import _build_watchlist
-
-        panel = pd.DataFrame(
-            {
-                "firm_id": ["AAA"],
-                "fiscal_year": [2023],
-                "fiscal_period": ["Q1"],
-                "company_size_bucket": ["large"],
-            }
-        )
-        result = _build_watchlist(self._make_preds(), panel)
-        assert result.iloc[0]["size"] == "large"
+        signals = result.iloc[0]["signals"]
+        assert "Neg. income" in signals
+        assert "Neg. cash flow" in signals
+        assert "Retained earnings" in signals
+        assert "High leverage" in signals
 
 
 class TestCompanyRiskHelpers:

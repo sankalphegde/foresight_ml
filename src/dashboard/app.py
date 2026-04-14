@@ -1,4 +1,4 @@
-"""Foresight-ML Dashboard — Main Entry Point.
+"""Foresight Dashboard — Main Entry Point.
 
 Multi-page Streamlit app for exploring corporate financial distress
 predictions, model health, and pipeline status.
@@ -12,13 +12,12 @@ from __future__ import annotations
 import time
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 # ---------------------------------------------------------------------------
 # Page config — must be first Streamlit call
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Foresight-ML Dashboard",
+    page_title="Foresight Dashboard",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -133,8 +132,8 @@ with st.sidebar:
             </div>
             <div>
                 <p style="font-size:15px;font-weight:600;margin:0;color:#1a1a18;
-                letter-spacing:-0.2px">Foresight-ML</p>
-                <p style="font-size:11px;color:#b8b8b0;margin:2px 0 0">v1.0</p>
+                letter-spacing:-0.2px">Foresight</p>
+                <p style="font-size:11px;color:#b8b8b0;margin:2px 0 0">See risk before it strikes</p>
             </div>
         </div>
         """,
@@ -153,29 +152,32 @@ with st.sidebar:
     )
 
     # ── Spacer ───────────────────────────────────────────────────
-    for _ in range(15):
-        st.markdown("")
+    st.markdown('<div style="flex:1;min-height:100px"></div>', unsafe_allow_html=True)
 
     # ── Footer ───────────────────────────────────────────────────
     st.markdown(
         """
         <div style="border-top:0.5px solid rgba(0,0,0,0.08);padding-top:12px">
-            <div class="sb-static">
+            <a href="https://github.com/Foresight-ML/foresight_ml#readme" target="_blank" style="text-decoration:none">
+            <div class="sb-static" style="cursor:pointer">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                     <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>
                     <path d="M8 6V8.5M8 10.5V10.5" stroke="currentColor" stroke-width="1.3"
                     stroke-linecap="round"/></svg>
-                Documentation
+                Documentation ↗
             </div>
-            <div class="sb-static">
+            </a>
+            <a href="https://foresight-mlflow-6ool3rlbea-uc.a.run.app" target="_blank" style="text-decoration:none">
+            <div class="sb-static" style="cursor:pointer">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                     <circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.3"/>
                     <path d="M6 4V6H8" stroke="currentColor" stroke-width="1.3"
                     stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="M12 10V14M10 12H14" stroke="currentColor" stroke-width="1.3"
                     stroke-linecap="round"/></svg>
-                Settings
+                MLflow ↗
             </div>
+            </a>
         </div>
         """,
         unsafe_allow_html=True,
@@ -194,7 +196,7 @@ with st.sidebar:
             <div style="width:28px;height:28px;border-radius:50%;
             background:linear-gradient(135deg,#dbeafe,#bfdbfe);
             display:flex;align-items:center;justify-content:center;font-size:11px;
-            font-weight:600;color:#1e40af;flex-shrink:0">FM</div>
+            font-weight:600;color:#1e40af;flex-shrink:0">FS</div>
             <div style="min-width:0">
                 <p style="font-size:12px;font-weight:500;margin:0;color:#1a1a18">Group 22</p>
                 <p style="font-size:11px;color:#b8b8b0;margin:0">{api_text}</p>
@@ -212,7 +214,7 @@ with st.sidebar:
 if "loaded" not in st.session_state:
     loading_placeholder = st.empty()
     with loading_placeholder.container():
-        components.html(
+        st.html(
             """
             <style>
             @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -220,7 +222,7 @@ if "loaded" not in st.session_state:
             @keyframes stepIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
             @keyframes dotPulse { 0%,80%,100% { opacity: 0.2; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1); } }
             @keyframes ringRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #ffffff; }
+            body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
             .step-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
             .step-label { font-size: 13px; color: #9c9a92; }
             .step-done .step-label { color: #1a1a18; }
@@ -242,43 +244,43 @@ if "loaded" not in st.session_state:
                   </svg>
                 </div>
               </div>
-              <p style="font-size: 18px; font-weight: 500; margin: 0; color: #1a1a18; animation: fadeIn 0.4s ease 0.1s both;">Corporate Financial Distress Early-Warning System</p>
-              <p style="font-size: 13px; color: #9c9a92; margin: 6px 0 0; animation: fadeIn 0.4s ease 0.2s both;">Preparing your financial intelligence dashboard</p>
+              <p style="font-size: 18px; font-weight: 500; margin: 0; color: #1a1a18; animation: fadeIn 0.4s ease 0.1s both;">Foresight</p>
+              <p style="font-size: 13px; color: #9c9a92; margin: 6px 0 0; animation: fadeIn 0.4s ease 0.2s both;">Corporate Financial Distress Early-Warning System</p>
               <div style="width: 100%; max-width: 400px; margin: 2rem 0;">
                 <div style="height: 4px; background: #f0efea; border-radius: 2px; overflow: hidden;">
-                  <div style="height: 100%; background: #3b7dd8; border-radius: 2px; animation: progressFill 6s ease-in-out forwards;"></div>
+                  <div style="height: 100%; background: #3b7dd8; border-radius: 2px; animation: progressFill 4s ease-in-out forwards;"></div>
                 </div>
                 <div style="display: flex; justify-content: space-between; margin-top: 6px;">
                   <span id="pctText" style="font-size: 12px; color: #3b7dd8; font-weight: 500;">0%</span>
-                  <span id="etaText" style="font-size: 12px; color: #9c9a92;">~6s remaining</span>
+                  <span id="etaText" style="font-size: 12px; color: #9c9a92;">Loading...</span>
                 </div>
               </div>
-              <div style="width: 100%; max-width: 400px; background: #ffffff; border: 0.5px solid rgba(0,0,0,0.12); border-radius: 12px; padding: 1rem 1.25rem;">
+              <div style="width: 100%; max-width: 400px; border: 0.5px solid rgba(0,0,0,0.12); border-radius: 12px; padding: 1rem 1.25rem;">
                 <div class="step-row step-done" style="animation: stepIn 0.3s ease 0.3s both;">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M5 8L7 10L11 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   <span class="step-label">Authenticating session</span>
                   <span style="font-size: 11px; color: #9c9a92; margin-left: auto;">0.3s</span>
                 </div>
-                <div class="step-row step-done" style="animation: stepIn 0.3s ease 1.2s both; border-top: 0.5px solid rgba(0,0,0,0.08);">
+                <div class="step-row step-done" style="animation: stepIn 0.3s ease 0.8s both; border-top: 0.5px solid rgba(0,0,0,0.08);">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M5 8L7 10L11 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   <span class="step-label">Connecting to data pipeline</span>
-                  <span style="font-size: 11px; color: #9c9a92; margin-left: auto;">1.1s</span>
+                  <span style="font-size: 11px; color: #9c9a92; margin-left: auto;">0.8s</span>
                 </div>
-                <div class="step-row step-done" style="animation: stepIn 0.3s ease 2.2s both; border-top: 0.5px solid rgba(0,0,0,0.08);">
+                <div class="step-row step-done" style="animation: stepIn 0.3s ease 1.4s both; border-top: 0.5px solid rgba(0,0,0,0.08);">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M5 8L7 10L11 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   <span class="step-label">Loading XGBoost model (v1)</span>
-                  <span style="font-size: 11px; color: #9c9a92; margin-left: auto;">1.8s</span>
+                  <span style="font-size: 11px; color: #9c9a92; margin-left: auto;">1.2s</span>
                 </div>
-                <div class="step-row step-active" id="step4" style="animation: stepIn 0.3s ease 3.2s both; border-top: 0.5px solid rgba(0,0,0,0.08);">
+                <div class="step-row step-active" id="step4" style="animation: stepIn 0.3s ease 2.0s both; border-top: 0.5px solid rgba(0,0,0,0.08);">
                   <div class="dot-loader" style="flex-shrink: 0; width: 16px; justify-content: center;"><span></span><span></span><span></span></div>
-                  <span class="step-label">Scoring 33,636 companies</span>
+                  <span class="step-label">Scoring companies</span>
                   <span style="font-size: 11px; color: #9c9a92; margin-left: auto;" id="step4time"></span>
                 </div>
-                <div class="step-row" id="step5" style="animation: stepIn 0.3s ease 4.5s both; border-top: 0.5px solid rgba(0,0,0,0.08);">
+                <div class="step-row" id="step5" style="animation: stepIn 0.3s ease 2.8s both; border-top: 0.5px solid rgba(0,0,0,0.08);">
                   <div style="width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid #d4d4d4; flex-shrink: 0;"></div>
                   <span class="step-label" style="color: #d4d4d4;">Loading SHAP explanations</span>
                 </div>
-                <div class="step-row" id="step6" style="animation: stepIn 0.3s ease 5s both; border-top: 0.5px solid rgba(0,0,0,0.08);">
+                <div class="step-row" id="step6" style="animation: stepIn 0.3s ease 3.2s both; border-top: 0.5px solid rgba(0,0,0,0.08);">
                   <div style="width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid #d4d4d4; flex-shrink: 0;"></div>
                   <span class="step-label" style="color: #d4d4d4;">Preparing dashboard</span>
                 </div>
@@ -299,14 +301,13 @@ if "loaded" not in st.session_state:
               </div>
             </div>
             <script>
-            const pctEl=document.getElementById('pctText'),etaEl=document.getElementById('etaText'),step4=document.getElementById('step4'),step4time=document.getElementById('step4time'),step5=document.getElementById('step5'),step6=document.getElementById('step6'),totalMs=6000,start=Date.now();
-            function tick(){const e=Date.now()-start,p=Math.min(100,Math.round(e/totalMs*100)),r=Math.max(0,Math.ceil((totalMs-e)/1000));if(pctEl)pctEl.textContent=p+'%';if(etaEl)etaEl.textContent=r>0?'~'+r+'s remaining':'Complete';if(e>4200&&step4&&!step4.classList.contains('step-done')){step4.classList.remove('step-active');step4.classList.add('step-done');step4.querySelector('.dot-loader').outerHTML='<svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M5 8L7 10L11 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';if(step4time)step4time.textContent='2.4s';if(step5){step5.classList.add('step-active');step5.querySelector('div').outerHTML='<div class="dot-loader" style="flex-shrink:0;width:16px;justify-content:center;"><span></span><span></span><span></span></div>';step5.querySelector('.step-label').style.color='#3b7dd8';step5.querySelector('.step-label').style.fontWeight='500';}}if(e>5200&&step5&&!step5.classList.contains('step-done')){step5.classList.remove('step-active');step5.classList.add('step-done');step5.querySelector('.dot-loader').outerHTML='<svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M5 8L7 10L11 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';var t5=document.createElement('span');t5.style.cssText='font-size:11px;color:#9c9a92;margin-left:auto;';t5.textContent='0.9s';step5.appendChild(t5);if(step6){step6.classList.add('step-active');step6.querySelector('div').outerHTML='<div class="dot-loader" style="flex-shrink:0;width:16px;justify-content:center;"><span></span><span></span><span></span></div>';step6.querySelector('.step-label').style.color='#3b7dd8';step6.querySelector('.step-label').style.fontWeight='500';}}if(e>5800&&step6&&!step6.classList.contains('step-done')){step6.classList.remove('step-active');step6.classList.add('step-done');step6.querySelector('.dot-loader').outerHTML='<svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M5 8L7 10L11 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';var t6=document.createElement('span');t6.style.cssText='font-size:11px;color:#9c9a92;margin-left:auto;';t6.textContent='0.5s';step6.appendChild(t6);if(pctEl){pctEl.textContent='100%';pctEl.style.color='#16a34a';}if(etaEl){etaEl.textContent='Ready';etaEl.style.color='#16a34a';}}if(e<totalMs+200)requestAnimationFrame(tick);}
+            const pctEl=document.getElementById('pctText'),etaEl=document.getElementById('etaText'),step4=document.getElementById('step4'),step4time=document.getElementById('step4time'),step5=document.getElementById('step5'),step6=document.getElementById('step6'),totalMs=4000,start=Date.now();
+            function tick(){const e=Date.now()-start,p=Math.min(100,Math.round(e/totalMs*100)),r=Math.max(0,Math.ceil((totalMs-e)/1000));if(pctEl)pctEl.textContent=p+'%';if(etaEl)etaEl.textContent=r>0?'~'+r+'s remaining':'Ready';if(e>2600&&step4&&!step4.classList.contains('step-done')){step4.classList.remove('step-active');step4.classList.add('step-done');step4.querySelector('.dot-loader').outerHTML='<svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M5 8L7 10L11 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';if(step4time)step4time.textContent='1.8s';if(step5){step5.classList.add('step-active');step5.querySelector('div').outerHTML='<div class="dot-loader" style="flex-shrink:0;width:16px;justify-content:center;"><span></span><span></span><span></span></div>';step5.querySelector('.step-label').style.color='#3b7dd8';step5.querySelector('.step-label').style.fontWeight='500';}}if(e>3200&&step5&&!step5.classList.contains('step-done')){step5.classList.remove('step-active');step5.classList.add('step-done');step5.querySelector('.dot-loader').outerHTML='<svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M5 8L7 10L11 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';var t5=document.createElement('span');t5.style.cssText='font-size:11px;color:#9c9a92;margin-left:auto;';t5.textContent='0.6s';step5.appendChild(t5);if(step6){step6.classList.add('step-active');step6.querySelector('div').outerHTML='<div class="dot-loader" style="flex-shrink:0;width:16px;justify-content:center;"><span></span><span></span><span></span></div>';step6.querySelector('.step-label').style.color='#3b7dd8';step6.querySelector('.step-label').style.fontWeight='500';}}if(e>3700&&step6&&!step6.classList.contains('step-done')){step6.classList.remove('step-active');step6.classList.add('step-done');step6.querySelector('.dot-loader').outerHTML='<svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M5 8L7 10L11 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';var t6=document.createElement('span');t6.style.cssText='font-size:11px;color:#9c9a92;margin-left:auto;';t6.textContent='0.4s';step6.appendChild(t6);if(pctEl){pctEl.textContent='100%';pctEl.style.color='#16a34a';}if(etaEl){etaEl.textContent='Ready';etaEl.style.color='#16a34a';}}if(e<totalMs+200)requestAnimationFrame(tick);}
             tick();
             </script>
-            """,
-            height=550,
+            """
         )
-    time.sleep(6)
+    time.sleep(4)
     loading_placeholder.empty()
     st.session_state["loaded"] = True
     st.rerun()
