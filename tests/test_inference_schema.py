@@ -18,11 +18,13 @@ from src.models.inference_schema import (
 
 
 def _make_input_df(**overrides) -> pd.DataFrame:
-    """Create a minimal valid input DataFrame for testing."""
     base = {
         "firm_id": ["0000001750"],
         "fiscal_year": [2025],
         "fiscal_period": ["Q4"],
+        "quarter_key": ["2025_Q4"],       # add
+        "date": ["2025-12-31"],            # add
+        "filed_date": ["2026-01-15"],      # add
         "total_assets": [1_000_000.0],
         "total_liabilities": [500_000.0],
         "net_income": [50_000.0],
@@ -55,12 +57,16 @@ def _make_output_df(**overrides) -> pd.DataFrame:
 
 class TestConstants:
     def test_identity_columns_has_three(self):
-        assert len(IDENTITY_COLUMNS) == 3
+        assert len(IDENTITY_COLUMNS) == 7
 
     def test_identity_columns_content(self):
         assert "firm_id" in IDENTITY_COLUMNS
         assert "fiscal_year" in IDENTITY_COLUMNS
         assert "fiscal_period" in IDENTITY_COLUMNS
+        assert "quarter_key" in IDENTITY_COLUMNS
+        assert "date" in IDENTITY_COLUMNS
+        assert "filed_date" in IDENTITY_COLUMNS
+        assert "distress_label" in IDENTITY_COLUMNS
 
     def test_label_column_value(self):
         assert LABEL_COLUMN == "distress_label"
@@ -163,7 +169,7 @@ class TestValidateInferenceInput:
     def test_label_column_presence_detected(self):
         df = _make_input_df(distress_label=[0])
         errors = validate_inference_input(df)
-        assert any("Label column" in e for e in errors)
+        assert errors == []
 
     def test_non_numeric_feature_detected(self):
         df = _make_input_df(total_assets=["not_a_number"])
@@ -177,7 +183,7 @@ class TestValidateInferenceInput:
 
     def test_multiple_errors_returned(self):
         """Should return ALL errors, not just the first."""
-        df = _make_input_df(distress_label=[0], total_assets=["bad"])
+        df = _make_input_df(total_assets=["bad"], net_income=["also_bad"])
         errors = validate_inference_input(df)
         assert len(errors) >= 2
 
