@@ -100,7 +100,7 @@ class TestModelRegistry(unittest.TestCase):
     def test_rollback_alert_generation(self):
         """Verify that monitor_model_deletion correctly writes the rollback alert file."""
         test_file = "tests/test_rollback_alert.json"
-        
+
         # Ensure cleanup before test
         if os.path.exists(test_file):
             os.remove(test_file)
@@ -108,16 +108,14 @@ class TestModelRegistry(unittest.TestCase):
         try:
             # 1. Trigger the monitor function
             monitor_model_deletion(
-                model_name="foresight_xgboost", 
-                version="1.0", 
-                save_path=test_file
+                model_name="foresight_xgboost", version="1.0", save_path=test_file
             )
 
             # 2. Verify file creation
             self.assertTrue(os.path.exists(test_file), "Rollback JSON was not created.")
 
             # 3. Verify file content
-            with open(test_file, "r") as f:
+            with open(test_file) as f:
                 data = json.load(f)
                 self.assertEqual(data["model_name"], "foresight_xgboost")
                 self.assertEqual(data["version"], "1.0")

@@ -14,8 +14,8 @@ import requests
 
 log = logging.getLogger(__name__)
 
-API_BASE_URL = os.getenv(
-    "FORESIGHT_API_URL",
+API_BASE_URL = os.getenv("FORESIGHT_API_URL") or os.getenv(
+    "API_URL",
     "https://foresight-api-6ool3rlbea-uc.a.run.app",
 )
 API_TIMEOUT = 10  # seconds
@@ -27,6 +27,11 @@ def _get(endpoint: str, params: dict | None = None) -> dict | None:
         url = f"{API_BASE_URL}{endpoint}"
         resp = requests.get(url, params=params, timeout=API_TIMEOUT)
         resp.raise_for_status()
+        content_type_raw = resp.headers.get("content-type", "")
+        content_type = content_type_raw.lower() if isinstance(content_type_raw, str) else ""
+        if content_type and "application/json" not in content_type:
+            log.warning("API call failed [GET %s]: non-JSON response", endpoint)
+            return None
         return resp.json()  # type: ignore[no-any-return]
     except Exception as e:
         log.warning("API call failed [GET %s]: %s", endpoint, e)
@@ -60,9 +65,9 @@ def get_model_info() -> dict | None:
     return _get("/model/info")
 
 
-def predict(cik: str) -> dict | None:
+def predict(payload: dict) -> dict | None:
     """POST /predict — get distress prediction for a company."""
-    return _post("/predict", {"cik": cik})
+    return _post("/predict", payload)
 
 
 def get_company(cik: str) -> dict | None:

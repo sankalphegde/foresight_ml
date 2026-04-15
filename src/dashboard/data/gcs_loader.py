@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -21,7 +22,7 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # GCS paths — single source of truth
 # ---------------------------------------------------------------------------
-GCS_BUCKET = "financial-distress-data"
+GCS_BUCKET = os.getenv("GCS_BUCKET", "financial-distress-data")
 
 SCORES_URI = f"gs://{GCS_BUCKET}/inference/scores_v1.0/scores.parquet"
 SHAP_URI = f"gs://{GCS_BUCKET}/shap/shap_values.parquet"
@@ -40,7 +41,7 @@ LOCAL_COMPANY_REF = Path("artifacts/reference/companies.csv")
 # Default manifest when GCS is unavailable
 DEFAULT_MANIFEST = {
     "schema_version": "1.0",
-    "model_name": "foresight-xgboost",
+    "model_name": "foresight_xgboost",
     "model_version": "v1",
     "mlflow_run_id": "pending",
     "trained_at": "2026-03-15T10:00:00+00:00",
@@ -74,10 +75,15 @@ def _read_gcs_json(uri: str) -> dict | None:
         return None
 
 
-def _safe_read_parquet(uri: str, label: str = "data") -> pd.DataFrame:
+def _safe_read_parquet(
+    uri: str,
+    label: str = "data",
+    columns: list[str] | None = None,
+    filters: list[tuple[str, str, object]] | None = None,
+) -> pd.DataFrame:
     """Read a parquet file, returning empty DataFrame on failure."""
     try:
-        df = pd.read_parquet(uri)
+        df = pd.read_parquet(uri, columns=columns, filters=filters)
         log.info("Loaded %s: %d rows", label, len(df))
         return df
     except Exception as e:
@@ -102,10 +108,43 @@ def load_shap_values() -> pd.DataFrame:
     return _safe_read_parquet(SHAP_URI, "SHAP values")
 
 
+@st.cache_data(ttl=300, show_spinner="Loading SHAP values...")
+def load_shap_for_company(firm_id: str) -> pd.DataFrame:
+    """Load SHAP rows for a single company to reduce memory pressure."""
+    return _safe_read_parquet(
+        SHAP_URI,
+        f"SHAP values for {firm_id}",
+        filters=[("firm_id", "==", firm_id)],
+    )
+
+
 @st.cache_data(ttl=300, show_spinner="Loading company data...")
 def load_labeled_panel() -> pd.DataFrame:
     """Load the full labeled panel (all company-quarter rows)."""
     return _safe_read_parquet(LABELED_PANEL_URI, "labeled panel")
+
+
+@st.cache_data(ttl=300, show_spinner="Loading company data...")
+def load_company_history_rows(firm_id: str) -> pd.DataFrame:
+    """Load labeled panel rows for a single company to reduce memory pressure."""
+    return _safe_read_parquet(
+        LABELED_PANEL_URI,
+        f"labeled panel for {firm_id}",
+        filters=[("firm_id", "==", firm_id)],
+    )
+
+
+@st.cache_data(ttl=300)
+def load_panel_firm_ids() -> list[str]:
+    """Load distinct firm IDs from panel using only the firm_id column."""
+    panel_ids = _safe_read_parquet(
+        LABELED_PANEL_URI,
+        "panel firm ids",
+        columns=["firm_id"],
+    )
+    if panel_ids.empty or "firm_id" not in panel_ids.columns:
+        return []
+    return sorted(panel_ids["firm_id"].dropna().astype(str).unique().tolist())
 
 
 @st.cache_data(ttl=300, show_spinner="Loading model info...")
@@ -164,11 +203,12 @@ def load_predictions() -> pd.DataFrame:
     try:
         df = pd.read_parquet(SCORES_URI)
         if "distress_probability" in df.columns:
-            log.info("Loaded batch scores: %d rows", len(df))
-            return df
+            if df["distress_probability"].sum() > 0:
+                log.info("Loaded batch scores: %d rows", len(df))
+                return df
+            log.warning("GCS scores are all zero — falling back to local scoring")
     except Exception:
         pass
-
     # 2/3. Live scoring fallback
     try:
         import tempfile
@@ -202,15 +242,17 @@ def load_predictions() -> pd.DataFrame:
         id_cols = ["firm_id", "fiscal_year", "fiscal_period"]
         ids = test_df[id_cols].copy()
 
-        # Prepare features
-        features = test_df.drop(columns=[label_col])
-        for col in features.columns:
-            if is_datetime64_any_dtype(features[col]):
-                features[col] = features[col].astype("int64")
+        # Prepare features — drop non-numeric columns
+        drop_cols = [label_col] + [
+            c for c in test_df.columns
+            if c in id_cols
+            or test_df[c].dtype == "object"
+            or is_datetime64_any_dtype(test_df[c])
+        ]
+        features = test_df.drop(columns=[c for c in drop_cols if c in test_df.columns])
         features = pd.get_dummies(features, dummy_na=True)
-
         # Align to model's expected columns
-        trained_cols = model.get_booster().feature_names
+        trained_cols = list(model.get_booster().feature_names or [])
         if trained_cols:
             features = features.reindex(columns=trained_cols, fill_value=0)
 
@@ -241,28 +283,34 @@ def load_predictions() -> pd.DataFrame:
 def load_company_map() -> pd.DataFrame:
     """Load company name/ticker/CIK mapping.
 
-    Tries local SEC company names file first, falls back to reference CSV.
+    Tries local files first, then GCS.
     Returns DataFrame with columns: firm_id, ticker, name.
     """
     empty = pd.DataFrame(columns=["firm_id", "ticker", "name"])
-
     try:
         if LOCAL_COMPANY_NAMES.exists():
             df = pd.read_csv(LOCAL_COMPANY_NAMES, dtype={"cik": str})
         elif LOCAL_COMPANY_REF.exists():
             df = pd.read_csv(LOCAL_COMPANY_REF)
             df["cik"] = df["cik"].astype(str)
-            df["name"] = df["ticker"]  # fallback: use ticker as name
+            df["name"] = df["ticker"]
         else:
-            return empty
-
+            # Try GCS
+            try:
+                df = pd.read_csv(f"gs://{GCS_BUCKET}/reference/company_names.csv", dtype={"cik": str})
+            except Exception:
+                try:
+                    df = pd.read_csv(f"gs://{GCS_BUCKET}/reference/companies.csv")
+                    df["cik"] = df["cik"].astype(str)
+                    df["name"] = df["ticker"]
+                except Exception:
+                    return empty
         df["firm_id"] = df["cik"].str.zfill(10)
         log.info("Loaded %d company mappings", len(df))
         return df[["firm_id", "ticker", "name"]]
     except Exception as e:
         log.warning("Company map not available: %s", e)
         return empty
-
 
 # ---------------------------------------------------------------------------
 # Query helpers

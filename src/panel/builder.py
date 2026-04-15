@@ -17,7 +17,6 @@ class PanelBuilder:
         "Assets": "total_assets",
         "Liabilities": "total_liabilities",
         "StockholdersEquity": "total_equity",
-        "LongTermDebt": "total_debt",
         "NetIncomeLoss": "net_income",
         "NetCashProvidedByUsedInOperatingActivities": "operating_cash_flow",
         "InterestExpense": "interest_expense",
@@ -32,7 +31,6 @@ class PanelBuilder:
         "total_liabilities",
         "net_income",
         "operating_cash_flow",
-        "total_debt",
         "total_equity",
         "interest_expense",
         "operating_income",
@@ -52,7 +50,15 @@ class PanelBuilder:
         validate_schema(self.df, self.REQUIRED_COLUMNS)
 
         logger.info("Parsing dates")
-        self.df["date"] = pd.to_datetime(self.df["date"])
+        self.df["date"] = pd.to_datetime(self.df["date"], errors="coerce")
+
+        # Filter out clearly wrong dates
+        logger.info("Filtering invalid dates")
+        valid_mask = (self.df["date"] >= "1993-01-01") & (self.df["date"] <= "2030-12-31")
+        bad_count = int((~valid_mask).sum())
+        if bad_count > 0:
+            logger.warning(f"Dropping {bad_count} rows with invalid dates outside 1993-2030")
+        self.df = self.df[valid_mask].reset_index(drop=True)
 
         logger.info("Removing duplicates")
         self.df = self.df.drop_duplicates(subset=["firm_id", "date"])
@@ -82,7 +88,6 @@ class PanelBuilder:
             "net_income",
             # new distress-signal columns
             "operating_cash_flow",
-            "total_debt",
             "total_equity",
             "interest_expense",
             "operating_income",

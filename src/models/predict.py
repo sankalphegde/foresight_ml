@@ -6,6 +6,7 @@ Enhanced with:
 - manifest.json provenance certificate written alongside scores
 """
 
+import os
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +15,7 @@ import mlflow
 import numpy as np
 import pandas as pd
 from mlflow.tracking import MlflowClient
+from pandas.api.types import is_datetime64_any_dtype
 
 from src.models.inference_schema import (
     IDENTITY_COLUMNS,
@@ -162,7 +164,6 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
     logger.info("Input schema validation passed (%d rows, %d cols)", len(latest_features_df), len(latest_features_df.columns))
 
     # --- Step 3: Generate predictions ---
-    # Capture pre-dummy raw feature columns for manifest
     raw_feature_columns = [c for c in latest_features_df.columns if c not in IDENTITY_COLUMNS]
 
     # Save identity columns for the output dataframe
@@ -201,7 +202,8 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
     latest_features_df["model_roc_auc"] = model_roc_auc
 
     # Load precomputed SHAP values — gracefully degrade if file not yet generated
-    shap_path = "gs://financial-distress-data/shap/shap_values.parquet"
+    gcs_bucket = os.getenv("GCS_BUCKET", "financial-distress-data")
+    shap_path = f"gs://{gcs_bucket}/shap/shap_values.parquet"
     logger.info(f"Loading SHAP values from {shap_path}")
     try:
         shap_df = pd.read_parquet(shap_path)
@@ -231,7 +233,7 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
         )
 
     # --- Step 7: Write scores + manifest to GCS ---
-    output_path = f"gs://financial-distress-data/inference/scores_v{version_str}/scores.parquet"
+    output_path = f"gs://{gcs_bucket}/inference/scores_v{version_str}/scores.parquet"
     final_scored_df.to_parquet(output_path, index=False)
     logger.info(f"Successfully saved batch inference results to {output_path}")
 
@@ -253,7 +255,7 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
 
     local_manifest = Path("/tmp/manifest.json")
     write_manifest(manifest, local_manifest)
-    gcs_dir = f"gs://financial-distress-data/inference/scores_v{version_str}"
+    gcs_dir = f"gs://{gcs_bucket}/inference/scores_v{version_str}"
     upload_manifest_to_gcs(local_manifest, gcs_dir)
 
     logger.info("Batch inference complete in %.2fs", duration)

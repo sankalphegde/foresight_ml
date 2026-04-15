@@ -10,31 +10,58 @@ from fastapi.testclient import TestClient
 from src.api.main import app
 from src.models.explain import get_top_features
 
+
 @pytest.fixture()
 def client() -> TestClient:
     return TestClient(app)
 
+
 @pytest.fixture(autouse=True)
 def mock_cloud_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Mocks all GCS, MLflow, and model loading to run tests completely offline."""
-    
+
     # 1. Mock pandas read_parquet for company and alerts endpoints
     def mock_read_parquet(path: str, **kwargs: Any) -> pd.DataFrame:
         if "scores.parquet" in str(path):
-            return pd.DataFrame([
-                {"firm_id": "0000123456", "company_name": "Test A", "distress_probability": 0.8, "active_signals": 2},
-                {"firm_id": "0000123457", "company_name": "Test B", "distress_probability": 0.9, "active_signals": 3},
-                {"firm_id": "0000123458", "company_name": "Test C", "distress_probability": 0.1, "active_signals": 0},
-            ])
+            return pd.DataFrame(
+                [
+                    {
+                        "firm_id": "0000123456",
+                        "company_name": "Test A",
+                        "distress_probability": 0.8,
+                        "active_signals": 2,
+                    },
+                    {
+                        "firm_id": "0000123457",
+                        "company_name": "Test B",
+                        "distress_probability": 0.9,
+                        "active_signals": 3,
+                    },
+                    {
+                        "firm_id": "0000123458",
+                        "company_name": "Test C",
+                        "distress_probability": 0.1,
+                        "active_signals": 0,
+                    },
+                ]
+            )
         # Default fallback for explain helper
-        return pd.DataFrame([{
-            "firm_id": "0000123456", "fiscal_year": 2025, "fiscal_period": "Q4",
-            "top_features_json": json.dumps([
-                {"feature": "net_income", "shap_value": -0.45, "rank": 1},
-                {"feature": "total_assets", "shap_value": 0.22, "rank": 2},
-                {"feature": "total_liabilities", "shap_value": -0.15, "rank": 3},
-            ])
-        }])
+        return pd.DataFrame(
+            [
+                {
+                    "firm_id": "0000123456",
+                    "fiscal_year": 2025,
+                    "fiscal_period": "Q4",
+                    "top_features_json": json.dumps(
+                        [
+                            {"feature": "net_income", "shap_value": -0.45, "rank": 1},
+                            {"feature": "total_assets", "shap_value": 0.22, "rank": 2},
+                            {"feature": "total_liabilities", "shap_value": -0.15, "rank": 3},
+                        ]
+                    ),
+                }
+            ]
+        )
 
     monkeypatch.setattr("pandas.read_parquet", mock_read_parquet)
     monkeypatch.setattr("src.models.explain.pd.read_parquet", mock_read_parquet)
@@ -43,14 +70,22 @@ def mock_cloud_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     class MockFile:
         def __init__(self, content: str):
             self.content = content
-        def __enter__(self) -> MockFile: return self
-        def __exit__(self, *args: Any) -> None: pass
-        def read(self) -> str: return self.content
+
+        def __enter__(self) -> MockFile:
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            pass
+
+        def read(self) -> str:
+            return self.content
 
     class MockGCS:
         def open(self, path: str, mode: str = "r") -> MockFile:
             if "manifest.json" in path:
-                return MockFile('{"schema_version": "1.0", "model_name": "foresight_xgboost", "gcs_scores_path": "gs://..."}')
+                return MockFile(
+                    '{"schema_version": "1.0", "model_name": "foresight_xgboost", "gcs_scores_path": "gs://..."}'
+                )
             if "summary_latest.json" in path:
                 return MockFile('{"dataset_drift": false, "report_url": "http://..."}')
             raise FileNotFoundError(f"Mock file not found: {path}")
@@ -61,13 +96,16 @@ def mock_cloud_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     class MockModel:
         def predict(self, data: Any) -> list[float]:
             return [0.85]  # Returns high risk probability
+
     class MockScaler:
         def transform(self, data: Any) -> Any:
             return data
 
     import src.api.main
+
     src.api.main.ml_models["model"] = MockModel()
     src.api.main.ml_models["scaler"] = MockScaler()
+
 
 # Define standard headers including the fallback API key from dependencies.py
 HEADERS = {"X-API-Key": "local-dev-key-123"}

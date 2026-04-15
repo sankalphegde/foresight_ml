@@ -8,7 +8,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=README.md,target=README.md \
     uv sync --frozen --no-dev
 
-COPY src/dashboard/ /app/src/dashboard/
+COPY src/ /app/src/
+COPY .streamlit/ /app/.streamlit/
 COPY pyproject.toml uv.lock README.md ./
 
 ENV GCS_BUCKET=financial-distress-data \

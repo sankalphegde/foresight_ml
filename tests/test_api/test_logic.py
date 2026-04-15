@@ -6,6 +6,7 @@ def calculate_risk_level(prob: float) -> str:
         return "Medium"
     return "Low"
 
+
 def test_risk_level_logic():
     """Verify that probability scores are binned into the correct risk categories."""
     assert calculate_risk_level(0.95) == "High"

@@ -75,3 +75,24 @@ resource "google_service_account" "dashboard" {
   display_name = "Foresight Dashboard (${var.environment})"
   description  = "Service account for Foresight Dashboard running on Cloud Run"
 }
+
+# Grant Dashboard service account read access to GCS
+resource "google_storage_bucket_iam_member" "dashboard_gcs_read" {
+  bucket = google_storage_bucket.data_lake.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.dashboard.email}"
+}
+
+# Grant Dashboard service account read access to the legacy populated bucket
+resource "google_storage_bucket_iam_member" "dashboard_gcs_read_legacy" {
+  bucket = "financial-distress-data"
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.dashboard.email}"
+}
+
+# Grant API service account read access to the legacy populated bucket
+resource "google_storage_bucket_iam_member" "api_gcs_read_legacy" {
+  bucket = "financial-distress-data"
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.api.email}"
+}

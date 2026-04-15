@@ -18,6 +18,28 @@ from src.dashboard.data.gcs_loader import (
 from src.dashboard.utils import risk_emoji
 
 # ---------------------------------------------------------------------------
+# Column name mapping — handles both old and new panel schemas
+# ---------------------------------------------------------------------------
+_COL_MAP = {
+    "operating_cash_flow": "operating_cash_flow",
+    "NetCashProvidedByUsedInOperatingActivities": "operating_cash_flow",
+    "retained_earnings": "retained_earnings",
+    "RetainedEarningsAccumulatedDeficit": "retained_earnings",
+    "total_equity": "total_equity",
+    "StockholdersEquity": "total_equity",
+}
+
+
+def _get_col(row: pd.Series, *candidates: str, default: float = 0) -> float:
+    """Get the first available column value from a row."""
+    for c in candidates:
+        val = row.get(c)
+        if pd.notna(val):
+            return float(val)
+    return default
+
+
+# ---------------------------------------------------------------------------
 # Watchlist builder
 # ---------------------------------------------------------------------------
 
@@ -28,7 +50,7 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
         return pd.DataFrame()
 
     predictions = predictions.sort_values(["firm_id", "fiscal_year", "fiscal_period"])
-    latest = predictions.groupby("firm_id").last().reset_index()
+    latest = predictions.drop_duplicates(subset=["firm_id"], keep="last").copy()
 
     # Quarter-over-quarter trend
     prev = predictions.groupby("firm_id").nth(-2).reset_index()
@@ -44,16 +66,12 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
     if not panel.empty:
         panel_latest = (
             panel.sort_values(["firm_id", "fiscal_year", "fiscal_period"])
-            .groupby("firm_id")
-            .last()
-            .reset_index()
+            .drop_duplicates(subset=["firm_id"], keep="last")
         )
         signal_cols = [
-            "sector_proxy",
-            "company_size_bucket",
             "net_income",
-            "NetCashProvidedByUsedInOperatingActivities",
-            "RetainedEarningsAccumulatedDeficit",
+            "operating_cash_flow", "NetCashProvidedByUsedInOperatingActivities",
+            "retained_earnings", "RetainedEarningsAccumulatedDeficit",
             "total_liabilities",
             "total_assets",
         ]
@@ -66,24 +84,21 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
         prob = float(r.get("distress_probability", 0))
 
         signals = []
-        if pd.notna(r.get("net_income")) and r["net_income"] < 0:
+        ni = _get_col(r, "net_income")
+        if ni < 0:
             signals.append("Neg. income")
-        if (
-            pd.notna(r.get("NetCashProvidedByUsedInOperatingActivities"))
-            and r["NetCashProvidedByUsedInOperatingActivities"] < 0
-        ):
+
+        ocf = _get_col(r, "operating_cash_flow", "NetCashProvidedByUsedInOperatingActivities")
+        if ocf < 0:
             signals.append("Neg. cash flow")
-        if (
-            pd.notna(r.get("RetainedEarningsAccumulatedDeficit"))
-            and r["RetainedEarningsAccumulatedDeficit"] < 0
-        ):
-            signals.append("Retained earnings ↓")
-        if (
-            pd.notna(r.get("total_assets"))
-            and r.get("total_assets", 0) > 0
-            and pd.notna(r.get("total_liabilities"))
-            and r["total_liabilities"] / r["total_assets"] > 0.8
-        ):
+
+        re = _get_col(r, "retained_earnings", "RetainedEarningsAccumulatedDeficit")
+        if re < 0:
+            signals.append("Retained earnings deficit")
+
+        ta = _get_col(r, "total_assets")
+        tl = _get_col(r, "total_liabilities")
+        if ta > 0 and tl / ta > 0.8:
             signals.append("High leverage")
 
         prev_val = r.get("prev_prob")
@@ -92,8 +107,6 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
         rows.append(
             {
                 "firm_id": r["firm_id"],
-                "sector": r.get("sector_proxy", "—"),
-                "size": r.get("company_size_bucket", "—"),
                 "risk_score": prob,
                 "change": change,
                 "signals": " · ".join(signals) if signals else "—",
@@ -113,6 +126,7 @@ def render() -> None:
     """Render the High-Risk Watchlist page."""
     st.header("High-Risk Watchlist")
     st.caption("Companies most likely to experience financial distress within the next 6 months")
+
     with st.expander("ℹ️ How to use this page", expanded=False):
         st.markdown(
             """
@@ -127,7 +141,7 @@ def render() -> None:
             **Tips:**
             - Use the threshold slider to focus on high-risk companies only
             - Export to CSV for offline analysis or sharing with your team
-            - Sector/size filters help narrow down specific segments
+            - Select a company and click "View details" to see the full risk analysis
             """
         )
 
@@ -148,7 +162,7 @@ def render() -> None:
         return
 
     # ── Filters ──────────────────────────────────────────────────────
-    col_thresh, col_sector, col_size, col_export = st.columns([2, 1.5, 1.5, 1])
+    col_thresh, col_spacer, col_export = st.columns([2, 2, 1])
 
     with col_thresh:
         threshold = st.slider(
@@ -157,24 +171,12 @@ def render() -> None:
             max_value=1.0,
             value=0.5,
             step=0.05,
-            help="Show companies with predicted distress probability ≥ this value. "
+            help="Show companies with predicted distress probability above this value. "
             "High risk ≥ 0.70, Medium ≥ 0.30",
         )
 
-    with col_sector:
-        sectors = ["All sectors"] + sorted(watchlist["sector"].dropna().unique().tolist())
-        selected_sector = st.selectbox("Sector", options=sectors, help="Filter by industry sector")
-
-    with col_size:
-        sizes = ["All sizes"] + sorted(watchlist["size"].dropna().unique().tolist())
-        selected_size = st.selectbox("Size", options=sizes, help="Filter by company size bucket")
-
     # Apply filters
     filtered = watchlist[watchlist["risk_score"] >= threshold].copy()
-    if selected_sector != "All sectors":
-        filtered = filtered[filtered["sector"] == selected_sector]
-    if selected_size != "All sizes":
-        filtered = filtered[filtered["size"] == selected_size]
     filtered = filtered.sort_values("risk_score", ascending=False)
 
     with col_export:
@@ -189,53 +191,17 @@ def render() -> None:
 
     # ── Summary metrics ──────────────────────────────────────────────
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Companies shown", f"{len(filtered):,}")
-    m2.metric("🔴 High risk (≥0.70)", len(filtered[filtered["risk_score"] >= 0.70]))
+    m1.metric("Companies shown", f"{len(filtered):,}",
+              help="Number of companies matching current filter")
+    m2.metric("🔴 High risk (≥0.70)", len(filtered[filtered["risk_score"] >= 0.70]),
+              help="Companies with >70% distress probability")
     m3.metric(
         "🟡 Medium (0.30–0.70)",
         len(filtered[(filtered["risk_score"] >= 0.30) & (filtered["risk_score"] < 0.70)]),
+        help="Companies with 30-70% distress probability",
     )
-    m4.metric("Total scored", f"{len(watchlist):,}")
-
-    # ── Sector breakdown chart ───────────────────────────────────────
-    if not filtered.empty and "sector" in filtered.columns:
-        sector_counts = filtered["sector"].value_counts()
-        sector_counts = sector_counts[sector_counts.index != "—"]
-        if len(sector_counts) >= 1:
-            col_chart, _ = st.columns([1, 2])
-            with col_chart:
-                st.markdown("#### Risk by sector")
-                palette = [
-                    "#b91c1c",
-                    "#d97706",
-                    "#3b7dd8",
-                    "#16a34a",
-                    "#9333ea",
-                    "#0891b2",
-                    "#be185d",
-                    "#4f46e5",
-                ]
-                fig = go.Figure(
-                    data=[
-                        go.Pie(
-                            labels=sector_counts.index.tolist(),
-                            values=sector_counts.values.tolist(),
-                            hole=0.5,
-                            marker={"colors": palette[: len(sector_counts)]},
-                            textinfo="label+value",
-                            textfont={"size": 11},
-                            hovertemplate="%{label}: %{value} companies<extra></extra>",
-                        )
-                    ]
-                )
-                fig.update_layout(
-                    height=220,
-                    showlegend=False,
-                    margin={"l": 0, "r": 0, "t": 10, "b": 10},
-                    paper_bgcolor="white",
-                    plot_bgcolor="white",
-                )
-                st.plotly_chart(fig, width="stretch")
+    m4.metric("Total scored", f"{len(watchlist):,}",
+              help="All companies scored by the model")
 
     # ── Add company names ────────────────────────────────────────────
     if not company_map.empty:
@@ -249,13 +215,38 @@ def render() -> None:
 
     # ── Watchlist table ──────────────────────────────────────────────
     if filtered.empty:
-        st.info(f"No companies found with risk score ≥ {threshold:.0%}")
+        st.info(f"No companies found with risk score above {threshold:.0%}")
         if threshold > 0.9:
             st.info(
-                "💡 Try lowering the threshold. Most companies have low distress probability, "
-                "which is expected — only ~2-5% of companies experience financial distress."
+                "Try lowering the threshold. Most companies have low distress probability, "
+                "which is expected — only 2-5% of companies experience financial distress."
             )
         return
+
+    # ── View company selector (above table) ──────────────────────────
+    view_col, info_col = st.columns([2, 3])
+    with view_col:
+        view_options = []
+        for _, r in filtered.iterrows():
+            label = f"{r['company']} ({r['ticker']})" if r["company"] != "—" else r["firm_id"]
+            view_options.append(label)
+
+        selected_view = st.selectbox(
+            "View company details",
+            options=view_options,
+            index=None,
+            placeholder="Select a company to view full risk analysis...",
+            help="Select a company, then switch to Risk Analysis in the sidebar",
+            key="watchlist_view",
+        )
+
+    if selected_view:
+        idx = view_options.index(selected_view)
+        firm_id = filtered.iloc[idx]["firm_id"]
+        st.session_state["view_company"] = firm_id
+        with info_col:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.info("Company selected. Click **Risk Analysis** in the sidebar to view details.", icon="👈")
 
     st.markdown(
         f"**Showing {len(filtered):,} companies** · Sorted by predicted distress probability"
@@ -271,11 +262,9 @@ def render() -> None:
         "company": "Company",
         "ticker": "Ticker",
         "firm_id": "CIK",
-        "sector": "Sector",
-        "size": "Size",
         "risk": "Risk Score",
         "trend": "vs Last Qtr",
-        "signals": "Active Distress Signals",
+        "signals": "Distress Signals",
         "quarter": "Quarter",
     }
     st.dataframe(
@@ -286,6 +275,5 @@ def render() -> None:
     )
 
     st.caption(
-        f"Predictions from XGBoost model (test set 2022–2023). "
-        f"Threshold: {threshold:.0%} · {len(filtered):,} of {len(watchlist):,} companies."
+        f"Threshold: {threshold:.0%} · {len(filtered):,} of {len(watchlist):,} companies"
     )

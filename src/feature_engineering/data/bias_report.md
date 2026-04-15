@@ -1,6 +1,6 @@
 # Financial Distress Pipeline — Bias Analysis Report
 
-*Generated: 2026-03-24 00:10:35*
+*Generated: 2026-04-11 19:58:38*
 
 ---
 
@@ -56,7 +56,7 @@ represents 'this metric is not applicable for this observation.'
 
 ## 3. Label Imbalance Analysis
 
-The dataset has a **severe class imbalance** with only 1.76% positive labels
+The dataset has a **severe class imbalance** with only 1.76% positive labels 
 (3,734 distressed vs 207,880 non-distressed).
 
 > [!CAUTION]
@@ -215,14 +215,14 @@ Population Stability Index (PSI) measures distributional shift between slices:
 
 ## 6. Recommendations
 
-1. **Address class imbalance** before training: Use SMOTE, class weights, or stratified
+1. **Address class imbalance** before training: Use SMOTE, class weights, or stratified 
    sampling. Evaluate with PR-AUC and F1, not accuracy.
-2. **Investigate high-drift features**: Features with PSI > 0.25 across company size
+2. **Investigate high-drift features**: Features with PSI > 0.25 across company size 
    buckets may cause the model to perform differently for small vs. mega-cap firms.
-3. **Consider removing zero-filled features**: Features that are 100% NULL (like
-   `cash_burn_rate`) have no discriminative power after 0-fill and should be dropped
+3. **Consider removing zero-filled features**: Features that are 100% NULL (like 
+   `cash_burn_rate`) have no discriminative power after 0-fill and should be dropped 
    or sourced from alternative data.
-4. **Stratified evaluation**: Always evaluate model performance per-slice (size, sector,
+4. **Stratified evaluation**: Always evaluate model performance per-slice (size, sector, 
    time period) to detect hidden bias in predictions.
-5. **Temporal validation**: Use a walk-forward split (not random) to prevent lookahead bias,
+5. **Temporal validation**: Use a walk-forward split (not random) to prevent lookahead bias, 
    given the 2009–2026 time span and identified temporal drift.

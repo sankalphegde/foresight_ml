@@ -76,7 +76,11 @@ async def get_high_risk_alerts(
 
     except FileNotFoundError:
         logger.error("scores.parquet not found in GCS.")
-        raise HTTPException(status_code=503, detail="Watchlist data is currently unavailable.") from None
+        raise HTTPException(
+            status_code=503, detail="Watchlist data is currently unavailable."
+        ) from None
     except Exception as e:
         logger.error(f"Error fetching alerts: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error while fetching alerts.") from e
+        raise HTTPException(
+            status_code=500, detail="Internal server error while fetching alerts."
+        ) from e

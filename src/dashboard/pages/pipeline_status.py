@@ -6,6 +6,7 @@ last run timestamps, and key summary metrics.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import streamlit as st
@@ -17,9 +18,11 @@ from src.dashboard.data.gcs_loader import (
     load_predictions,
 )
 
+GCS_BUCKET = os.getenv("GCS_BUCKET", "financial-distress-data")
 
-def _status_dot(status: str) -> str:
-    """Return colored HTML dot for a pipeline task status."""
+
+def _pipeline_row(name: str, duration: str, status: str, detail: str = "") -> str:
+    """Render a single pipeline task row as HTML."""
     color_map = {
         "success": "#16a34a",
         "failed": "#b91c1c",
@@ -29,25 +32,11 @@ def _status_dot(status: str) -> str:
         "pending": "#9c9a92",
     }
     color = color_map.get(status.lower(), "#9c9a92")
-    return f'<div style="width:8px;height:8px;border-radius:50%;background:{color};flex-shrink:0"></div>'
-
-
-def _pipeline_row(name: str, duration: str, status: str, detail: str = "") -> str:
-    """Render a single pipeline task row as HTML."""
-    status_color = {
-        "success": "#16a34a",
-        "failed": "#b91c1c",
-        "warning": "#d97706",
-        "running": "#3b7dd8",
-        "skipped": "#9c9a92",
-        "pending": "#9c9a92",
-    }
-    color = status_color.get(status.lower(), "#9c9a92")
 
     return f"""
     <div style="display:flex;align-items:center;gap:12px;padding:9px 0;
     border-bottom:0.5px solid rgba(0,0,0,0.07)">
-        {_status_dot(status)}
+        <div style="width:8px;height:8px;border-radius:50%;background:{color};flex-shrink:0"></div>
         <div style="font-size:13px;font-weight:500;flex:1">{name}</div>
         <div style="font-size:11px;color:#9c9a92;min-width:60px;text-align:right">{duration}</div>
         <div style="font-size:11px;min-width:100px;text-align:right;color:{color}">
@@ -66,10 +55,10 @@ def render() -> None:
             """
             **Pipeline Status** shows the health of both automated pipelines.
 
-            **Data pipeline** (@daily) — Ingests new SEC filings and FRED economic data,
+            **Data pipeline** (daily) — Ingests new SEC filings and FRED economic data,
             cleans, engineers features, and runs validation.
 
-            **Training pipeline** (@weekly) — Retrains the model, evaluates on held-out data,
+            **Training pipeline** (weekly) — Retrains the model, evaluates on held-out data,
             and promotes to production only if quality gate passes (ROC-AUC ≥ 0.80).
 
             **Status indicators:**
@@ -85,132 +74,119 @@ def render() -> None:
     drift = load_drift_summary()
     predictions = load_predictions()
 
-    # ── Determine statuses from available data ───────────────────────
-    # Model exists?
-    model_exists = Path("artifacts/models/xgb_model.pkl").exists()
-    test_exists = Path("artifacts/splits/test.parquet").exists()
-    shap_exists = Path("artifacts/shap/shap_values.parquet").exists()
+    # ── Normalize data ───────────────────────────────────────────────
     has_predictions = not predictions.empty
-    roc_auc = optuna.get("test_roc_auc", manifest.get("roc_auc", 0))
-    drift_detected = drift.get("drift_detected", False)
-
+    roc_auc = manifest.get("roc_auc", optuna.get("test_roc_auc", 0))
+    drift_detected = drift.get("dataset_drift", drift.get("drift_detected", False))
+    retrain_triggered = drift.get("retrain_triggered", False)
     scored_at = manifest.get("scored_at", "pending")
     trained_at = manifest.get("trained_at", "—")
+    has_optuna = bool(optuna.get("best_params"))
+    has_manifest = manifest.get("mlflow_run_id", "pending") != "pending"
+
+    # Artifact checks — local first, then infer from loaded data
+    model_exists = Path("artifacts/models/xgb_model.pkl").exists() or has_manifest
+    test_exists = Path("artifacts/splits/test.parquet").exists() or has_predictions
+    shap_exists = Path("artifacts/shap/shap_values.parquet").exists()
 
     # ── Two columns: data pipeline + training pipeline ───────────────
     col_data, col_train = st.columns(2)
 
     with col_data:
-        st.markdown("#### Data pipeline — `foresight_ingestion`")
-        st.caption("Schedule: @daily")
+        st.markdown("#### Data Pipeline")
+        st.caption("Schedule: daily")
         st.markdown("---")
 
         data_tasks = [
             ("FRED ingestion", "~4m", "success", "Success"),
             ("SEC XBRL ingestion", "~18m", "success", "Success"),
-            ("BigQuery cleaning", "~7m", "success", "Success"),
+            ("Data cleaning", "~7m", "success", "Success"),
             ("Panel build + labeling", "~3m", "success", "Success"),
             ("Feature engineering", "~12m", "success", "Success"),
             ("Bias analysis", "~2m", "success", "Success"),
-            ("Validation + anomaly detection", "~1m", "success", "Success"),
+            ("Validation", "~1m", "success", "Success"),
         ]
 
-        # Add drift monitoring status
+        # Drift monitoring — uses real status
         if drift_detected:
             data_tasks.append(("Drift monitoring", "~2m", "warning", "Drift detected"))
-            data_tasks.append(("Retraining trigger", "—", "running", "Queued"))
+            if retrain_triggered:
+                data_tasks.append(("Retraining trigger", "~0.1m", "success", "Triggered"))
+            else:
+                data_tasks.append(("Retraining trigger", "—", "skipped", "Below threshold"))
         else:
             data_tasks.append(("Drift monitoring", "~2m", "success", "No drift"))
 
         for name, duration, status, detail in data_tasks:
             st.markdown(_pipeline_row(name, duration, status, detail), unsafe_allow_html=True)
 
-        st.caption("Last run timestamps based on GCS artifact presence.")
-
     with col_train:
-        st.markdown("#### Training pipeline — `foresight_training`")
-        st.caption("Schedule: @weekly")
+        st.markdown("#### Training Pipeline")
+        st.caption("Schedule: weekly")
         st.markdown("---")
 
-        # Build training tasks with real status
-        train_tasks = []
-
-        # Data gate
-        train_tasks.append(
+        train_tasks = [
             (
                 "Data gate check",
                 "~0.1m",
                 "success" if test_exists else "pending",
                 "Passed" if test_exists else "Pending",
-            )
-        )
+            ),
+            (
+                "Train + Optuna tuning",
+                "~62m",
+                "success" if has_optuna else "pending",
+                "Success" if has_optuna else "Pending",
+            ),
+        ]
 
-        # Training
-        if optuna.get("best_params"):
-            train_tasks.append(("Train + Optuna (25 trials)", "~62m", "success", "Success"))
-        else:
-            train_tasks.append(("Train + Optuna (25 trials)", "—", "pending", "Pending"))
-
-        # Quality gate
+        # Quality gate — uses real ROC-AUC
         if roc_auc > 0:
             passed = roc_auc >= 0.80
-            train_tasks.append(
-                (
-                    "Quality gate (ROC-AUC)",
-                    "~0.2m",
-                    "success" if passed else "failed",
-                    f"{roc_auc:.4f} {'✓' if passed else '✗'}",
-                )
-            )
+            train_tasks.append((
+                "Quality gate (ROC-AUC)",
+                "~0.2m",
+                "success" if passed else "failed",
+                f"{roc_auc:.4f} {'✓' if passed else '✗'}",
+            ))
         else:
             train_tasks.append(("Quality gate (ROC-AUC)", "—", "pending", "Pending"))
 
-        # SHAP + bias
-        train_tasks.append(
+        train_tasks.extend([
             (
-                "SHAP + bias report",
+                "SHAP explanations",
                 "~8m",
                 "success" if shap_exists else "pending",
                 "Success" if shap_exists else "Pending",
-            )
-        )
-
-        # Batch inference
-        train_tasks.append(
+            ),
             (
                 "Batch inference",
                 "~5m",
                 "success" if has_predictions else "pending",
                 f"{len(predictions):,} rows" if has_predictions else "Pending",
-            )
-        )
-
-        # Registry
-        train_tasks.append(
+            ),
             (
-                "Registry + rollback check",
+                "Registry + promotion",
                 "~0.5m",
                 "success" if model_exists else "pending",
                 "Promoted" if model_exists else "Pending",
-            )
-        )
+            ),
+        ])
 
         for name, duration, status, detail in train_tasks:
             st.markdown(_pipeline_row(name, duration, status, detail), unsafe_allow_html=True)
 
-        st.caption(f"Trained: {trained_at}")
+        st.caption(f"Last trained: {trained_at}")
 
     # ── Summary metrics ──────────────────────────────────────────────
     st.markdown("---")
 
     m1, m2, m3, m4 = st.columns(4)
-
     m1.metric(
         "Last scored",
         scored_at if scored_at != "pending" else "—",
         help="Timestamp of most recent batch inference run",
     )
-
     m2.metric(
         "Companies scored",
         f"{len(predictions):,}" if has_predictions else "—",
@@ -221,33 +197,39 @@ def render() -> None:
     if has_predictions and "distress_probability" in predictions.columns:
         high_risk = int((predictions["distress_probability"] >= 0.70).sum())
     m3.metric(
-        "High-risk companies (≥0.70)", high_risk, help="Companies above the high-risk threshold"
+        "High-risk (≥0.70)",
+        high_risk,
+        help="Companies above the high-risk threshold",
     )
-
     m4.metric(
         "Model ROC-AUC",
         f"{roc_auc:.4f}" if roc_auc > 0 else "—",
         help="Model's ability to distinguish distressed from healthy firms. Target ≥ 0.80",
     )
+
     # ── Artifact status ──────────────────────────────────────────────
     st.markdown("---")
     st.markdown("#### Artifact status")
 
     artifacts = [
-        ("Model (xgb_model.pkl)", model_exists),
-        ("Test split (test.parquet)", test_exists),
-        ("SHAP values (shap_values.parquet)", shap_exists),
+        ("Model", model_exists),
+        ("Test split", test_exists),
+        ("SHAP values", shap_exists),
         ("Predictions", has_predictions),
-        ("Optuna results", bool(optuna.get("best_params"))),
+        ("Optuna results", has_optuna),
+        ("Manifest", has_manifest),
     ]
 
     cols = st.columns(len(artifacts))
     for col, (name, exists) in zip(cols, artifacts, strict=False):
+        bg = "#dcfce7" if exists else "#fee2e2"
+        fg = "#166534" if exists else "#b91c1c"
+        icon = "✅" if exists else "❌"
         col.markdown(
-            f"""<div style="text-align:center;padding:8px;background:{"#dcfce7" if exists else "#fee2e2"};
+            f"""<div style="text-align:center;padding:8px;background:{bg};
             border-radius:8px;font-size:12px">
-                <div>{"✅" if exists else "❌"}</div>
-                <div style="margin-top:4px;color:{"#166534" if exists else "#b91c1c"}">{name}</div>
+                <div>{icon}</div>
+                <div style="margin-top:4px;color:{fg}">{name}</div>
             </div>""",
             unsafe_allow_html=True,
         )
@@ -255,8 +237,8 @@ def render() -> None:
     # ── Links ────────────────────────────────────────────────────────
     st.markdown("---")
     link1, link2, link3 = st.columns(3)
-    link1.markdown("[🔗 MLflow](https://foresight-mlflow-6ool3rlbea-uc.a.run.app)")
+    link1.markdown("[MLflow ↗](https://foresight-mlflow-6ool3rlbea-uc.a.run.app)")
     link2.markdown(
-        "[🔗 GCS Bucket](https://console.cloud.google.com/storage/browser/financial-distress-data)"
+        f"[GCS Bucket ↗](https://console.cloud.google.com/storage/browser/{GCS_BUCKET})"
     )
-    link3.markdown("[🔗 GitHub](https://github.com/Foresight-ML/foresight_ml)")
+    link3.markdown("[GitHub ↗](https://github.com/Foresight-ML/foresight_ml)")

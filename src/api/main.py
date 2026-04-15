@@ -1,8 +1,7 @@
 """Main FastAPI application setup."""
 
-from typing import AsyncIterator
-
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import gcsfs

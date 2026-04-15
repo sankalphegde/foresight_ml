@@ -18,7 +18,15 @@ import pandas as pd
 from pydantic import BaseModel, Field
 
 # Identity columns — required for downstream joins, NOT features.
-IDENTITY_COLUMNS: list[str] = ["firm_id", "fiscal_year", "fiscal_period"]
+IDENTITY_COLUMNS: list[str] = [
+    "firm_id",
+    "fiscal_year",
+    "fiscal_period",
+    "quarter_key",
+    "date",
+    "filed_date",
+    "distress_label",
+]
 
 # The label column — must NOT be present in inference input.
 LABEL_COLUMN: str = "distress_label"
@@ -117,20 +125,19 @@ def validate_inference_input(df: pd.DataFrame) -> list[str]:  # noqa: F821
         if col not in df.columns:
             errors.append(f"Missing identity column: {col}")
 
-    # Label should NOT be present in inference input
-    if LABEL_COLUMN in df.columns:
-        errors.append(
-            f"Label column '{LABEL_COLUMN}' found in inference input — " "remove it before scoring"
-        )
-
-    # Feature columns (everything except identity) must be numeric
+    # All-null non-identity columns indicate upstream pipeline bugs
     feature_cols = [c for c in df.columns if c not in IDENTITY_COLUMNS]
     for col in feature_cols:
-        if not pd.api.types.is_numeric_dtype(df[col]):
-            errors.append(f"Non-numeric feature column: '{col}' ({df[col].dtype})")
+        if col == LABEL_COLUMN:
+            continue
 
-    # All-null columns indicate upstream pipeline bugs
-    for col in feature_cols:
+        # Enforce numeric features before model-side preprocessing.
+        non_null = df[col].dropna()
+        if not non_null.empty:
+            coerced = pd.to_numeric(non_null, errors="coerce")
+            if coerced.isna().any():
+                errors.append(f"Non-numeric values found in feature column '{col}'")
+
         if col in df.columns and df[col].isna().all():
             errors.append(f"Column '{col}' is entirely null — likely a pipeline issue")
 

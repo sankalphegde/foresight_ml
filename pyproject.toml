@@ -39,6 +39,7 @@ dependencies = [
     "uvicorn>=0.40.0",
     "slowapi>=0.1.9",
     "litellm>=1.83.0",
+    "evidently==0.4.36",
 ]
 
 [build-system]
