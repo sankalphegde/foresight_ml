@@ -169,7 +169,7 @@ def render() -> None:
             "Minimum risk score",
             min_value=0.0,
             max_value=1.0,
-            value=0.5,
+            value=0.1,
             step=0.05,
             help="Show companies with predicted distress probability above this value. "
             "High risk ≥ 0.70, Medium ≥ 0.30",
