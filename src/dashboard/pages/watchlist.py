@@ -7,7 +7,6 @@ with company names, sector breakdown chart, filters, and CSV export.
 from __future__ import annotations
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 from src.dashboard.data.gcs_loader import (
@@ -64,14 +63,15 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
 
     # Merge financial signals from panel
     if not panel.empty:
-        panel_latest = (
-            panel.sort_values(["firm_id", "fiscal_year", "fiscal_period"])
-            .drop_duplicates(subset=["firm_id"], keep="last")
-        )
+        panel_latest = panel.sort_values(
+            ["firm_id", "fiscal_year", "fiscal_period"]
+        ).drop_duplicates(subset=["firm_id"], keep="last")
         signal_cols = [
             "net_income",
-            "operating_cash_flow", "NetCashProvidedByUsedInOperatingActivities",
-            "retained_earnings", "RetainedEarningsAccumulatedDeficit",
+            "operating_cash_flow",
+            "NetCashProvidedByUsedInOperatingActivities",
+            "retained_earnings",
+            "RetainedEarningsAccumulatedDeficit",
             "total_liabilities",
             "total_assets",
         ]
@@ -169,7 +169,7 @@ def render() -> None:
             "Minimum risk score",
             min_value=0.0,
             max_value=1.0,
-            value=0.5,
+            value=0.1,
             step=0.05,
             help="Show companies with predicted distress probability above this value. "
             "High risk ≥ 0.70, Medium ≥ 0.30",
@@ -191,17 +191,20 @@ def render() -> None:
 
     # ── Summary metrics ──────────────────────────────────────────────
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Companies shown", f"{len(filtered):,}",
-              help="Number of companies matching current filter")
-    m2.metric("🔴 High risk (≥0.70)", len(filtered[filtered["risk_score"] >= 0.70]),
-              help="Companies with >70% distress probability")
+    m1.metric(
+        "Companies shown", f"{len(filtered):,}", help="Number of companies matching current filter"
+    )
+    m2.metric(
+        "🔴 High risk (≥0.70)",
+        len(filtered[filtered["risk_score"] >= 0.70]),
+        help="Companies with >70% distress probability",
+    )
     m3.metric(
         "🟡 Medium (0.30–0.70)",
         len(filtered[(filtered["risk_score"] >= 0.30) & (filtered["risk_score"] < 0.70)]),
         help="Companies with 30-70% distress probability",
     )
-    m4.metric("Total scored", f"{len(watchlist):,}",
-              help="All companies scored by the model")
+    m4.metric("Total scored", f"{len(watchlist):,}", help="All companies scored by the model")
 
     # ── Add company names ────────────────────────────────────────────
     if not company_map.empty:
@@ -246,7 +249,10 @@ def render() -> None:
         st.session_state["view_company"] = firm_id
         with info_col:
             st.markdown("<br>", unsafe_allow_html=True)
-            st.info("Company selected. Click **Risk Analysis** in the sidebar to view details.", icon="👈")
+            st.info(
+                "Company selected. Click **Risk Analysis** in the sidebar to view details.",
+                icon="👈",
+            )
 
     st.markdown(
         f"**Showing {len(filtered):,} companies** · Sorted by predicted distress probability"
@@ -274,6 +280,4 @@ def render() -> None:
         height=min(len(display) * 38 + 40, 600),
     )
 
-    st.caption(
-        f"Threshold: {threshold:.0%} · {len(filtered):,} of {len(watchlist):,} companies"
-    )
+    st.caption(f"Threshold: {threshold:.0%} · {len(filtered):,} of {len(watchlist):,} companies")
