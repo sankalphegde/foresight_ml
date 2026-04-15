@@ -27,14 +27,15 @@ async def get_company_history(cik: str) -> list[dict[str, Any]]:
 
         # Deduplicate by firm + quarter, keep highest distress_probability
         company_data = (
-            company_data
-            .sort_values("distress_probability", ascending=False)
+            company_data.sort_values("distress_probability", ascending=False)
             .drop_duplicates(subset=["firm_id", "fiscal_year", "fiscal_period"], keep="first")
             .sort_values(["fiscal_year", "fiscal_period"])
         )
 
         # Convert timestamps to strings for JSON serialization
-        for col in company_data.select_dtypes(include=["datetime64[ns, UTC]", "datetime64[ns]"]).columns:
+        for col in company_data.select_dtypes(
+            include=["datetime64[ns, UTC]", "datetime64[ns]"]
+        ).columns:
             company_data[col] = company_data[col].astype(str)
 
         return cast(list[dict[str, Any]], company_data.to_dict(orient="records"))

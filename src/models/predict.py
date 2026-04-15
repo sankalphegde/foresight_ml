@@ -15,12 +15,10 @@ import mlflow
 import numpy as np
 import pandas as pd
 from mlflow.tracking import MlflowClient
-from pandas.api.types import is_datetime64_any_dtype
 
 from src.models.inference_schema import (
     IDENTITY_COLUMNS,
     LABEL_COLUMN,
-    validate_inference_input,
     validate_inference_output,
 )
 from src.models.manifest_io import upload_manifest_to_gcs, write_manifest
@@ -54,15 +52,16 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
     # --- Step 1: Load model and fetch version metadata ---
     logger.info(f"Loading Production model from {model_uri}")
 
-    import os
     import tempfile
 
     import gcsfs
     from xgboost import XGBClassifier
 
-    def _load_xgb_from_gcs() -> "_GCSModelWrapper":
+    def _load_xgb_from_gcs():
         """Download XGBoost model from GCS and wrap it."""
-        gcs_model_path = f"gs://{os.environ.get('GCS_BUCKET', 'financial-distress-data')}/models/xgb_model.pkl"
+        gcs_model_path = (
+            f"gs://{os.environ.get('GCS_BUCKET', 'financial-distress-data')}/models/xgb_model.pkl"
+        )
         fs = gcsfs.GCSFileSystem()
         with tempfile.NamedTemporaryFile(suffix=".ubj", delete=False) as tmp:
             tmp_path = tmp.name
@@ -72,6 +71,7 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
             _xgb.load_model(tmp_path)
         except Exception:
             import joblib
+
             _xgb = joblib.load(tmp_path)
 
         class _GCSModelWrapper:
@@ -110,7 +110,7 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
                     except Exception:
                         return None
 
-            model: "_GCSModelWrapper | _MLflowWrapper" = _MLflowWrapper()
+            model = _MLflowWrapper()
             logger.info("MLflow model loaded and unwrapped for predict_proba")
         except Exception as unwrap_err:
             logger.warning(
@@ -161,7 +161,11 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
     missing_identity = [c for c in IDENTITY_COLUMNS if c not in latest_features_df.columns]
     if missing_identity:
         raise ValueError(f"Input validation failed: missing identity columns {missing_identity}")
-    logger.info("Input schema validation passed (%d rows, %d cols)", len(latest_features_df), len(latest_features_df.columns))
+    logger.info(
+        "Input schema validation passed (%d rows, %d cols)",
+        len(latest_features_df),
+        len(latest_features_df.columns),
+    )
 
     # --- Step 3: Generate predictions ---
     raw_feature_columns = [c for c in latest_features_df.columns if c not in IDENTITY_COLUMNS]
@@ -172,6 +176,7 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
     # Apply the same numeric transformation used during training:
     # datetime → int64, categorical → pd.get_dummies(dummy_na=True)
     from src.models.train import _to_numeric_frame  # noqa: PLC0415
+
     X_all = _to_numeric_frame(latest_features_df)
 
     # Align to the model's expected feature columns (handles unseen/missing dummies)
@@ -214,7 +219,10 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
             on=["firm_id", "fiscal_year", "fiscal_period"],
             how="left",
         )
-        logger.info("SHAP values merged: %d rows matched", final_scored_df["top_features_json"].notna().sum())
+        logger.info(
+            "SHAP values merged: %d rows matched",
+            final_scored_df["top_features_json"].notna().sum(),
+        )
     except Exception as shap_err:
         logger.warning(
             "SHAP values unavailable (%s) — scores.parquet will be written without "

@@ -557,8 +557,14 @@ class TestApiClientEndpoints:
         from src.dashboard.data.api_client import predict
 
         mock.return_value = {"distress_probability": 0.5}
-        payload = {"firm_id": "0000001234", "fiscal_year": 2023, "fiscal_period": "Q1",
-                    "total_assets": 1000, "total_liabilities": 500, "net_income": 100}
+        payload = {
+            "firm_id": "0000001234",
+            "fiscal_year": 2023,
+            "fiscal_period": "Q1",
+            "total_assets": 1000,
+            "total_liabilities": 500,
+            "net_income": 100,
+        }
         assert predict(payload) == {"distress_probability": 0.5}
 
     @patch("src.dashboard.data.api_client._get")

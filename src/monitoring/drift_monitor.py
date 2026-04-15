@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from evidently.report import Report
 from evidently.metric_preset import DataDriftPreset, DataQualityPreset
+from evidently.report import Report
 
 from src.utils.logging import get_logger
 

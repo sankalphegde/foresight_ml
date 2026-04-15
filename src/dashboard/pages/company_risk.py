@@ -250,7 +250,7 @@ def render() -> None:
     if not selected_firm:
         return
 
-# ── Fetch company data ───────────────────────────────────────────
+    # ── Fetch company data ───────────────────────────────────────────
     firm_preds = None
     if not predictions.empty:
         fp = predictions[predictions["firm_id"] == selected_firm].copy()
@@ -343,9 +343,15 @@ def render() -> None:
                 "firm_id": selected_firm,
                 "fiscal_year": latest_year,
                 "fiscal_period": latest_period,
-                "total_assets": float(history.iloc[-1].get("total_assets", 0)) if not history.empty else 0.0,
-                "total_liabilities": float(history.iloc[-1].get("total_liabilities", 0)) if not history.empty else 0.0,
-                "net_income": float(history.iloc[-1].get("net_income", 0)) if not history.empty else 0.0,
+                "total_assets": float(history.iloc[-1].get("total_assets", 0))
+                if not history.empty
+                else 0.0,
+                "total_liabilities": float(history.iloc[-1].get("total_liabilities", 0))
+                if not history.empty
+                else 0.0,
+                "net_income": float(history.iloc[-1].get("net_income", 0))
+                if not history.empty
+                else 0.0,
             }
             with st.spinner("Scoring via API..."):
                 result = predict(payload)
@@ -384,18 +390,30 @@ def render() -> None:
                 x=[sel_q],
                 y=[sel_prob],
                 mode="markers",
-                marker={"size": 14, "color": risk_color(latest_score), "line": {"width": 2, "color": "white"}},
+                marker={
+                    "size": 14,
+                    "color": risk_color(latest_score),
+                    "line": {"width": 2, "color": "white"},
+                },
                 hovertemplate=f"Selected: {sel_q}<br>Probability: {sel_prob:.2%}<extra></extra>",
                 showlegend=False,
             )
         )
         fig.add_hline(
-            y=0.70, line_dash="dash", line_color=COLORS["high"], opacity=0.4,
-            annotation_text="High risk", annotation_position="top left",
+            y=0.70,
+            line_dash="dash",
+            line_color=COLORS["high"],
+            opacity=0.4,
+            annotation_text="High risk",
+            annotation_position="top left",
         )
         fig.add_hline(
-            y=0.30, line_dash="dash", line_color=COLORS["medium"], opacity=0.3,
-            annotation_text="Medium", annotation_position="top left",
+            y=0.30,
+            line_dash="dash",
+            line_color=COLORS["medium"],
+            opacity=0.3,
+            annotation_text="Medium",
+            annotation_position="top left",
         )
         fig.update_yaxes(title_text="Distress probability", range=[-0.05, 1.05], tickformat=".0%")
         fig.update_layout(height=280, showlegend=False)

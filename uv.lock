@@ -1581,11 +1581,10 @@ wheels = [
 
 [[package]]
 name = "evidently"
-version = "0.7.21"
+version = "0.4.36"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
-    { name = "cryptography" },
     { name = "deprecation" },
     { name = "dynaconf" },
     { name = "fsspec" },
@@ -1593,7 +1592,11 @@ dependencies = [
     { name = "litestar" },
     { name = "nltk" },
     { name = "numpy" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc" },
+    { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-proto" },
+    { name = "opentelemetry-sdk" },
     { name = "pandas", extra = ["parquet"] },
     { name = "plotly" },
     { name = "pydantic" },
@@ -1607,13 +1610,12 @@ dependencies = [
     { name = "typing-inspect" },
     { name = "ujson" },
     { name = "urllib3" },
-    { name = "uuid6" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "watchdog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c0/da/cbfce40d20d76b2b0edaa258a97aa35a33bd0ad308539fa055872d79a5b5/evidently-0.7.21.tar.gz", hash = "sha256:f13c415d749dd73825bd1ec485136eaf9261b3794d765d2844718b7ffe167998", size = 7678489, upload-time = "2026-03-10T14:15:37.677Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/5c/745b228ea398ce75f8c198657c171904f9df39a1e7ef611813ce254a04f4/evidently-0.4.36.tar.gz", hash = "sha256:32f1e8890988bb068dd3fb0394cd916a7ab03f0d66822b5f13fb135c936a1f5f", size = 2274155, upload-time = "2024-08-15T17:34:19.915Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/da/7e/1728a3a1e8fcd6865f3642c260feb5c03b436b62d5b12812f50d4d27e8ed/evidently-0.7.21-py3-none-any.whl", hash = "sha256:04e247de0ce8eabe618687770568ca06162e64a39ebf10e33ef6ea3aeda31187", size = 11744189, upload-time = "2026-03-10T14:15:34.015Z" },
+    { url = "https://files.pythonhosted.org/packages/29/27/090c2a363451c8c5aea1f51c0ec598313da3ad5dabb5a95791521409a3ef/evidently-0.4.36-py3-none-any.whl", hash = "sha256:332849bd2dd4b3e2ee551a9ece8f813cb32e90065e2f0e153d253f958a5df13f", size = 3408070, upload-time = "2024-08-15T17:34:17.229Z" },
 ]
 
 [[package]]
@@ -1880,7 +1882,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=46.0.7" },
     { name = "dvc", specifier = ">=3.66.1" },
     { name = "dvc-gs", specifier = ">=3.0.2" },
-    { name = "evidently", specifier = "==0.7.21" },
+    { name = "evidently", specifier = "==0.4.36" },
     { name = "fastapi", specifier = ">=0.117.1" },
     { name = "gcsfs", specifier = ">=2024.10.0" },
     { name = "google-cloud-bigquery", specifier = ">=3.14.0" },

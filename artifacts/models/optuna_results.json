@@ -1,12 +1,12 @@
 {
-  "baseline_val_roc": 0.975640742671591,
+  "baseline_val_roc": 0.9530331698109988,
   "best_params": {
-    "learning_rate": 0.06403277988175617,
+    "learning_rate": 0.15614917085695515,
     "max_depth": 3,
-    "n_estimators": 200,
+    "n_estimators": 800,
     "subsample": 0.6,
     "colsample_bytree": 1.0,
-    "min_child_weight": 10
+    "min_child_weight": 1
   },
-  "test_roc_auc": 0.9756519246560974
+  "test_roc_auc": 0.9411030521121433
 }

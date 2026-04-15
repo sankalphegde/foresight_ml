@@ -285,7 +285,9 @@ def save_sensitivity_plot(study: Any, out_path: Path) -> None:
     import optuna
 
     if len(study.trials) < 2:
-        logger.warning("Skipping sensitivity plot — need at least 2 Optuna trials, got %d.", len(study.trials))
+        logger.warning(
+            "Skipping sensitivity plot — need at least 2 Optuna trials, got %d.", len(study.trials)
+        )
         return
 
     importances = optuna.importance.get_param_importances(study)
@@ -388,7 +390,7 @@ def main() -> None:
     # Log model + artifacts to MLflow so registry.py can load them via artifact URI
     import mlflow.xgboost as mlflow_xgb
 
-    with mlflow.start_run(run_name="final_model") as final_run:
+    with mlflow.start_run(run_name="final_model"):
         mlflow.log_params(best_params)
         mlflow.log_metric("test_roc_auc", float(test_roc))
         mlflow.log_metric("baseline_val_roc", float(baseline_roc))

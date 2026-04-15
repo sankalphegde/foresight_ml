@@ -12,7 +12,9 @@ from src.api.schemas import AlertItem, AlertsResponse
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Alerts"])
 
-_LOCAL_REF = Path(__file__).parent.parent.parent.parent / "artifacts" / "reference" / "company_names.csv"
+_LOCAL_REF = (
+    Path(__file__).parent.parent.parent.parent / "artifacts" / "reference" / "company_names.csv"
+)
 _GCS_REF = "gs://financial-distress-data/reference/company_names.csv"
 
 
@@ -22,9 +24,15 @@ def _load_name_maps() -> tuple[dict[str, str], dict[str, str]]:
         if _LOCAL_REF.exists():
             ref = pd.read_csv(_LOCAL_REF, dtype=str).fillna("")
         else:
-            ref = pd.read_parquet(_GCS_REF) if _GCS_REF.endswith(".parquet") else pd.read_csv(_GCS_REF, dtype=str, storage_options={"token": "google_default"})
+            ref = (
+                pd.read_parquet(_GCS_REF)
+                if _GCS_REF.endswith(".parquet")
+                else pd.read_csv(_GCS_REF, dtype=str, storage_options={"token": "google_default"})
+            )
             ref = ref.fillna("")
-        return dict(zip(ref["firm_id"], ref["name"])), dict(zip(ref["firm_id"], ref["ticker"]))
+        return dict(zip(ref["firm_id"], ref["name"], strict=False)), dict(
+            zip(ref["firm_id"], ref["ticker"], strict=False)
+        )
     except Exception as e:
         logger.warning("Could not load company name reference: %s", e)
         return {}, {}
@@ -42,9 +50,8 @@ async def get_high_risk_alerts(
         df = pd.read_parquet(scores_path, filesystem=fs)
 
         # Deduplicate: keep the highest distress probability per firm
-        df = (
-            df.sort_values("distress_probability", ascending=False)
-            .drop_duplicates(subset=["firm_id"], keep="first")
+        df = df.sort_values("distress_probability", ascending=False).drop_duplicates(
+            subset=["firm_id"], keep="first"
         )
 
         # Load company name + ticker maps

@@ -193,7 +193,8 @@ def run_feature_bias_pipeline(**context: Any) -> None:
 
     if completed.returncode != 0:
         raise RuntimeError(f"Feature/bias pipeline failed with exit code {completed.returncode}")
-    
+
+
 def run_drift_monitoring(**context: Any) -> None:
     """Run Evidently drift monitoring and write reports to GCS."""
     summary = run_drift_monitor()

@@ -244,10 +244,9 @@ def load_predictions() -> pd.DataFrame:
 
         # Prepare features — drop non-numeric columns
         drop_cols = [label_col] + [
-            c for c in test_df.columns
-            if c in id_cols
-            or test_df[c].dtype == "object"
-            or is_datetime64_any_dtype(test_df[c])
+            c
+            for c in test_df.columns
+            if c in id_cols or test_df[c].dtype == "object" or is_datetime64_any_dtype(test_df[c])
         ]
         features = test_df.drop(columns=[c for c in drop_cols if c in test_df.columns])
         features = pd.get_dummies(features, dummy_na=True)
@@ -297,7 +296,9 @@ def load_company_map() -> pd.DataFrame:
         else:
             # Try GCS
             try:
-                df = pd.read_csv(f"gs://{GCS_BUCKET}/reference/company_names.csv", dtype={"cik": str})
+                df = pd.read_csv(
+                    f"gs://{GCS_BUCKET}/reference/company_names.csv", dtype={"cik": str}
+                )
             except Exception:
                 try:
                     df = pd.read_csv(f"gs://{GCS_BUCKET}/reference/companies.csv")
@@ -311,6 +312,7 @@ def load_company_map() -> pd.DataFrame:
     except Exception as e:
         log.warning("Company map not available: %s", e)
         return empty
+
 
 # ---------------------------------------------------------------------------
 # Query helpers

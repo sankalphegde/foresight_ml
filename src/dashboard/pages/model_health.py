@@ -134,14 +134,19 @@ def render() -> None:
         drift_label = "Detected" if drift_detected else "None"
 
         drift_rows = [
-            ("Dataset drift",
-             f'<span style="background:{drift_bg};color:{drift_color};'
-             f'padding:2px 10px;border-radius:20px;font-size:11px;font-weight:500">'
-             f'{drift_label}</span>'),
+            (
+                "Dataset drift",
+                f'<span style="background:{drift_bg};color:{drift_color};'
+                f'padding:2px 10px;border-radius:20px;font-size:11px;font-weight:500">'
+                f"{drift_label}</span>",
+            ),
             ("Report date", str(drift_date)),
             ("Features analyzed", str(features_checked)),
             ("Features drifted", str(n_drifted)),
-            ("Drift share", f"{drift_share:.0%}" if isinstance(drift_share, int | float) else str(drift_share)),
+            (
+                "Drift share",
+                f"{drift_share:.0%}" if isinstance(drift_share, int | float) else str(drift_share),
+            ),
             ("Retrain triggered", "Yes" if retrain_triggered else "No"),
         ]
 
@@ -163,7 +168,8 @@ def render() -> None:
                     name = feat.get("feature", str(feat))
                     psi = feat.get("psi", 0)
                     color = (
-                        COLORS["high"] if psi > 0.25
+                        COLORS["high"]
+                        if psi > 0.25
                         else (COLORS["medium"] if psi > 0.10 else COLORS["low"])
                     )
                     st.markdown(
@@ -186,19 +192,23 @@ def render() -> None:
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric(
-            "Total scored", f"{len(predictions):,}",
+            "Total scored",
+            f"{len(predictions):,}",
             help="Number of company-quarters scored by the model",
         )
         m2.metric(
-            "Mean probability", f"{probs.mean():.2%}",
+            "Mean probability",
+            f"{probs.mean():.2%}",
             help="Average predicted distress probability across all companies",
         )
         m3.metric(
-            "High risk (≥0.70)", f"{(probs >= 0.70).sum():,}",
+            "High risk (≥0.70)",
+            f"{(probs >= 0.70).sum():,}",
             help="Companies with >70% predicted chance of distress",
         )
         m4.metric(
-            "Median probability", f"{probs.median():.4f}",
+            "Median probability",
+            f"{probs.median():.4f}",
             help="Middle value — 50% of companies are above, 50% below",
         )
 
@@ -212,12 +222,20 @@ def render() -> None:
             )
         )
         fig.add_vline(
-            x=0.70, line_dash="dash", line_color=COLORS["high"], opacity=0.6,
-            annotation_text="High risk", annotation_position="top right",
+            x=0.70,
+            line_dash="dash",
+            line_color=COLORS["high"],
+            opacity=0.6,
+            annotation_text="High risk",
+            annotation_position="top right",
         )
         fig.add_vline(
-            x=0.30, line_dash="dash", line_color=COLORS["medium"], opacity=0.4,
-            annotation_text="Medium", annotation_position="top right",
+            x=0.30,
+            line_dash="dash",
+            line_color=COLORS["medium"],
+            opacity=0.4,
+            annotation_text="Medium",
+            annotation_position="top right",
         )
         fig.update_xaxes(title_text="Distress probability", range=[0, 1])
         fig.update_yaxes(title_text="Number of companies")
@@ -235,9 +253,15 @@ def render() -> None:
 
     if not slice_perf.empty:
         display_cols = [
-            c for c in [
-                "dimension", "slice", "sample_count", "roc_auc",
-                "recall_at_5pct", "precision_at_5pct", "brier_score",
+            c
+            for c in [
+                "dimension",
+                "slice",
+                "sample_count",
+                "roc_auc",
+                "recall_at_5pct",
+                "precision_at_5pct",
+                "brier_score",
             ]
             if c in slice_perf.columns
         ]
@@ -247,4 +271,6 @@ def render() -> None:
             hide_index=True,
         )
     else:
-        st.info("Slice performance data not yet available. Run the evaluation pipeline to generate per-slice metrics.")
+        st.info(
+            "Slice performance data not yet available. Run the evaluation pipeline to generate per-slice metrics."
+        )

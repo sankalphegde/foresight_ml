@@ -143,35 +143,39 @@ def render() -> None:
         # Quality gate — uses real ROC-AUC
         if roc_auc > 0:
             passed = roc_auc >= 0.80
-            train_tasks.append((
-                "Quality gate (ROC-AUC)",
-                "~0.2m",
-                "success" if passed else "failed",
-                f"{roc_auc:.4f} {'✓' if passed else '✗'}",
-            ))
+            train_tasks.append(
+                (
+                    "Quality gate (ROC-AUC)",
+                    "~0.2m",
+                    "success" if passed else "failed",
+                    f"{roc_auc:.4f} {'✓' if passed else '✗'}",
+                )
+            )
         else:
             train_tasks.append(("Quality gate (ROC-AUC)", "—", "pending", "Pending"))
 
-        train_tasks.extend([
-            (
-                "SHAP explanations",
-                "~8m",
-                "success" if shap_exists else "pending",
-                "Success" if shap_exists else "Pending",
-            ),
-            (
-                "Batch inference",
-                "~5m",
-                "success" if has_predictions else "pending",
-                f"{len(predictions):,} rows" if has_predictions else "Pending",
-            ),
-            (
-                "Registry + promotion",
-                "~0.5m",
-                "success" if model_exists else "pending",
-                "Promoted" if model_exists else "Pending",
-            ),
-        ])
+        train_tasks.extend(
+            [
+                (
+                    "SHAP explanations",
+                    "~8m",
+                    "success" if shap_exists else "pending",
+                    "Success" if shap_exists else "Pending",
+                ),
+                (
+                    "Batch inference",
+                    "~5m",
+                    "success" if has_predictions else "pending",
+                    f"{len(predictions):,} rows" if has_predictions else "Pending",
+                ),
+                (
+                    "Registry + promotion",
+                    "~0.5m",
+                    "success" if model_exists else "pending",
+                    "Promoted" if model_exists else "Pending",
+                ),
+            ]
+        )
 
         for name, duration, status, detail in train_tasks:
             st.markdown(_pipeline_row(name, duration, status, detail), unsafe_allow_html=True)
@@ -238,7 +242,5 @@ def render() -> None:
     st.markdown("---")
     link1, link2, link3 = st.columns(3)
     link1.markdown("[MLflow ↗](https://foresight-mlflow-6ool3rlbea-uc.a.run.app)")
-    link2.markdown(
-        f"[GCS Bucket ↗](https://console.cloud.google.com/storage/browser/{GCS_BUCKET})"
-    )
+    link2.markdown(f"[GCS Bucket ↗](https://console.cloud.google.com/storage/browser/{GCS_BUCKET})")
     link3.markdown("[GitHub ↗](https://github.com/Foresight-ML/foresight_ml)")
