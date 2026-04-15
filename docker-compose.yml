@@ -18,6 +18,7 @@ services:
       - GCS_BUCKET=${GCS_BUCKET}
       - FRED_API_KEY=${FRED_API_KEY}
       - SEC_USER_AGENT=${SEC_USER_AGENT}
+      - AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT="120"
     volumes:
       - ./src/airflow/dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
