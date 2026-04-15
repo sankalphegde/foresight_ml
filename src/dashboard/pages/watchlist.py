@@ -49,9 +49,16 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
         return pd.DataFrame()
 
     predictions = predictions.sort_values(["firm_id", "fiscal_year", "fiscal_period"])
-    latest = predictions.drop_duplicates(subset=["firm_id"], keep="last").copy()
 
-    # Quarter-over-quarter trend
+    # Use the PEAK (highest-ever) distress score per firm so historically
+    # distressed companies surface even if their most recent quarter score is low.
+    latest = (
+        predictions.sort_values("distress_probability", ascending=False)
+        .drop_duplicates(subset=["firm_id"], keep="first")
+        .copy()
+    )
+
+    # Quarter-over-quarter trend: compare peak quarter to the one before it
     prev = predictions.groupby("firm_id").nth(-2).reset_index()
     if not prev.empty and "distress_probability" in prev.columns:
         prev_col = prev[["firm_id", "distress_probability"]].rename(
@@ -169,9 +176,9 @@ def render() -> None:
             "Minimum risk score",
             min_value=0.0,
             max_value=1.0,
-            value=0.5,
+            value=0.7,
             step=0.05,
-            help="Show companies with predicted distress probability above this value. "
+            help="Show companies whose peak predicted distress probability exceeded this value. "
             "High risk ≥ 0.70, Medium ≥ 0.30",
         )
 
