@@ -27,20 +27,32 @@ def mock_cloud_environment(monkeypatch: pytest.MonkeyPatch) -> None:
                 [
                     {
                         "firm_id": "0000123456",
+                        "fiscal_year": 2025,
+                        "fiscal_period": "Q4",
                         "company_name": "Test A",
                         "distress_probability": 0.8,
+                        "confidence_interval_lower": 0.75,
+                        "confidence_interval_upper": 0.85,
                         "active_signals": 2,
                     },
                     {
                         "firm_id": "0000123457",
+                        "fiscal_year": 2025,
+                        "fiscal_period": "Q4",
                         "company_name": "Test B",
                         "distress_probability": 0.9,
+                        "confidence_interval_lower": 0.85,
+                        "confidence_interval_upper": 0.95,
                         "active_signals": 3,
                     },
                     {
                         "firm_id": "0000123458",
+                        "fiscal_year": 2025,
+                        "fiscal_period": "Q4",
                         "company_name": "Test C",
                         "distress_probability": 0.1,
+                        "confidence_interval_lower": 0.05,
+                        "confidence_interval_upper": 0.15,
                         "active_signals": 0,
                     },
                 ]
