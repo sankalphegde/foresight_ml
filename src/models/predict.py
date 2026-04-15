@@ -51,36 +51,27 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
 
     # --- Step 1: Load model and fetch version metadata ---
     logger.info(f"Loading Production model from {model_uri}")
-    try:
-        model = mlflow.pyfunc.load_model(model_uri)
-    except Exception as mlflow_load_err:
-        # MLflow artifact store may be empty if train.py ran before log_model was added.
-        # Fall back to loading the XGBoost model directly from GCS.
-        import os
-        import tempfile
 
-        import gcsfs
-        from xgboost import XGBClassifier
+    import os
+    import tempfile
 
-        logger.warning(
-            "MLflow artifact load failed (%s). Falling back to GCS model at "
-            "gs://financial-distress-data/models/xgb_model.pkl",
-            mlflow_load_err,
-        )
+    import gcsfs
+    from xgboost import XGBClassifier
+
+    def _load_xgb_from_gcs() -> "_GCSModelWrapper":
+        """Download XGBoost model from GCS and wrap it."""
         gcs_model_path = f"gs://{os.environ.get('GCS_BUCKET', 'financial-distress-data')}/models/xgb_model.pkl"
         fs = gcsfs.GCSFileSystem()
         with tempfile.NamedTemporaryFile(suffix=".ubj", delete=False) as tmp:
             tmp_path = tmp.name
         fs.get(gcs_model_path.replace("gs://", ""), tmp_path)
         _xgb = XGBClassifier()
-        # Try XGBoost native format first (ubj/json), fall back to pickle
         try:
             _xgb.load_model(tmp_path)
         except Exception:
             import joblib
             _xgb = joblib.load(tmp_path)
 
-        # Wrap in a simple object that matches the .predict() interface mlflow pyfunc uses
         class _GCSModelWrapper:
             def predict(self, X: "pd.DataFrame") -> "np.ndarray":
                 return _xgb.predict_proba(X)[:, 1]
@@ -92,7 +83,49 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
                 except Exception:
                     return None
 
-        model = _GCSModelWrapper()
+        return _GCSModelWrapper()
+
+    try:
+        _pyfunc = mlflow.pyfunc.load_model(model_uri)
+
+        # MLflow pyfunc.predict() returns class labels (0/1) for XGBoost classifiers,
+        # not probabilities. Unwrap the native model to get predict_proba instead.
+        try:
+            _native = _pyfunc.unwrap_python_model()
+            if hasattr(_native, "predict_proba"):
+                _xgb_native = _native
+            else:
+                _xgb_native = _pyfunc._model_impl.xgb_model  # type: ignore[attr-defined]
+
+            class _MLflowWrapper:
+                def predict(self, X: "pd.DataFrame") -> "np.ndarray":
+                    return _xgb_native.predict_proba(X)[:, 1]
+
+                @property
+                def feature_names(self) -> "list[str] | None":
+                    try:
+                        return list(_xgb_native.get_booster().feature_names or [])
+                    except Exception:
+                        return None
+
+            model: "_GCSModelWrapper | _MLflowWrapper" = _MLflowWrapper()
+            logger.info("MLflow model loaded and unwrapped for predict_proba")
+        except Exception as unwrap_err:
+            logger.warning(
+                "Could not unwrap MLflow pyfunc for predict_proba (%s). "
+                "Falling back to GCS model.",
+                unwrap_err,
+            )
+            model = _load_xgb_from_gcs()
+
+    except Exception as mlflow_load_err:
+        # MLflow artifact store empty — fall back to GCS
+        logger.warning(
+            "MLflow artifact load failed (%s). Falling back to GCS model at "
+            "gs://financial-distress-data/models/xgb_model.pkl",
+            mlflow_load_err,
+        )
+        model = _load_xgb_from_gcs()
 
     client = MlflowClient()
     prod_versions = client.get_latest_versions(model_name, stages=["Production"])
@@ -227,4 +260,7 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
 
 
 if __name__ == "__main__":
-    run_batch_inference("gs://financial-distress-data/features/latest.parquet", version_str="1.0")
+    run_batch_inference(
+        "gs://financial-distress-data/features/labeled_v1/labeled_panel.parquet",
+        version_str="1.0",
+    )
