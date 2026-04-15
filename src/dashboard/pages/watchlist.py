@@ -1,7 +1,7 @@
 """Page 2 — High-Risk Watchlist.
 
 Filterable table of companies ranked by predicted distress probability,
-with company names, sector breakdown chart, filters, and CSV export.
+with company names, filters, and CSV export.
 """
 
 from __future__ import annotations
@@ -63,15 +63,14 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
 
     # Merge financial signals from panel
     if not panel.empty:
-        panel_latest = panel.sort_values(
-            ["firm_id", "fiscal_year", "fiscal_period"]
-        ).drop_duplicates(subset=["firm_id"], keep="last")
+        panel_latest = (
+            panel.sort_values(["firm_id", "fiscal_year", "fiscal_period"])
+            .drop_duplicates(subset=["firm_id"], keep="last")
+        )
         signal_cols = [
             "net_income",
-            "operating_cash_flow",
-            "NetCashProvidedByUsedInOperatingActivities",
-            "retained_earnings",
-            "RetainedEarningsAccumulatedDeficit",
+            "operating_cash_flow", "NetCashProvidedByUsedInOperatingActivities",
+            "retained_earnings", "RetainedEarningsAccumulatedDeficit",
             "total_liabilities",
             "total_assets",
         ]
@@ -107,6 +106,7 @@ def _build_watchlist(predictions: pd.DataFrame, panel: pd.DataFrame) -> pd.DataF
         rows.append(
             {
                 "firm_id": r["firm_id"],
+                "distress_label": int(r.get("distress_label", 0)),
                 "risk_score": prob,
                 "change": change,
                 "signals": " · ".join(signals) if signals else "—",
@@ -169,14 +169,19 @@ def render() -> None:
             "Minimum risk score",
             min_value=0.0,
             max_value=1.0,
-            value=0.5,
+            value=0.10,
             step=0.05,
             help="Show companies with predicted distress probability above this value. "
             "High risk ≥ 0.70, Medium ≥ 0.30",
         )
 
     # Apply filters
-    filtered = watchlist[watchlist["risk_score"] >= threshold].copy()
+    if "distress_label" in watchlist.columns:
+        filtered = watchlist[
+            (watchlist["distress_label"] == 1) | (watchlist["risk_score"] >= threshold)
+        ].copy()
+    else:
+        filtered = watchlist[watchlist["risk_score"] >= threshold].copy()
     filtered = filtered.sort_values("risk_score", ascending=False)
 
     with col_export:
@@ -190,21 +195,17 @@ def render() -> None:
         )
 
     # ── Summary metrics ──────────────────────────────────────────────
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric(
-        "Companies shown", f"{len(filtered):,}", help="Number of companies matching current filter"
+    above_50 = len(watchlist[watchlist["risk_score"] >= 0.50])
+    st.info(
+        f"**{above_50} companies** currently above 50% distress probability.",
+        icon="📊",
     )
-    m2.metric(
-        "🔴 High risk (≥0.70)",
-        len(filtered[filtered["risk_score"] >= 0.70]),
-        help="Companies with >70% distress probability",
-    )
-    m3.metric(
-        "🟡 Medium (0.30–0.70)",
-        len(filtered[(filtered["risk_score"] >= 0.30) & (filtered["risk_score"] < 0.70)]),
-        help="Companies with 30-70% distress probability",
-    )
-    m4.metric("Total scored", f"{len(watchlist):,}", help="All companies scored by the model")
+
+    m1, m2 = st.columns(2)
+    m1.metric("Companies shown", f"{len(filtered):,}",
+              help="Number of companies matching current filter")
+    m2.metric("Total scored", f"{len(watchlist):,}",
+              help="All companies scored by the model")
 
     # ── Add company names ────────────────────────────────────────────
     if not company_map.empty:
@@ -219,7 +220,7 @@ def render() -> None:
     # ── Watchlist table ──────────────────────────────────────────────
     if filtered.empty:
         st.info(f"No companies found with risk score above {threshold:.0%}")
-        if threshold > 0.9:
+        if threshold > 0.5:
             st.info(
                 "Try lowering the threshold. Most companies have low distress probability, "
                 "which is expected — only 2-5% of companies experience financial distress."
@@ -249,13 +250,10 @@ def render() -> None:
         st.session_state["view_company"] = firm_id
         with info_col:
             st.markdown("<br>", unsafe_allow_html=True)
-            st.info(
-                "Company selected. Click **Risk Analysis** in the sidebar to view details.",
-                icon="👈",
-            )
+            st.info("Company selected. Click **Risk Analysis** in the sidebar to view details.", icon="👈")
 
     st.markdown(
-        f"**Showing {len(filtered):,} companies** · Sorted by predicted distress probability"
+        f"**Showing {len(filtered):,} companies** · Sorted by distress probability"
     )
 
     display = filtered.copy()
@@ -270,9 +268,9 @@ def render() -> None:
         "firm_id": "CIK",
         "risk": "Risk Score",
         "trend": "vs Last Qtr",
-        "signals": "Distress Signals",
         "quarter": "Quarter",
     }
+
     st.dataframe(
         display[list(col_map.keys())].rename(columns=col_map),
         use_container_width=True,
@@ -280,4 +278,6 @@ def render() -> None:
         height=min(len(display) * 38 + 40, 600),
     )
 
-    st.caption(f"Threshold: {threshold:.0%} · {len(filtered):,} of {len(watchlist):,} companies")
+    st.caption(
+        f"Threshold: {threshold:.0%} · {len(filtered):,} of {len(watchlist):,} companies"
+    )

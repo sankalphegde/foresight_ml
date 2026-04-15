@@ -142,8 +142,6 @@ def render() -> None:
 
             **Tips:**
             - Type a company name, ticker (e.g. AAPL), or CIK number
-            - Select a quarter to view historical predictions
-            - Use "Score now" to get a live prediction from the API
             """
         )
 
@@ -169,10 +167,6 @@ def render() -> None:
     if not predictions.empty:
         firm_ids = sorted(predictions["firm_id"].unique())
         data_source = "predictions"
-        st.success(
-            f"Loaded {len(predictions):,} predictions for {len(firm_ids):,} companies",
-            icon="✅",
-        )
     else:
         firm_ids = panel_firm_ids
         data_source = "panel"
@@ -217,7 +211,7 @@ def render() -> None:
             display_options.append(fid)
 
     # ── Company search ───────────────────────────────────────────────
-    col_search, col_quarter = st.columns([3, 1])
+    col_search = st.container()
 
     with col_search:
         pre_selected_idx = None
@@ -250,7 +244,7 @@ def render() -> None:
     if not selected_firm:
         return
 
-    # ── Fetch company data ───────────────────────────────────────────
+# ── Fetch company data ───────────────────────────────────────────
     firm_preds = None
     if not predictions.empty:
         fp = predictions[predictions["firm_id"] == selected_firm].copy()
@@ -268,21 +262,7 @@ def render() -> None:
     if not history.empty:
         history = history.sort_values(["fiscal_year", "fiscal_period"]).copy()
 
-    # ── Quarter selector (wired up) ──────────────────────────────────
-    selected_quarter_idx = -1  # default to latest
-    if firm_preds is not None and len(firm_preds) > 1:
-        quarters = firm_preds.apply(
-            lambda r: quarter_label(int(r["fiscal_year"]), str(r.get("fiscal_period", ""))),
-            axis=1,
-        ).tolist()
-        with col_quarter:
-            selected_q = st.selectbox(
-                "Quarter",
-                options=quarters,
-                index=len(quarters) - 1,
-                key="quarter_select",
-            )
-            selected_quarter_idx = quarters.index(selected_q)
+    selected_quarter_idx = -1  # always use latest
 
     # ── Determine score for selected quarter ─────────────────────────
     if firm_preds is not None and not firm_preds.empty:
@@ -335,33 +315,6 @@ def render() -> None:
         else:
             st.caption("📋 Distress label (no model predictions)")
 
-        # ── Score now button ─────────────────────────────────────
-        if st.button("🔄 Score now", help="Get a live prediction from the API", key="score_now"):
-            from src.dashboard.data.api_client import predict
-
-            payload = {
-                "firm_id": selected_firm,
-                "fiscal_year": latest_year,
-                "fiscal_period": latest_period,
-                "total_assets": float(history.iloc[-1].get("total_assets", 0))
-                if not history.empty
-                else 0.0,
-                "total_liabilities": float(history.iloc[-1].get("total_liabilities", 0))
-                if not history.empty
-                else 0.0,
-                "net_income": float(history.iloc[-1].get("net_income", 0))
-                if not history.empty
-                else 0.0,
-            }
-            with st.spinner("Scoring via API..."):
-                result = predict(payload)
-            if result and "distress_probability" in result:
-                prob = result["distress_probability"]
-                level = result.get("risk_level", "—")
-                st.success(f"Live score: **{prob:.2%}** ({level})", icon="🤖")
-            else:
-                st.warning("API scoring unavailable right now.", icon="⚠️")
-
     # ── Trend chart ──────────────────────────────────────────────────
     if firm_preds is not None and len(firm_preds) > 1:
         st.markdown("#### Predicted distress probability — 6-month outlook")
@@ -390,30 +343,18 @@ def render() -> None:
                 x=[sel_q],
                 y=[sel_prob],
                 mode="markers",
-                marker={
-                    "size": 14,
-                    "color": risk_color(latest_score),
-                    "line": {"width": 2, "color": "white"},
-                },
+                marker={"size": 14, "color": risk_color(latest_score), "line": {"width": 2, "color": "white"}},
                 hovertemplate=f"Selected: {sel_q}<br>Probability: {sel_prob:.2%}<extra></extra>",
                 showlegend=False,
             )
         )
         fig.add_hline(
-            y=0.70,
-            line_dash="dash",
-            line_color=COLORS["high"],
-            opacity=0.4,
-            annotation_text="High risk",
-            annotation_position="top left",
+            y=0.70, line_dash="dash", line_color=COLORS["high"], opacity=0.4,
+            annotation_text="High risk", annotation_position="top left",
         )
         fig.add_hline(
-            y=0.30,
-            line_dash="dash",
-            line_color=COLORS["medium"],
-            opacity=0.3,
-            annotation_text="Medium",
-            annotation_position="top left",
+            y=0.30, line_dash="dash", line_color=COLORS["medium"], opacity=0.3,
+            annotation_text="Medium", annotation_position="top left",
         )
         fig.update_yaxes(title_text="Distress probability", range=[-0.05, 1.05], tickformat=".0%")
         fig.update_layout(height=280, showlegend=False)

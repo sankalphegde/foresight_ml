@@ -205,6 +205,7 @@ def load_predictions() -> pd.DataFrame:
         if "distress_probability" in df.columns:
             if df["distress_probability"].sum() > 0:
                 log.info("Loaded batch scores: %d rows", len(df))
+                df["distress_probability"] = df["distress_probability"].pow(0.35).clip(upper=1.0)
                 return df
             log.warning("GCS scores are all zero — falling back to local scoring")
     except Exception:
@@ -258,7 +259,7 @@ def load_predictions() -> pd.DataFrame:
         probas = model.predict_proba(features)[:, 1]
 
         result = ids.copy()
-        result["distress_probability"] = probas
+        result["distress_probability"] = pd.Series(probas).pow(0.35).clip(upper=1.0).values
         result["distress_label"] = test_df[label_col].values
 
         log.info("Live scoring complete: %d rows, mean prob=%.3f", len(result), probas.mean())
@@ -288,7 +289,9 @@ def load_company_map() -> pd.DataFrame:
     empty = pd.DataFrame(columns=["firm_id", "ticker", "name"])
     try:
         if LOCAL_COMPANY_NAMES.exists():
-            df = pd.read_csv(LOCAL_COMPANY_NAMES, dtype={"cik": str})
+            df = pd.read_csv(LOCAL_COMPANY_NAMES, dtype=str)
+            if "firm_id" in df.columns and "cik" not in df.columns:
+                df["cik"] = df["firm_id"]
         elif LOCAL_COMPANY_REF.exists():
             df = pd.read_csv(LOCAL_COMPANY_REF)
             df["cik"] = df["cik"].astype(str)

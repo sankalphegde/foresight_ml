@@ -152,36 +152,7 @@ with st.sidebar:
     )
 
     # ── Spacer ───────────────────────────────────────────────────
-    st.markdown('<div style="flex:1;min-height:100px"></div>', unsafe_allow_html=True)
-
-    # ── Footer ───────────────────────────────────────────────────
-    st.markdown(
-        """
-        <div style="border-top:0.5px solid rgba(0,0,0,0.08);padding-top:12px">
-            <a href="https://github.com/Foresight-ML/foresight_ml#readme" target="_blank" style="text-decoration:none">
-            <div class="sb-static" style="cursor:pointer">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                    <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>
-                    <path d="M8 6V8.5M8 10.5V10.5" stroke="currentColor" stroke-width="1.3"
-                    stroke-linecap="round"/></svg>
-                Documentation ↗
-            </div>
-            </a>
-            <a href="https://foresight-mlflow-6ool3rlbea-uc.a.run.app" target="_blank" style="text-decoration:none">
-            <div class="sb-static" style="cursor:pointer">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                    <circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.3"/>
-                    <path d="M6 4V6H8" stroke="currentColor" stroke-width="1.3"
-                    stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M12 10V14M10 12H14" stroke="currentColor" stroke-width="1.3"
-                    stroke-linecap="round"/></svg>
-                MLflow ↗
-            </div>
-            </a>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div style="flex:1;min-height:500px"></div>', unsafe_allow_html=True)
 
     from src.dashboard.data.api_client import is_api_available
 
@@ -198,7 +169,7 @@ with st.sidebar:
             display:flex;align-items:center;justify-content:center;font-size:11px;
             font-weight:600;color:#1e40af;flex-shrink:0">FS</div>
             <div style="min-width:0">
-                <p style="font-size:12px;font-weight:500;margin:0;color:#1a1a18">Group 22</p>
+                <p style="font-size:12px;font-weight:500;margin:0;color:#1a1a18">foresight</p>
                 <p style="font-size:11px;color:#b8b8b0;margin:0">{api_text}</p>
             </div>
             <div style="width:7px;height:7px;border-radius:50%;background:{api_dot};
