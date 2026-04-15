@@ -10,6 +10,7 @@ import os
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import mlflow
 import numpy as np
@@ -57,7 +58,7 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
     import gcsfs
     from xgboost import XGBClassifier
 
-    def _load_xgb_from_gcs():
+    def _load_xgb_from_gcs() -> Any:
         """Download XGBoost model from GCS and wrap it."""
         gcs_model_path = (
             f"gs://{os.environ.get('GCS_BUCKET', 'financial-distress-data')}/models/xgb_model.pkl"
@@ -97,11 +98,11 @@ def run_batch_inference(features_gcs_path: str, version_str: str = "1.0") -> Non
             if hasattr(_native, "predict_proba"):
                 _xgb_native = _native
             else:
-                _xgb_native = _pyfunc._model_impl.xgb_model  # type: ignore[attr-defined]
+                _xgb_native = _pyfunc._model_impl.xgb_model  # noqa: SLF001
 
             class _MLflowWrapper:
                 def predict(self, X: "pd.DataFrame") -> "np.ndarray":
-                    return _xgb_native.predict_proba(X)[:, 1]
+                    return np.asarray(_xgb_native.predict_proba(X))[:, 1]
 
                 @property
                 def feature_names(self) -> "list[str] | None":
