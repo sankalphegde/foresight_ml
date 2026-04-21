@@ -4,9 +4,12 @@ End-to-end MLOps + deployed product for predicting corporate financial distress 
 
 **Production endpoints (Cloud Run):**
 
-- Inference API — `https://foresight-api-<hash>-uc.a.run.app`
-- Dashboard — `https://foresight-dashboard-<hash>-uc.a.run.app`
-- MLflow — `https://foresight-mlflow-6ool3rlbea-uc.a.run.app`
+- Inference API — https://foresight-api-6ool3rlbea-uc.a.run.app
+- Dashboard — https://foresight-dashboard-6ool3rlbea-uc.a.run.app
+- Airflow UI - https://foresight-airflow-6ool3rlbea-uc.a.run.app
+- MLflow tracking — https://foresight-mlflow-6ool3rlbea-uc.a.run.app
+  
+- Demo video — [Watch Demo](https://drive.google.com/file/d/1cWE2zdX7DuXmQWym5HPohvdbF7L2iHCy/view?usp=sharing)
 
 ---
 
@@ -62,6 +65,8 @@ The project is structured as a full MLOps system covering:
 ---
 
 ## Architecture
+
+<img width="1682" height="2032" alt="_Users_sankalphegde_Downloads_Foresight-ML%20Architecture html" src="https://github.com/user-attachments/assets/3b341b32-2f49-4792-8d1f-f69cd07a8f88" />
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
