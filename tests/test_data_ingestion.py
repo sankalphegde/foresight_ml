@@ -69,11 +69,14 @@ def test_fred_fetch_series():
     client = FREDClient(api_key=api_key)
 
     # Fetch Federal Funds Rate (DFF) - always available
-    response = client.get_series(
-        series_id="DFF",
-        start_date="2024-01-01",
-        use_cache=False,  # Force fresh fetch
-    )
+    try:
+        response = client.get_series(
+            series_id="DFF",
+            start_date="2024-01-01",
+            use_cache=False,  # Force fresh fetch
+        )
+    except HTTPError as exc:
+        pytest.skip(f"FRED API unavailable (transient error): {exc}")
 
     # Validate response structure
     assert len(response.observations) > 0
